@@ -25,6 +25,37 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Slide context moved inside the question, after two weaker attempts failed · uncommitted
+**Scope:** `app/pipeline/prompt.py`, `app/prompts/presenter.md`, `tests/test_turn.py`
+**Change:** Asked "what's this slide about" the agent kept answering about whichever slide it last
+spoke about, not the one on screen. This is the third attempt at the same defect, and the first two
+are worth recording because they looked sufficient and were not.
+
+1. **Naming the slide in the system prompt.** Lost to a near-identical exchange further down the
+   conversation: asked the same question twice on different slides, the model replayed its first
+   answer word for word.
+2. **A system message immediately before the question.** No better. The question was identical to
+   the earlier one and the earlier answer sat directly above it.
+3. **A system message appended after the question.** Passed once in testing, then failed again in
+   the owner's hands, which is the more honest sample.
+4. **What works: stamping the context into the question itself**, so each turn reads
+   `[Looking at slide 6 of 6: "Trade-offs and What's Next"] What's this slide about`. A model cannot
+   skim past a phrase inside the sentence it is answering. The prompt explains that a bracketed
+   prefix is context, is never read aloud, and is the truth about where the deck is now even when an
+   earlier answer was about somewhere else.
+
+**Verified** across three hand-navigations in one session with history accumulating: slide 4 answered
+about interruption, slide 6 about trade-offs, and slide 1 about the system, with no wrong navigation
+and no bracket spoken.
+
+**Lesson about verification.** Attempt 3 was tested once, passed, and shipped. The owner found it
+still broken within minutes. One live pass is not evidence for a non-deterministic failure; the test
+now walks several slides in one session so the history that causes the bug is actually present.
+
+**Also changed:** the development server now runs with `--reload`. It had been started without it, so
+a fix could be committed while the running process still served the old code. Removing that class of
+confusion is worth more than the reload cost.
+
 ### 2026-09-11 · A wrong answer dragged the deck off the slide the user chose · uncommitted
 **Scope:** `app/pipeline/prompt.py`, `app/pipeline/slides.py`, `app/session.py`, and their tests
 **Change:** From an exported session: on slide 6 the owner asked "What's this slide about" and got an

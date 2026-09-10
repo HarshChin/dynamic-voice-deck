@@ -31,6 +31,9 @@ from ..providers.base import Message
 
 logger = get_logger(__name__)
 
+QUESTION_PREFIX_MARKER = "[Looking at slide "
+"""Opening of the context stamped onto each question; also detects a double stamp."""
+
 DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "prompts" / "presenter.md"
 """The presenter template, resolved from this package rather than the process's
 working directory, which differs between uvicorn, pytest, and an editor."""
@@ -95,6 +98,43 @@ def load_template(path: Path = DEFAULT_TEMPLATE_PATH) -> str:
     except OSError as exc:
         msg = f"prompt template {path} could not be read: {exc}"
         raise ConfigError(msg) from exc
+
+
+def _stamp_last_question(messages: list[Message], deck: Deck, snapshot: Mapping[str, Any]) -> None:
+    """Prefix the user's question with the slide they are looking at.
+
+    The context goes *inside* the question rather than beside it, and that
+    placement was reached by elimination against a live model. Naming the slide
+    only in the system prompt lost to a near-identical exchange higher up the
+    conversation: asked the same thing twice on different slides, the model
+    replayed its first answer word for word. A system message placed just before
+    the question did not help either, because the question was identical to the
+    earlier one and the earlier answer sat directly above it. Appending the
+    system message after the question was better and still missed. A model
+    cannot skim past a phrase inside the sentence it is answering, so that is
+    where the context now lives.
+
+    The system prompt tells the agent that a bracketed prefix is context for it
+    and is never read aloud.
+
+    Args:
+        messages: The message list, modified in place.
+        deck: The deck being presented.
+        snapshot: The slide controller's snapshot.
+    """
+    index = snapshot.get("current_slide")
+    if not isinstance(index, int) or not 1 <= index <= deck.last_index:
+        return
+    slide = deck.slide(index)
+    for position in range(len(messages) - 1, -1, -1):
+        message = messages[position]
+        if message.role != "user":
+            continue
+        if message.content.startswith(QUESTION_PREFIX_MARKER):
+            return
+        prefix = f'{QUESTION_PREFIX_MARKER}{index} of {deck.last_index}: "{slide.title}"] '
+        messages[position] = message.model_copy(update={"content": prefix + message.content})
+        return
 
 
 def _current_slide(snapshot: Mapping[str, Any]) -> int | None:
@@ -249,18 +289,7 @@ class PromptBuilder:
         system = Message(role="system", content=self.render_system(deck, snapshot))
         messages = [system, *history_messages]
 
-        reminder = self._current_slide_reminder(deck, snapshot)
-        if reminder is not None:
-            # Appended last, after the user's question, because that is the
-            # most recent thing the model reads and recency is what decides
-            # this. Two failures drove the position. Placing it only in the
-            # system prompt lost to a near-identical exchange sitting just above
-            # the new question: asked the same thing on slide 5 and again after
-            # moving to slide 4 by hand, the model replayed its slide-5 answer
-            # word for word. Placing it immediately *before* the question was
-            # still not enough, because the question itself was identical to the
-            # previous one and the previous answer sat right there. Last wins.
-            messages.append(reminder)
+        _stamp_last_question(messages, deck, snapshot)
 
         logger.debug(
             "prompt.built",
@@ -270,33 +299,3 @@ class PromptBuilder:
             system_chars=len(system.content),
         )
         return messages
-
-    @staticmethod
-    def _current_slide_reminder(deck: Deck, snapshot: Mapping[str, Any]) -> Message | None:
-        """Build the just-in-time reminder of which slide is on screen.
-
-        Args:
-            deck: The deck being presented.
-            snapshot: The slide controller's snapshot.
-
-        Returns:
-            A system message naming the slide and its bullets, or ``None`` when
-            the snapshot carries no usable slide index.
-        """
-        index = snapshot.get("current_slide")
-        if not isinstance(index, int) or not 1 <= index <= deck.last_index:
-            return None
-        slide = deck.slide(index)
-        bullets = "; ".join(slide.bullets)
-        return Message(
-            role="system",
-            content=(
-                f"BEFORE YOU ANSWER: the room is looking at SLIDE {index} of "
-                f'{deck.last_index}, "{slide.title}" ({bullets}). '
-                f'"This slide", "here" and "that" all mean slide {index}. '
-                "The deck may have moved since your last answer, so answer for the slide named "
-                "here and nowhere else. If you have answered a similar question earlier in this "
-                "conversation, do NOT reuse that answer: it was about whichever slide was on "
-                "screen then, which may not be this one."
-            ),
-        )
