@@ -251,18 +251,16 @@ class PromptBuilder:
 
         reminder = self._current_slide_reminder(deck, snapshot)
         if reminder is not None:
-            # Placed immediately before the user's question rather than only in
-            # the system prompt, because recency wins. Observed failure: asked
-            # the same question twice, once on slide 5 and again after moving to
-            # slide 4 by hand, the model replayed its slide-5 answer word for
-            # word. The position block hundreds of lines earlier lost to the
-            # near-identical exchange sitting right above the new question.
-            insert_at = len(messages)
-            for index in range(len(messages) - 1, 0, -1):
-                if messages[index].role == "user":
-                    insert_at = index
-                    break
-            messages.insert(insert_at, reminder)
+            # Appended last, after the user's question, because that is the
+            # most recent thing the model reads and recency is what decides
+            # this. Two failures drove the position. Placing it only in the
+            # system prompt lost to a near-identical exchange sitting just above
+            # the new question: asked the same thing on slide 5 and again after
+            # moving to slide 4 by hand, the model replayed its slide-5 answer
+            # word for word. Placing it immediately *before* the question was
+            # still not enough, because the question itself was identical to the
+            # previous one and the previous answer sat right there. Last wins.
+            messages.append(reminder)
 
         logger.debug(
             "prompt.built",
@@ -293,8 +291,12 @@ class PromptBuilder:
         return Message(
             role="system",
             content=(
-                f'The room is looking at SLIDE {index}: "{slide.title}" ({bullets}). '
-                f"Answer about THIS slide. If your last answer was about a different slide, "
-                f"do not repeat it -- the deck has moved since."
+                f"BEFORE YOU ANSWER: the room is looking at SLIDE {index} of "
+                f'{deck.last_index}, "{slide.title}" ({bullets}). '
+                f'"This slide", "here" and "that" all mean slide {index}. '
+                "The deck may have moved since your last answer, so answer for the slide named "
+                "here and nowhere else. If you have answered a similar question earlier in this "
+                "conversation, do NOT reuse that answer: it was about whichever slide was on "
+                "screen then, which may not be this one."
             ),
         )

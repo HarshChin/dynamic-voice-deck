@@ -566,13 +566,13 @@ async def test_the_second_request_replays_what_was_already_spoken(deck: Deck) ->
     assert ("assistant", "Two layers, actually.") in turn.replayed(1)
     assert turn.result.text == "Two layers, actually. The browser stops playback first."
     # The first request has nothing to replay, so it is left exactly as it was.
-    # A system reminder naming the slide on screen sits immediately before the
-    # question (see PromptBuilder._current_slide_reminder); the user's message is
-    # still the last thing the model reads.
+    # A system reminder naming the slide on screen is appended AFTER the
+    # question, because it is recency that decides which slide the model answers
+    # for (see PromptBuilder._current_slide_reminder).
     replayed = turn.replayed(0)
-    assert replayed[-1] == ("user", "How do you handle interruptions?")
-    assert [role for role, _ in replayed] == ["system", "user"]
-    assert "SLIDE 1" in replayed[0][1]
+    assert [role for role, _ in replayed] == ["user", "system"]
+    assert replayed[0] == ("user", "How do you handle interruptions?")
+    assert "SLIDE 1" in replayed[-1][1]
 
 
 async def test_a_plain_answer_costs_a_single_request(deck: Deck) -> None:

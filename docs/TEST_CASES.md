@@ -477,6 +477,13 @@ parametrised, so 18 test functions expand to 53 collected backend cases.
 | TC-FE-094 | F2 | Given a 503 response, then the status reads unreachable (exercises the `response.ok` branch, which no test previously reached) | `src/smoke.test.ts::TC-FE-094` | passing |
 | TC-FE-095 | TR-103 | Given a probe that never settles, when App unmounts, then the request is aborted and no state update leaks | `src/smoke.test.ts::TC-FE-095` | passing |
 
+### Hand navigation outranks the fallback (added 2026-09-11)
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-240 | F9 / TR-062, TR-063 | Given the user moved the deck by hand this turn, when the answer's wording scores strongly for another slide, then the keyword fallback stays silent and the deck does not move | `tests/test_slides.py::test_the_fallback_is_suppressed_after_the_user_navigates_by_hand` | passing |
+| TC-BE-241 | TR-062 | Given that suppression, when the next turn begins, then the fallback works again — it lasts one turn, not for ever | `tests/test_slides.py::test_the_fallback_returns_once_a_new_turn_begins` | passing |
+
 ---
 
 ## Manual checklist (before each release)

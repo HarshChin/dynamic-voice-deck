@@ -643,3 +643,37 @@ def test_controllers_over_one_deck_are_independent(demo_deck: Deck) -> None:
 
     assert second.current_slide == 1
     assert second.last_error is None
+
+
+# --------------------------------------------------------------------------- #
+# The fallback yields to hand navigation (TR-062, TR-063)
+# --------------------------------------------------------------------------- #
+
+
+def test_the_fallback_is_suppressed_after_the_user_navigates_by_hand(demo_deck: Deck) -> None:
+    """TC-BE-240: a hand-driven move outranks a scorer reading the answer's wording.
+
+    Seen live: on slide 6 the model reused an earlier answer about slide 1, and
+    the fallback moved the deck to slide 1 to match it, dragging the room off the
+    slide they had just chosen. An explicit choice must win over an inference.
+    """
+    controller = SlideController(demo_deck, current_slide=6)
+    # Wording that would otherwise score strongly for another slide.
+    answer = " ".join(demo_deck.slide(1).aliases + demo_deck.slide(1).bullets)
+
+    controller.on_user_navigation(6)
+
+    assert controller.keyword_fallback(answer) is None
+    assert controller.current_slide == 6
+
+
+def test_the_fallback_returns_once_a_new_turn_begins(demo_deck: Deck) -> None:
+    """TC-BE-241: the suppression lasts one turn, not for ever."""
+    controller = SlideController(demo_deck, current_slide=6)
+    answer = " ".join(demo_deck.slide(1).aliases + demo_deck.slide(1).bullets)
+    controller.on_user_navigation(6)
+    assert controller.keyword_fallback(answer) is None
+
+    controller.begin_turn()
+
+    assert controller.keyword_fallback(answer) is not None

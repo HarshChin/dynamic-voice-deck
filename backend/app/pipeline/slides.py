@@ -452,6 +452,16 @@ class SlideController:
         self.presentation_cursor = self.current_slide
         self.mode = mode
         self.last_error: str | None = None
+        self.user_navigated = False
+        """Whether the user moved the deck by hand since the last turn began.
+
+        The keyword fallback is switched off while this is set. A hand-driven
+        move is an explicit statement of what the user wants to look at, and a
+        scorer working from the *answer's* wording has no business overruling
+        it. Seen live: on slide 6 the model reused an earlier answer about slide
+        1, and the fallback then dragged the deck to slide 1 to match, so a
+        wrong answer moved the room away from the slide they had chosen.
+        """
         self._terms: tuple[_SlideTerms, ...] = tuple(
             _SlideTerms.build(slide) for slide in deck.slides
         )
@@ -510,6 +520,11 @@ class SlideController:
             The action to broadcast, or ``None`` when the evidence is thin,
             split, or points at the current slide.
         """
+        if self.user_navigated:
+            # The user chose this slide by hand during this turn. Scoring the
+            # answer's wording against the aliases could only move them off it.
+            logger.info("slides.fallback_suppressed", reason="user navigated by hand")
+            return None
         tokens = _tokenize(answer_text)
         if not tokens:
             return None
@@ -564,6 +579,10 @@ class SlideController:
         )
         return action
 
+    def begin_turn(self) -> None:
+        """Note that a new turn is starting, clearing per-turn navigation state."""
+        self.user_navigated = False
+
     def on_user_navigation(self, index: int) -> str:
         """Follow the deck after the user moved it themselves (TR-063).
 
@@ -578,6 +597,7 @@ class SlideController:
             A system note naming the slide and its title, for the history.
         """
         target = self._clamp(index)
+        self.user_navigated = True
         self.current_slide = target
         title = self.deck.slide(target).title
         logger.info("slides.user_navigation", index=target, requested=index)

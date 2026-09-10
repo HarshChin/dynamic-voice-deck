@@ -401,6 +401,7 @@ class Session:
         # same history at once and the outgoing one would stamp the new id on
         # its own last messages (TR-022).
         await cancel_task(self._task)
+        self.slides.begin_turn()
         self.turn_id += 1
         await self.set_state(SessionState.THINKING)
         self._task = asyncio.create_task(self._run_turn(text), name=f"turn-{self.turn_id}")

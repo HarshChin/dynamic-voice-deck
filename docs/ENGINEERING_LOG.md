@@ -25,6 +25,31 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · A wrong answer dragged the deck off the slide the user chose · uncommitted
+**Scope:** `app/pipeline/prompt.py`, `app/pipeline/slides.py`, `app/session.py`, and their tests
+**Change:** From an exported session: on slide 6 the owner asked "What's this slide about" and got an
+answer about slide 1, after which the deck jumped to slide 1. Two bugs compounding.
+
+**The model reused its previous answer.** The same question had been asked two turns earlier while
+slide 1 was on screen, and the reply came back word for word. The just-in-time reminder naming the
+current slide was already in place but sat *before* the user's question, where it lost to an
+identical exchange sitting immediately above. Moved it to the very end, after the question, so it is
+the last thing the model reads, and sharpened it to say the deck may have moved and that an earlier
+answer must not be reused. Recency is what decides this; the third position finally worked.
+
+**Then the keyword fallback made it worse.** The wrong answer scored against slide 1's aliases, so
+the fallback moved the deck to slide 1 to match — overriding five deliberate arrow-key presses.
+A hand-driven move is an explicit statement of what the user wants to look at, and a scorer reading
+the *answer's* wording has no business overruling it. The fallback is now suppressed for the turn
+following any manual navigation, and resumes on the next turn.
+
+**Verified** on the exact sequence: answer on slide 1, arrow to slide 6, ask the identical question,
+and it answers about trade-offs without touching the deck.
+
+**Note on the rate limit:** the exported log shows the free tier is 7,000 *input* tokens per minute,
+not 8,000 total as the earlier error implied. With a prompt near 1,800 tokens and up to three
+requests per navigating turn, a question every 30 seconds is about the sustainable rate.
+
 ### 2026-09-11 · The agent moved the deck and said almost nothing · uncommitted
 **Scope:** `app/prompts/presenter.md`, `app/pipeline/turn.py`, `tests/test_turn.py`
 **Change:** The owner exported a session in which every answer was one short sentence, one turn said
