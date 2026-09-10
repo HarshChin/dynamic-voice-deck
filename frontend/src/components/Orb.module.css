@@ -1,0 +1,211 @@
+/* Agent state indicator (PRD F11). Every state is driven by `data-state` on the root, so the
+   component never computes a class name and the audio-reactive Phase 2 variants can hang off the
+   same hook. */
+
+.orb {
+  --orb-size: 2.75rem;
+  --orb-colour: var(--dvd-faint);
+  --orb-wash: rgb(97 108 129 / 18%);
+  --orb-glow: 0 0 0 rgb(0 0 0 / 0%);
+
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: var(--orb-size) auto;
+  place-items: center;
+  gap: var(--dvd-space-2);
+}
+
+.orb[data-compact="true"] {
+  --orb-size: 2rem;
+}
+
+.halo,
+.ring,
+.core {
+  grid-area: 1 / 1;
+  border-radius: 50%;
+  place-self: center;
+}
+
+.halo {
+  width: calc(var(--orb-size) * 1.9);
+  height: calc(var(--orb-size) * 1.9);
+  background: radial-gradient(circle, var(--orb-wash) 0%, transparent 68%);
+  opacity: 0.9;
+}
+
+.ring {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  border: 1px solid var(--orb-colour);
+  opacity: 0.35;
+}
+
+.core {
+  width: calc(var(--orb-size) * 0.62);
+  height: calc(var(--orb-size) * 0.62);
+  background:
+    radial-gradient(circle at 34% 30%, rgb(255 255 255 / 55%) 0%, transparent 55%),
+    var(--orb-colour);
+  box-shadow: var(--orb-glow);
+}
+
+.caption {
+  grid-area: 2 / 1;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.label {
+  color: var(--dvd-text-dim);
+  font-size: var(--dvd-text-sm);
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.hint {
+  color: var(--dvd-faint);
+  font-size: var(--dvd-text-xs);
+  line-height: 1.2;
+}
+
+/* ---------------------------------------------------------------- states */
+
+.orb[data-state="connecting"] {
+  --orb-colour: var(--dvd-muted);
+  --orb-wash: rgb(135 145 165 / 20%);
+}
+
+.orb[data-state="connecting"] .core {
+  animation: pulse 2s var(--dvd-ease) infinite;
+}
+
+.orb[data-state="listening"],
+.orb[data-state="hearing"] {
+  --orb-colour: var(--dvd-accent);
+  --orb-wash: var(--dvd-accent-wash);
+  --orb-glow: 0 0 14px rgb(122 162 255 / 45%);
+}
+
+.orb[data-state="listening"] .core {
+  animation: breathe 3.4s var(--dvd-ease) infinite;
+}
+
+.orb[data-state="hearing"] .ring {
+  opacity: 0.8;
+  animation: sonar 1.1s var(--dvd-ease) infinite;
+}
+
+.orb[data-state="thinking"] {
+  --orb-colour: var(--dvd-violet);
+  --orb-wash: var(--dvd-violet-wash);
+  --orb-glow: 0 0 14px rgb(167 139 250 / 45%);
+}
+
+.orb[data-state="thinking"] .ring {
+  border-color: transparent;
+  border-top-color: var(--orb-colour);
+  border-right-color: var(--orb-colour);
+  opacity: 0.85;
+  animation: orbit 1.1s linear infinite;
+}
+
+.orb[data-state="speaking"] {
+  --orb-colour: var(--dvd-green);
+  --orb-wash: var(--dvd-green-wash);
+  --orb-glow: 0 0 16px rgb(74 222 128 / 45%);
+}
+
+.orb[data-state="speaking"] .ring {
+  opacity: 0.7;
+  animation: sonar 1.5s var(--dvd-ease) infinite;
+}
+
+.orb[data-state="speaking"] .core {
+  animation: breathe 1.5s var(--dvd-ease) infinite;
+}
+
+.orb[data-state="interrupted"] {
+  --orb-colour: var(--dvd-red);
+  --orb-wash: var(--dvd-red-wash);
+  --orb-glow: 0 0 16px rgb(248 113 113 / 55%);
+}
+
+.orb[data-state="interrupted"] .core {
+  animation: flash 150ms steps(2, end) 2;
+}
+
+.orb[data-state="error"] {
+  --orb-colour: var(--dvd-amber);
+  --orb-wash: var(--dvd-amber-wash);
+}
+
+.orb[data-state="error"] .ring {
+  border-width: 2px;
+  border-style: dashed;
+  opacity: 0.9;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes sonar {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.85);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes flash {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* The global reduce-motion rule freezes animations mid-keyframe, which can leave a ring invisible.
+   Restore a legible resting appearance so the state still reads without motion (PRD F11). */
+@media (prefers-reduced-motion: reduce) {
+  .orb .core,
+  .orb .ring {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+
+  .orb .ring {
+    opacity: 0.55;
+  }
+}

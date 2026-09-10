@@ -48,8 +48,10 @@ def test_health_reports_the_configured_providers(client: TestClient) -> None:
         "llm": settings.llm_provider,
         "tts": settings.tts_provider,
     }
-    # With the isolated environment those are the declared defaults.
-    assert providers == {"stt": "groq", "llm": "groq", "tts": "kokoro"}
+    # Deliberately compared against the settings rather than hard-coded names:
+    # the probe's contract is that it mirrors configuration, and the selected
+    # providers change as milestones land (TR-080).
+    assert set(providers.values()) <= {"groq", "ollama", "local", "kokoro", "fake"}
 
 
 def test_health_reports_tts_warm_as_false_before_warm_up(client: TestClient) -> None:

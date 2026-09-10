@@ -1,47 +1,206 @@
+/**
+ * The application shell.
+ *
+ * Global rather than a CSS module because it owns the page grid, which nothing else should be able
+ * to reach into. Component-level styling lives in the `.module.css` file next to each component.
+ */
+
 .app {
-  margin: 0 auto;
-  max-width: 46rem;
-  padding: 4rem 1.5rem;
+  display: grid;
+  height: 100dvh;
+  grid-template-areas:
+    "bar bar"
+    "stage rail"
+    "controls controls";
+  grid-template-columns: minmax(0, 1fr) 23rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.app__title {
+.app[data-log-open="false"] {
+  grid-template-areas:
+    "bar"
+    "stage"
+    "controls";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ------------------------------------------------------------------- bar */
+
+.app__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-5);
+  grid-area: bar;
+  padding: var(--dvd-space-3) var(--dvd-space-5);
+  border-bottom: 1px solid var(--dvd-line);
+  background-color: var(--dvd-bg-elev);
+}
+
+.app__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app__wordmark {
   margin: 0;
-  font-size: clamp(2rem, 6vw, 3rem);
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  color: var(--dvd-text);
+  font-size: var(--dvd-text-md);
+  font-weight: 640;
+  letter-spacing: -0.015em;
 }
 
-.app__subtitle {
-  margin: 0.5rem 0 2rem;
-  color: var(--dvd-muted);
-  font-size: 1.0625rem;
+.app__tagline {
+  margin: 0;
+  color: var(--dvd-faint);
+  font-size: var(--dvd-text-xs);
 }
 
-.app__status {
+.app__deck {
+  flex: 1;
+  overflow: hidden;
+  margin: 0;
+  color: var(--dvd-text-dim);
+  font-size: var(--dvd-text-sm);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app__health {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--dvd-space-2);
   margin: 0;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--dvd-border);
-  border-radius: 999px;
+  padding: 0.25rem var(--dvd-space-3);
+  border: 1px solid var(--dvd-line);
+  border-radius: var(--dvd-radius-pill);
   background-color: var(--dvd-surface);
   color: var(--dvd-muted);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.8125rem;
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  white-space: nowrap;
 }
 
-.app__status-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+.app__health-dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
   border-radius: 50%;
-  background-color: var(--dvd-pending);
+  background-color: var(--dvd-amber);
 }
 
-.app__status--ok .app__status-dot {
-  background-color: var(--dvd-ok);
+.app__health--ok .app__health-dot {
+  background-color: var(--dvd-green);
 }
 
-.app__status--unreachable .app__status-dot {
-  background-color: var(--dvd-bad);
+.app__health--unreachable .app__health-dot {
+  background-color: var(--dvd-red);
+}
+
+.app__log-toggle {
+  padding: 0.3125rem var(--dvd-space-3);
+  border: 1px solid var(--dvd-line-strong);
+  border-radius: var(--dvd-radius-pill);
+  background-color: var(--dvd-surface);
+  color: var(--dvd-text-dim);
+  cursor: pointer;
+  font-size: var(--dvd-text-xs);
+  white-space: nowrap;
+}
+
+.app__log-toggle:hover {
+  border-color: var(--dvd-accent-dim);
+  color: var(--dvd-text);
+}
+
+/* ----------------------------------------------------------------- stage */
+
+.app__stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  grid-area: stage;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 0;
+  padding: var(--dvd-space-5);
+}
+
+.app__cover {
+  margin: 0 auto;
+  max-width: 34rem;
+  padding: var(--dvd-space-6);
+  border: 1px dashed var(--dvd-line-strong);
+  border-radius: var(--dvd-radius-lg);
+  text-align: center;
+}
+
+.app__cover-title {
+  margin: 0 0 var(--dvd-space-3);
+  color: var(--dvd-text-dim);
+  font-size: var(--dvd-text-lg);
+  font-weight: 600;
+}
+
+.app__cover-body {
+  margin: 0;
+  color: var(--dvd-muted);
+  font-size: var(--dvd-text-base);
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.app__cover-body code {
+  padding: 0.0625rem 0.3125rem;
+  border-radius: var(--dvd-radius-sm);
+  background-color: var(--dvd-surface-2);
+  color: var(--dvd-text-dim);
+  font-family: var(--dvd-font-mono);
+  font-size: 0.9em;
+}
+
+/* ------------------------------------------------------------ rail, bar */
+
+.app__rail {
+  display: flex;
+  flex-direction: column;
+  grid-area: rail;
+  min-height: 0;
+  border-left: 1px solid var(--dvd-line);
+  background-color: var(--dvd-bg-elev);
+}
+
+/* PRD F12 pins the HUD to a corner. The bottom of the log column *is* the app's bottom-right
+   corner, and putting it there keeps latency permanently visible without ever covering a slide. */
+.app__hud {
+  flex: none;
+  padding: var(--dvd-space-3);
+  border-top: 1px solid var(--dvd-line);
+}
+
+.app__controls {
+  grid-area: controls;
+}
+
+/* Desktop is the target (PRD §2.2), but a narrow window should degrade rather than break: the log
+   becomes a short drawer under the deck instead of squeezing it. */
+@media (width <= 1000px) {
+  .app,
+  .app[data-log-open="false"] {
+    grid-template-areas:
+      "bar"
+      "stage"
+      "rail"
+      "controls";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .app__rail {
+    max-height: 40vh;
+  }
+
+  .app__tagline {
+    display: none;
+  }
 }

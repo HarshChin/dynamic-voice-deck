@@ -8,10 +8,18 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
-from fastapi import APIRouter, FastAPI, Request, status
+from fastapi import (
+    APIRouter,
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
@@ -19,8 +27,15 @@ from pydantic_settings import SettingsError
 
 from . import __version__
 from .config import Settings, get_settings
-from .errors import AppError, ConfigError
+from .decks.models import Deck
+from .decks.repository import DeckRepository, DeckSummary
+from .errors import AppError, ConfigError, DeckError
 from .logging_setup import configure_logging, get_logger
+from .pipeline.prompt import PromptBuilder
+from .protocol import ErrorCode
+from .providers.base import Providers
+from .providers.registry import build_providers
+from .session import Session, SessionManager
 
 logger = get_logger(__name__)
 
@@ -39,12 +54,13 @@ class AppState:
 
     settings: Settings
     tts_warm: bool = False
+    decks: DeckRepository | None = None
+    providers: Providers | None = None
+    prompts: PromptBuilder | None = None
+    sessions: SessionManager = field(default_factory=SessionManager)
 
-    # TODO(hv): Phase 1 adds the deck repository and the STT/LLM/TTS providers
-    # here -- see TRD §4.1 (module layout) and §4.9 TR-080
-    # (``registry.build_providers(settings)``). The lifespan will build them,
-    # store them on this dataclass, and set ``tts_warm`` after the warm-up
-    # synthesis required by TR-013.
+    # TODO(hv): milestone M2 warms Kokoro during startup and flips ``tts_warm``
+    # once the throwaway synthesis completes (TR-013).
 
 
 class HealthProviders(BaseModel):
@@ -178,19 +194,127 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     settings = _load_settings()
     configure_logging(settings)
-    app.state.app_state = AppState(settings=settings)
+    decks = DeckRepository()
+    providers = build_providers(settings)
+    app.state.app_state = AppState(
+        settings=settings,
+        decks=decks,
+        providers=providers,
+        prompts=PromptBuilder(),
+    )
     # ``masked_dump`` is mandatory here: the raw settings carry the Groq API key
     # and must never reach the logs (TR-180).
     logger.info("app.startup", version=__version__, settings=settings.masked_dump())
 
-    # TODO(hv): Phase 1 loads the DeckRepository and builds the providers here,
-    # then warms Kokoro and flips ``AppState.tts_warm`` -- TRD §4.1 and §4.9
-    # (TR-080), with the warm-up budget in TR-013.
+    logger.info(
+        "app.ready",
+        decks=[summary.id for summary in decks.list_decks()],
+        providers=providers.names,
+    )
 
     try:
         yield
     finally:
+        await app.state.app_state.sessions.close_all()
         logger.info("app.shutdown", version=__version__)
+
+
+@router.get("/decks", summary="List available decks")
+async def list_decks(request: Request) -> list[DeckSummary]:
+    """Return a summary of every loaded deck.
+
+    Args:
+        request: The incoming request, used to reach the deck repository.
+
+    Returns:
+        One summary per deck, ordered by id.
+    """
+    return _require_decks(request).list_decks()
+
+
+@router.get("/decks/{deck_id}", summary="Fetch one deck")
+async def get_deck(request: Request, deck_id: str) -> Deck:
+    """Return a deck by id.
+
+    Args:
+        request: The incoming request.
+        deck_id: Identifier of the deck to fetch.
+
+    Returns:
+        The deck.
+
+    Raises:
+        HTTPException: With status 404 when no such deck exists.
+    """
+    try:
+        return _require_decks(request).get(deck_id)
+    except DeckError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+def _require_decks(request: Request) -> DeckRepository:
+    """Return the deck repository, or explain that startup did not run.
+
+    Args:
+        request: The incoming request.
+
+    Returns:
+        The repository built during startup.
+
+    Raises:
+        HTTPException: With status 503 when the lifespan has not completed, which
+            is the honest answer: the process is up but not yet able to serve.
+    """
+    decks = get_app_state(request).decks
+    if decks is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="application startup has not completed",
+        )
+    return decks
+
+
+async def session_endpoint(websocket: WebSocket) -> None:
+    """Serve one voice session over a WebSocket (TRD §6).
+
+    Args:
+        websocket: The incoming connection.
+    """
+    state: AppState = websocket.app.state.app_state
+    if state.decks is None or state.providers is None or state.prompts is None:
+        await websocket.close(code=1011, reason="startup incomplete")
+        return
+
+    await websocket.accept()
+    session = Session(
+        websocket,
+        settings=state.settings,
+        providers=state.providers,
+        decks=state.decks,
+        prompts=state.prompts,
+    )
+    state.sessions.add(session)
+    try:
+        while True:
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
+            text = message.get("text")
+            if text is not None:
+                await session.handle_raw_text(text)
+                continue
+            payload = message.get("bytes")
+            if payload is not None:
+                # Audio arrives in milestone M3; until then a binary frame is a
+                # protocol violation rather than something to silently drop.
+                await session.send_error(
+                    ErrorCode.UNEXPECTED_BINARY,
+                    "binary frames are not accepted until milestone M3",
+                )
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await state.sessions.remove(session)
 
 
 def create_app() -> FastAPI:
@@ -219,6 +343,7 @@ def create_app() -> FastAPI:
     # handler, which Starlette supports at runtime yet types as synchronous.
     app.exception_handler(AppError)(app_error_handler)
     app.include_router(router)
+    app.add_api_websocket_route("/ws/session", session_endpoint, name="session")
     return app
 
 

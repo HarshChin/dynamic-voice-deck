@@ -1,0 +1,73 @@
+/* The latency HUD (PRD F12). Monospaced, tabular, and small: an instrument, not a report. */
+
+.hud {
+  width: 100%;
+  padding: var(--dvd-space-3);
+  border: 1px solid var(--dvd-line);
+  border-radius: var(--dvd-radius-md);
+  background-color: rgb(13 15 21 / 88%);
+  box-shadow: var(--dvd-shadow-panel);
+  backdrop-filter: blur(6px);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--dvd-space-2);
+}
+
+.title {
+  color: var(--dvd-text-dim);
+  font-size: var(--dvd-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.turn {
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+}
+
+.table thead th {
+  padding-bottom: var(--dvd-space-1);
+  border-bottom: 1px solid var(--dvd-line);
+  color: var(--dvd-line-strong);
+  font-weight: 500;
+}
+
+.stage {
+  color: var(--dvd-muted);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.value {
+  padding: 0.1875rem 0 0.1875rem var(--dvd-space-2);
+  color: var(--dvd-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* PRD F12: green inside the p50 budget, amber to 1.5x, red beyond. */
+.value[data-band="ok"] {
+  color: var(--dvd-green);
+}
+
+.value[data-band="warn"] {
+  color: var(--dvd-amber);
+}
+
+.value[data-band="bad"] {
+  color: var(--dvd-red);
+}

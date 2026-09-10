@@ -1,43 +1,83 @@
-/* Base theme. Real design lands in a later phase; this is only enough to look deliberate. */
+/**
+ * Design tokens and the global reset (PRD §6 F1, F11; CLAUDE.md §5).
+ *
+ * Everything visual is expressed as a custom property here and consumed from CSS modules, so the
+ * palette exists in exactly one place. The app is deliberately dark-only: it is a presentation
+ * surface that spends its life on a projector or a shared screen, where a light theme washes the
+ * slide out and the orb's colour states stop reading. `color-scheme: dark` tells the browser to
+ * match its own chrome (scrollbars, form controls) rather than us restyling each one.
+ */
 
 :root {
-  --dvd-bg: #f7f7f8;
-  --dvd-surface: #ffffff;
-  --dvd-text: #16161a;
-  --dvd-muted: #5c5f66;
-  --dvd-border: #e2e2e6;
-  --dvd-accent: #4c6ef5;
-  --dvd-ok: #2f9e44;
-  --dvd-bad: #e03131;
-  --dvd-pending: #f08c00;
+  /* Surfaces, from the page backdrop up to the raised slide. */
+  --dvd-bg: #08090d;
+  --dvd-bg-elev: #0d0f15;
+  --dvd-surface: #12151d;
+  --dvd-surface-2: #191d28;
+  --dvd-surface-3: #212636;
 
-  color-scheme: light dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
+  /* Text, in descending emphasis. */
+  --dvd-text: #eef1f7;
+  --dvd-text-dim: #b7bfd0;
+  --dvd-muted: #8791a5;
+  --dvd-faint: #616c81;
+
+  /* Lines. `--dvd-line-strong` is for anything a pointer can land on. */
+  --dvd-line: #1e2331;
+  --dvd-line-strong: #2b3245;
+
+  /* Semantic accents. The orb, the chips, and the HUD all draw from these. */
+  --dvd-accent: #7aa2ff;
+  --dvd-accent-dim: #4d6fc4;
+  --dvd-violet: #a78bfa;
+  --dvd-green: #4ade80;
+  --dvd-amber: #fbbf24;
+  --dvd-red: #f87171;
+
+  /* Tinted washes, used for chip and bubble fills so the accents stay readable on dark. */
+  --dvd-accent-wash: rgb(122 162 255 / 14%);
+  --dvd-violet-wash: rgb(167 139 250 / 14%);
+  --dvd-green-wash: rgb(74 222 128 / 13%);
+  --dvd-amber-wash: rgb(251 191 36 / 13%);
+  --dvd-red-wash: rgb(248 113 113 / 13%);
+
+  /* Type scale: a 1.22 ratio, rounded to values that land on the pixel grid at 16 px root. */
+  --dvd-text-xs: 0.6875rem;
+  --dvd-text-sm: 0.8125rem;
+  --dvd-text-base: 0.9375rem;
+  --dvd-text-md: 1.0625rem;
+  --dvd-text-lg: 1.3125rem;
+  --dvd-text-xl: 1.625rem;
+
+  /* Spacing: a 4 px base, so nothing lands on a half pixel. */
+  --dvd-space-1: 0.25rem;
+  --dvd-space-2: 0.5rem;
+  --dvd-space-3: 0.75rem;
+  --dvd-space-4: 1rem;
+  --dvd-space-5: 1.5rem;
+  --dvd-space-6: 2rem;
+  --dvd-space-7: 3rem;
+
+  --dvd-radius-sm: 0.375rem;
+  --dvd-radius-md: 0.625rem;
+  --dvd-radius-lg: 1rem;
+  --dvd-radius-pill: 999px;
+
+  --dvd-shadow-panel: 0 1px 2px rgb(0 0 0 / 40%), 0 18px 48px -24px rgb(0 0 0 / 80%);
+
+  /* PRD F1: slide transitions are 200 ms. Named once so the deck and the dots stay in step. */
+  --dvd-transition-slide: 200ms;
+  --dvd-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --dvd-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --dvd-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+  font-family: var(--dvd-font-sans);
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --dvd-bg: #101014;
-    --dvd-surface: #17171c;
-    --dvd-text: #ececf1;
-    --dvd-muted: #a0a0ab;
-    --dvd-border: #2a2a33;
-    --dvd-accent: #748ffc;
-    --dvd-ok: #51cf66;
-    --dvd-bad: #ff6b6b;
-    --dvd-pending: #ffd43b;
-  }
 }
 
 * {
@@ -55,6 +95,18 @@ body {
   min-height: 100vh;
 }
 
+/* One focus treatment for the whole app; every interactive element inherits it. */
+:focus-visible {
+  outline: 2px solid var(--dvd-accent);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* PRD F11 / TR-133: motion is decoration here, never the only carrier of meaning. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

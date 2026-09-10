@@ -60,9 +60,31 @@ The judge is the same LLM provider at `temperature=0` with rubric prompts in `ba
 
 | Model | E1 accuracy | E1 false nav | E4 style | E6 invalid | Notes |
 |---|---|---|---|---|---|
-| openai/gpt-oss-120b (Groq) | — | — | — | — | default candidate |
-| llama-3.3-70b-versatile (Groq) | — | — | — | — | fallback candidate |
+| **qwen/qwen3.8-27b (Groq)** | — | — | — | — | **current default**, chosen on the smoke comparison below |
+| openai/gpt-oss-120b (Groq) | — | — | — | — | rejected on the smoke comparison below |
+| openai/gpt-oss-20b (Groq) | — | — | — | — | untested |
 | local (Ollama, TBD) | — | — | — | — | offline reference |
+
+Note: `llama-3.3-70b-versatile` is no longer offered on this account; the models actually available
+are `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`,
+`qwen/qwen3.6-27b`, and the `groq/compound` pair. Every one carries the same free-tier limit of
+8,000 tokens per minute, so model choice cannot buy more throughput.
+
+### Preliminary model comparison — 2026-09-10 (smoke, not a full eval run)
+
+Three questions through the real pipeline, same prompt, same deck, same code. This is far too small
+to be an eval result; it is recorded because it changed the default model.
+
+| Question | `gpt-oss-120b` | `qwen3.8-27b` |
+|---|---|---|
+| "Which slide covers tool calling?" | Navigated to 5, then called `highlight_bullet` on the second step and never spoke. Fell back to "Here's slide 5." | Navigated to 5, answered: "Slide five, right here. It's titled Thinking: Tool Calling and Intent Routing." |
+| "What's the capital of France?" | Declined, but answered anyway: "the capital of France is Paris." Fixed by sharpening the prompt. | Declined cleanly, no navigation. |
+| "Go back to the interruption one and tell me how it works." | Navigated to 4, then emitted 221 characters of zero-width spaces. The deck is pure ASCII, so the corruption came from the model. | Navigated to 4, answered correctly with the short opener the prompt asks for. |
+| Time to first token | 1.6-2.7 s | 0.7-2.3 s |
+
+`gpt-oss-120b` also produced the literal text `highlightbullet(1)` inside a spoken answer during an
+earlier variant of the tool loop. Taken together, the default moved to `qwen/qwen3.8-27b`. This
+should be re-tested properly by eval suites E1, E4 and E6 before release.
 
 ## Results log
 

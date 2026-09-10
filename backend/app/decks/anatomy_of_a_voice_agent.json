@@ -1,0 +1,152 @@
+{
+  "id": "anatomy_of_a_voice_agent",
+  "title": "Anatomy of a Voice Agent",
+  "voice": "af_heart",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Anatomy of a Voice Agent",
+      "bullets": [
+        "A voice agent explaining its own architecture",
+        "Just talk: ask anything, in any order",
+        "Interrupt me mid-sentence and I stop",
+        "Say \"walk me through it\" for the full tour",
+        "Open weights end to end, running on a laptop"
+      ],
+      "notes": "Welcome. This is Dynamic Voice Deck, and the deck is about the system you are talking to right now. There is no speech-to-speech model here: your audio goes to Whisper for transcription, the text to an open-weight language model that answers and calls a navigation tool, and my reply to Kokoro for speech. Every millisecond of that chain belongs to this codebase, which is the point of the demo. So speak to me the way you would to a person. Ask a question and I will jump to the slide that answers it, then explain it in a few sentences. Three things are worth trying. Ask something out of order, like how interruption works, and watch the slide change before I speak. Talk over me and I will stop within about a tenth of a second and listen. Or say walk me through it and I will present the whole deck end to end.",
+      "aliases": [
+        "intro",
+        "start",
+        "overview",
+        "beginning",
+        "what is this",
+        "title slide",
+        "first slide",
+        "demo"
+      ]
+    },
+    {
+      "index": 2,
+      "title": "The Latency Budget",
+      "bullets": [
+        "Endpointing: 600 ms of silence ends your turn",
+        "Speech to text: about 300 ms",
+        "First token from the model: about 250 ms",
+        "First audio chunk from Kokoro: about 250 ms",
+        "Roughly 1.5 s to first sound, 2.5 s at p95"
+      ],
+      "notes": "Here is where the milliseconds go, measured from the end of your speech to the first sound of mine. Endpointing costs six hundred, because that is how long I wait in silence before deciding you have finished. Transcription takes about three hundred. The model returns its first token roughly two hundred and fifty later, and I start speaking as soon as the first sentence is complete, so synthesis adds another two hundred and fifty. Network and scheduling take forty. That totals about one and a half seconds to first audio, with a ceiling of two and a half at the ninety-fifth percentile. The interesting part is that endpointing is the largest single line item, and it is a product decision rather than a model limit. Shorten it and I cut you off; lengthen it and I feel slow. Everything else is bought with engineering: streaming tokens, synthesising the first sentence before the last one is written, and one request per turn instead of a permanent stream.",
+      "aliases": [
+        "latency",
+        "speed",
+        "delay",
+        "milliseconds",
+        "fast",
+        "slow",
+        "budget",
+        "response time",
+        "how fast are you",
+        "lag",
+        "time to first audio"
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Hearing: VAD and Turn-Taking",
+      "bullets": [
+        "Silero VAD scores ~30 ms frames in the browser",
+        "600 ms of silence means you are finished",
+        "Under 250 ms is a misfire and is discarded",
+        "300 ms of pre-roll saves your first syllable",
+        "One transcription request per finished turn"
+      ],
+      "notes": "Hearing happens in your browser, not on the server. Silero VAD, a tiny neural network, scores about thirty milliseconds of microphone audio at a time and says when speech starts and stops. Six hundred milliseconds of continuous silence ends your turn. Anything shorter than two hundred and fifty milliseconds is discarded as a misfire, so a cough or a keystroke never reaches the network, and three hundred milliseconds of audio from before the onset is kept so your first syllable is not clipped. Only the finished utterance is uploaded, which is one transcription request per turn rather than a permanent audio stream. The trade-off is honest: transcription cannot begin until you stop talking. In exchange, interruption is detected locally and needs no round trip at all, and a free-tier request budget stretches a long way. Every one of those thresholds lives in a single config file, so you can tune how patient I am.",
+      "aliases": [
+        "vad",
+        "hearing",
+        "listening",
+        "turn taking",
+        "when do you start talking",
+        "silence",
+        "microphone",
+        "noise",
+        "end of speech",
+        "endpointing",
+        "voice activity detection"
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Barge-in: Interrupting Gracefully",
+      "bullets": [
+        "Tier one: the browser flushes playback at once",
+        "Tier two: the server cancels the pipeline task",
+        "History cut to the sentences you actually heard",
+        "The cut is marked \"[interrupted by user]\"",
+        "Target: sound stops in under 150 ms"
+      ],
+      "notes": "Interruption is handled in two tiers. Tier one is the browser: the moment the voice detector hears speech onset it flushes the playback queue and stops every scheduled audio source, so sound ends in under one hundred and fifty milliseconds with no server round trip. It also records the last sentence you actually finished hearing. Tier two is the server: the interrupt message cancels the pipeline task, that cancellation propagates into the live model stream and the synthesis jobs, and the conversation history is truncated to the sentences you really heard, with a marker reading interrupted by user appended. The truncation is the part that matters. Without it I would believe I had said the sentences you cut off, and would never say them again. The tiers are split on purpose: the fast one keeps the experience honest, the slower one keeps my memory honest.",
+      "aliases": [
+        "interrupt",
+        "interruption",
+        "barge in",
+        "cut off",
+        "stop talking",
+        "talk over",
+        "cancel",
+        "interrupting",
+        "can i interrupt you"
+      ]
+    },
+    {
+      "index": 5,
+      "title": "Thinking: Tool Calling and Intent Routing",
+      "bullets": [
+        "The whole deck sits in the system prompt",
+        "go_to_slide(index, reason) moves the deck",
+        "highlight_bullet emphasises one line",
+        "Alias scoring catches a missed tool call",
+        "Your manual clicks are told to the model too"
+      ],
+      "notes": "Thinking is one streaming call to an open-weight model with the whole deck in the system prompt: every slide index, title, bullet, alias and speaker note. Those notes are my ground truth, so if you ask something the deck does not cover I say so rather than invent an answer. Two tools are exposed. Go to slide takes an index and a short reason, the text you see in the event log, and I call it before I speak so the slide arrives ahead of the words. Highlight bullet emphasises one line. If I answer about another slide but forget the tool call, a keyword fallback scores your words against each slide's aliases and navigates anyway. Both paths are logged distinctly, so the demo can show you which one fired. Navigating by hand works too: the move is appended to my history as a note, so I always know where you took us.",
+      "aliases": [
+        "tools",
+        "tool calling",
+        "function calling",
+        "routing",
+        "how do you change slides",
+        "navigation",
+        "intent",
+        "go to slide",
+        "reasoning",
+        "thinking"
+      ]
+    },
+    {
+      "index": 6,
+      "title": "Trade-offs and What's Next",
+      "bullets": [
+        "Speech-to-speech is faster, barge-in included",
+        "But it hides the turn-taking you came to see",
+        "This pipeline owns every millisecond",
+        "Open weights on a free tier cost latency",
+        "Next: local models, streaming STT, new decks"
+      ],
+      "notes": "An honest comparison. A speech-to-speech API would be faster than this and would give interruption handling for free, because the model hears and speaks natively and the vendor owns the turn-taking. It would also hide the parts worth showing: where endpointing happens, what is cancelled on an interrupt, how history is truncated. This pipeline owns every one of those milliseconds and is provider agnostic. The costs are real: open weights on a free tier are slower than a tuned proprietary stack, synthesis on a laptop processor adds a couple of hundred milliseconds, and passing through text loses your tone on the way in and my prosody on the way out. With another week I would stream transcription while you speak, run a small model locally to remove the network hop, and generate a deck from any topic on demand.",
+      "aliases": [
+        "trade offs",
+        "next steps",
+        "future",
+        "roadmap",
+        "comparison",
+        "speech to speech",
+        "cost",
+        "conclusion",
+        "summary",
+        "end",
+        "limitations",
+        "what would you do differently"
+      ]
+    }
+  ]
+}

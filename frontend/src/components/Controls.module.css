@@ -1,0 +1,157 @@
+/* The control bar. In Phase 1 the composer is the product's only input, so it gets the space: the
+   orb and the session buttons are sized to it, not the other way round. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-5);
+  padding: var(--dvd-space-3) var(--dvd-space-5);
+  border-top: 1px solid var(--dvd-line);
+  background-color: var(--dvd-bg-elev);
+}
+
+.composer {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--dvd-space-2);
+  min-width: 0;
+}
+
+.field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.input {
+  width: 100%;
+  padding: 0.6875rem var(--dvd-space-4);
+  border: 1px solid var(--dvd-line-strong);
+  border-radius: var(--dvd-radius-pill);
+  background-color: var(--dvd-surface);
+  color: var(--dvd-text);
+  font: inherit;
+  font-size: var(--dvd-text-md);
+}
+
+.input::placeholder {
+  color: var(--dvd-faint);
+}
+
+.input:focus {
+  border-color: var(--dvd-accent-dim);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(122 162 255 / 18%);
+}
+
+.counter {
+  position: absolute;
+  top: 50%;
+  right: var(--dvd-space-4);
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  transform: translateY(-50%);
+}
+
+.send {
+  padding: 0.6875rem var(--dvd-space-5);
+  border: 1px solid var(--dvd-accent-dim);
+  border-radius: var(--dvd-radius-pill);
+  background-color: var(--dvd-accent-wash);
+  color: var(--dvd-accent);
+  cursor: pointer;
+  font-size: var(--dvd-text-base);
+  font-weight: 600;
+  transition:
+    background-color var(--dvd-transition-slide) var(--dvd-ease),
+    opacity var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.send:hover:not(:disabled) {
+  background-color: rgb(122 162 255 / 24%);
+}
+
+.send:disabled {
+  border-color: var(--dvd-line);
+  background-color: transparent;
+  color: var(--dvd-faint);
+  cursor: default;
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-3);
+}
+
+.deck {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dvd-space-2);
+}
+
+.deckLabel {
+  color: var(--dvd-faint);
+  font-size: var(--dvd-text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.select {
+  max-width: 12rem;
+  padding: 0.4375rem var(--dvd-space-3);
+  border: 1px solid var(--dvd-line-strong);
+  border-radius: var(--dvd-radius-md);
+  background-color: var(--dvd-surface);
+  color: var(--dvd-text-dim);
+  font: inherit;
+  font-size: var(--dvd-text-sm);
+}
+
+.select:disabled {
+  color: var(--dvd-faint);
+  opacity: 0.6;
+}
+
+.primary {
+  padding: 0.625rem var(--dvd-space-5);
+  border: 1px solid transparent;
+  border-radius: var(--dvd-radius-pill);
+  background-color: var(--dvd-text);
+  color: var(--dvd-bg);
+  cursor: pointer;
+  font-size: var(--dvd-text-base);
+  font-weight: 620;
+  white-space: nowrap;
+  transition:
+    background-color var(--dvd-transition-slide) var(--dvd-ease),
+    color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.primary:hover {
+  background-color: #ffffff;
+}
+
+.primary[data-active="true"] {
+  border-color: rgb(248 113 113 / 40%);
+  background-color: var(--dvd-red-wash);
+  color: var(--dvd-red);
+}
+
+.primary[data-active="true"]:hover {
+  background-color: rgb(248 113 113 / 22%);
+}
+
+@media (width <= 1000px) {
+  .bar {
+    flex-wrap: wrap;
+    gap: var(--dvd-space-3);
+  }
+
+  .composer {
+    order: 3;
+    flex-basis: 100%;
+  }
+}

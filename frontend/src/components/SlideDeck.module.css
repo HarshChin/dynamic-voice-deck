@@ -1,0 +1,95 @@
+/* The deck viewport. The slide is the hero of the layout: it takes every pixel the shell can spare
+   and keeps a 16:9 frame so it reads as a slide rather than as a web page. */
+
+.deck {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--dvd-space-4);
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.frame {
+  position: relative;
+  width: min(100%, 74rem);
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--dvd-line);
+  border-radius: var(--dvd-radius-lg);
+  background:
+    radial-gradient(115% 90% at 8% 0%, rgb(122 162 255 / 8%) 0%, transparent 58%),
+    linear-gradient(180deg, var(--dvd-surface) 0%, var(--dvd-bg-elev) 100%);
+  box-shadow: var(--dvd-shadow-panel);
+}
+
+.pane {
+  height: 100%;
+  animation: enter var(--dvd-transition-slide) var(--dvd-ease) both;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--dvd-faint);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-4);
+}
+
+.arrow {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--dvd-line);
+  border-radius: var(--dvd-radius-md);
+  background-color: var(--dvd-surface);
+  color: var(--dvd-text-dim);
+  cursor: pointer;
+  font-size: var(--dvd-text-base);
+  transition:
+    border-color var(--dvd-transition-slide) var(--dvd-ease),
+    color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.arrow:hover:not(:disabled) {
+  border-color: var(--dvd-line-strong);
+  color: var(--dvd-text);
+}
+
+.arrow:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.counter {
+  min-width: 3.25rem;
+  margin: 0;
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* PRD F1: 200 ms. Deliberately understated — a slide that slides too far reads as a toy. */
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.75rem, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,89 @@
+/* One slide. The type is sized in `clamp()` against the viewport so the same markup reads from a
+   1280 px window up to a projector without a second layout. */
+
+.slide {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--dvd-space-4), 3vh, var(--dvd-space-6));
+  height: 100%;
+  padding: clamp(var(--dvd-space-5), 4vh, var(--dvd-space-7));
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dvd-space-2);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  max-width: 22ch;
+  color: var(--dvd-text);
+  font-size: clamp(1.75rem, 3.1vw, 2.75rem);
+  font-weight: 640;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.bullets {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  gap: clamp(var(--dvd-space-2), 1.6vh, var(--dvd-space-4));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bullet {
+  display: grid;
+  align-items: baseline;
+  gap: var(--dvd-space-3);
+  grid-template-columns: 0.5rem 1fr;
+  padding: var(--dvd-space-2) var(--dvd-space-3);
+  border-radius: var(--dvd-radius-md);
+  color: var(--dvd-text-dim);
+  font-size: clamp(1rem, 1.35vw, 1.1875rem);
+  line-height: 1.45;
+  transition:
+    background-color var(--dvd-transition-slide) var(--dvd-ease),
+    color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.marker {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background-color: var(--dvd-line-strong);
+  transform: translateY(-0.15em);
+  transition: background-color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.text {
+  text-wrap: pretty;
+}
+
+/* PRD F1: the agent points at a bullet while it talks about it. The emphasis is a wash plus a
+   brighter marker, so it survives both a colour-blind reader and a projector's poor contrast. */
+.bullet[data-highlighted="true"] {
+  background-color: var(--dvd-accent-wash);
+  box-shadow: inset 2px 0 0 var(--dvd-accent);
+  color: var(--dvd-text);
+}
+
+.bullet[data-highlighted="true"] .marker {
+  background-color: var(--dvd-accent);
+  box-shadow: 0 0 10px rgb(122 162 255 / 60%);
+}

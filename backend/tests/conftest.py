@@ -98,6 +98,25 @@ def isolated_env(
 
 
 @pytest.fixture
+def fake_providers(monkeypatch: pytest.MonkeyPatch, isolated_env: Path) -> None:
+    """Select provider implementations that need no credential or network.
+
+    Any test that runs the application lifespan needs this. Startup builds the
+    providers (TR-080), and the configured defaults name real services, so an
+    otherwise-isolated test would fail asking for ``GROQ_API_KEY``. Selecting
+    the fakes keeps the test hermetic while still exercising the real
+    construction path.
+
+    Args:
+        monkeypatch: Pytest patcher; every change is undone at teardown.
+        isolated_env: Ordering dependency, so the scrub runs before this.
+    """
+    monkeypatch.setenv("STT_PROVIDER", "fake")
+    monkeypatch.setenv("LLM_PROVIDER", "fake")
+    monkeypatch.setenv("TTS_PROVIDER", "fake")
+
+
+@pytest.fixture
 def settings(isolated_env: Path) -> Settings:
     """Return a freshly built ``Settings`` for the isolated environment.
 
@@ -113,7 +132,7 @@ def settings(isolated_env: Path) -> Settings:
 
 
 @pytest.fixture
-def client(isolated_env: Path) -> Iterator[TestClient]:
+def client(isolated_env: Path, fake_providers: None) -> Iterator[TestClient]:
     """Return a test client for a freshly built application.
 
     The client is deliberately *not* entered as a context manager, so the
@@ -125,6 +144,8 @@ def client(isolated_env: Path) -> Iterator[TestClient]:
     Args:
         isolated_env: Ordering dependency on the isolation fixture, so the
             application reads the scrubbed environment.
+        fake_providers: Ordering dependency, so provider construction during a
+            lifespan run needs no credential.
 
     Yields:
         A client bound to a new application instance.

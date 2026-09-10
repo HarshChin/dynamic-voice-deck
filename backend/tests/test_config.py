@@ -33,7 +33,7 @@ def test_server_generation_and_pipeline_defaults_are_the_declared_values(
     ]
 
     assert settings.groq_stt_model == "whisper-large-v3-turbo"
-    assert settings.groq_llm_model == "openai/gpt-oss-120b"
+    assert settings.groq_llm_model == "qwen/qwen3.8-27b"
     assert settings.groq_base_url == "https://api.groq.com/openai/v1"
     assert settings.ollama_base_url == "http://localhost:11434/v1"
     assert settings.ollama_model == "llama3.1:8b"

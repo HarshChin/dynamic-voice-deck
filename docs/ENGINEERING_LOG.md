@@ -25,6 +25,75 @@ Rules:
 
 ## 2026-09-10
 
+### 2026-09-10 · Phase 1: two bugs the first end-to-end run exposed · uncommitted
+**Scope:** `app/pipeline/turn.py`, `app/pipeline/prompt.py`, `app/prompts/presenter.md`,
+`app/session.py`, `app/main.py`, `.env`, `.env.example`, several tests
+**Change:** Built the text loop -- deck repository, protocol, history, slide controller, chunker,
+prompt builder, Groq streaming client, session state machine, turn pipeline, and the WebSocket and
+deck routes -- then drove it against the real Groq API and fixed what that revealed.
+
+**Bug 1: the agent moved the deck and said nothing.** The first run answered "how do you handle it
+when I interrupt you?" by navigating correctly to slide 4 and then producing zero words. The model
+returned `finish_reason=tool_calls` with empty content, which is simply how tool calling works: the
+model emits the call and stops, and the caller must send the tool results back in a SECOND request
+to get the spoken answer. `run_turn` made one request. Added a two-step loop with a hard ceiling of
+two round trips. The follow-up call deliberately offers no tools, which both stops the model
+navigating twice for one question and saves the tool schemas' ~320 input tokens.
+
+**Bug 2: the free tier could not afford the prompt.** The third question came back HTTP 429. Groq's
+free tier allows 8,000 tokens per minute for every model offered (checked across gpt-oss-120b,
+gpt-oss-20b and qwen3.8-27b via the rate-limit response headers, so switching model does not help).
+The prompt was 3,262 input tokens, capping the agent at two requests a minute -- less than one
+exchange, since a turn that calls a tool needs two. Cut to 1,815 tokens, a 44% reduction, by:
+- **Sending notes only for the slide on screen.** Other slides contribute title and bullets, which
+  is all the model needs to decide where to go. To speak about another slide it must navigate first,
+  which is the behaviour the prompt already asked for. Worth ~1,570 tokens.
+- **Not sending aliases at all.** They exist for the server-side keyword fallback in
+  `SlideController`, which runs in Python after the model answers. The model never needed them.
+  Worth ~300 tokens.
+- **Tightening the system prompt** from 5,548 to 3,730 characters with every behavioural rule intact.
+
+**Why this matters beyond the free tier:** input tokens are also latency. The measured
+time-to-first-token was 3.5 s on the two-step path, which is well outside the 250 ms budget in TRD
+§8.1 and will need attention in M2 when it sits in front of speech.
+
+**Verification:** After the fixes, "how do you handle it when I interrupt you?" navigates to slide 4
+and answers in seven segments with content drawn from the notes, opening "Two layers, actually." --
+the short opener the prompt asks for, which exists because the first sentence is synthesised before
+the rest is generated. "What's the weather in London?" correctly navigates nowhere and gives a
+one-sentence redirect. 279 backend tests and 27 frontend tests pass; ruff, mypy --strict, eslint,
+tsc and prettier are clean.
+
+**Other decisions:**
+- **Provider defaults now match the milestone.** The registry fails fast on providers whose
+  milestone has not landed, so `.env` and `.env.example` select `fake` for speech-to-text and
+  text-to-speech, with a comment saying when each flips to the real thing. Without this a fresh
+  clone would not start.
+- **Tests that boot the app now request a `fake_providers` fixture** rather than inheriting ambient
+  defaults, and two assertions that hard-coded provider names were rewritten to compare against the
+  configuration, which is what the health probe actually promises.
+- **Helper functions in `turn.py` are keyword-only.** They take six same-typed arguments and a
+  positional mix-up would be silent.
+
+**Follow-ups:**
+- Time to first token is 3.5 s against a 250 ms budget. Investigate before M2 puts audio behind it.
+- The model's answer used typographic quotes, which a speech synthesiser may voice oddly. Normalise
+  in the chunker during M2.
+- Sentence count is measured in speakable segments, not grammatical sentences, so a four-sentence
+  answer reports as seven. Make sure the metric's name does not mislead in the HUD.
+
+### 2026-09-10 · Process change: drop the adversarial verify stage from reviews · uncommitted
+**Scope:** working process, no code
+**Change:** The per-phase loop becomes **code -> review -> resolve -> smoke test**. The separate
+skeptic pass that independently tried to refute every review finding is removed.
+**Why:** Owner's call. On Phase 0 the verify stage cost 39 extra agents to refute 20 findings, and
+its main value (catching overstated severity) is cheaply replaced by the resolver simply reading the
+code before acting. The two refuted findings that mattered were ones I overrode anyway, which is the
+judgement the loop needs, not another vote.
+**Trade-off accepted:** Some findings will now be actioned that a skeptic would have shown to be
+wrong, so review output must be read critically rather than applied mechanically. Reviews stay
+multi-lens and parallel; only the second stage goes.
+
 ### 2026-09-10 · Phase 0 shipped; a self-inflicted CI failure worth recording · 191b134, 4b0df8e, 56529bc
 **Scope:** `.github/workflows/ci.yml`
 **Change:** Pushed Phase 0 and confirmed CI green on a clean ubuntu-24.04 runner in 26 s. Then bumped

@@ -41,7 +41,12 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Dynamic Voice Deck");
     expect(await screen.findByText(/backend: ok/)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    // Phase 1 also fetches the deck listing and the deck itself, so count the health probe rather
+    // than every request: probing twice is the bug this assertion has always been about.
+    const healthCalls = (fetchMock.mock.calls as unknown as [string][]).filter(
+      ([url]) => url === "/api/health",
+    );
+    expect(healthCalls).toHaveLength(1);
   });
 
   it("TC-FE-093: probes the documented health path, not some other URL", async () => {

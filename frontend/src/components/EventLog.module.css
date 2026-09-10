@@ -1,0 +1,311 @@
+/* The event log (PRD F10). A secondary column: quieter type, tighter rhythm, and no colour that
+   competes with the slide. Every entry kind has its own silhouette so the panel can be skimmed. */
+
+.panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-3);
+  padding: var(--dvd-space-3) var(--dvd-space-4);
+  border-bottom: 1px solid var(--dvd-line);
+}
+
+.title {
+  flex: 1;
+  margin: 0;
+  color: var(--dvd-text-dim);
+  font-size: var(--dvd-text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dvd-space-1);
+  color: var(--dvd-muted);
+  cursor: pointer;
+  font-size: var(--dvd-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.toggle input {
+  accent-color: var(--dvd-accent);
+  margin: 0;
+}
+
+.copy {
+  padding: 0.25rem var(--dvd-space-3);
+  border: 1px solid var(--dvd-line-strong);
+  border-radius: var(--dvd-radius-pill);
+  background-color: var(--dvd-surface);
+  color: var(--dvd-text-dim);
+  cursor: pointer;
+  font-size: var(--dvd-text-xs);
+  white-space: nowrap;
+}
+
+.copy:hover {
+  border-color: var(--dvd-accent-dim);
+  color: var(--dvd-text);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--dvd-space-5) var(--dvd-space-4);
+  color: var(--dvd-faint);
+  font-size: var(--dvd-text-sm);
+  line-height: 1.6;
+}
+
+.entries {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dvd-space-2);
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--dvd-space-4);
+  list-style: none;
+}
+
+.row {
+  display: flex;
+}
+
+.row[data-align="end"] {
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------------- bubbles */
+
+.bubbleUser,
+.bubbleAgent {
+  max-width: 88%;
+  margin: 0;
+  padding: var(--dvd-space-2) var(--dvd-space-3);
+  border-radius: var(--dvd-radius-md);
+  font-size: var(--dvd-text-sm);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.bubbleUser {
+  border: 1px solid rgb(122 162 255 / 28%);
+  background-color: var(--dvd-accent-wash);
+  border-bottom-right-radius: var(--dvd-radius-sm);
+  color: var(--dvd-text);
+}
+
+.bubbleAgent {
+  border: 1px solid var(--dvd-line);
+  background-color: var(--dvd-surface);
+  border-bottom-left-radius: var(--dvd-radius-sm);
+  color: var(--dvd-text-dim);
+}
+
+/* TR-132: the user never heard these, so the log must not imply the agent said them. */
+.bubbleAgent[data-cancelled="true"] {
+  color: var(--dvd-faint);
+  opacity: 0.7;
+  text-decoration: line-through;
+}
+
+/* ----------------------------------------------------------------- chips */
+
+.chipTool,
+.chipSlide,
+.chipInterrupt,
+.chipError {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dvd-space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--dvd-space-2) var(--dvd-space-3);
+  border: 1px solid var(--dvd-line);
+  border-radius: var(--dvd-radius-md);
+  background-color: var(--dvd-surface);
+  font-size: var(--dvd-text-sm);
+}
+
+.chipIcon {
+  flex: none;
+  color: inherit;
+  font-size: var(--dvd-text-sm);
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.chipBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.chipTitle {
+  color: var(--dvd-text);
+  font-weight: 560;
+}
+
+.chipDetail {
+  color: var(--dvd-muted);
+  font-size: var(--dvd-text-xs);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.badge {
+  flex: none;
+  align-self: center;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: var(--dvd-radius-pill);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  letter-spacing: 0.02em;
+}
+
+/* TR-062: the model calling the tool and the keyword matcher inferring it are different events,
+   and a demo is only honest if the panel says which one happened. */
+.chipTool[data-source="llm"] {
+  border-color: rgb(122 162 255 / 34%);
+  background-color: var(--dvd-accent-wash);
+  color: var(--dvd-accent);
+}
+
+.chipTool[data-source="llm"] .badge {
+  background-color: rgb(122 162 255 / 20%);
+  color: var(--dvd-accent);
+}
+
+.chipTool[data-source="fallback"] {
+  border-color: rgb(167 139 250 / 34%);
+  border-style: dashed;
+  background-color: var(--dvd-violet-wash);
+  color: var(--dvd-violet);
+}
+
+.chipTool[data-source="fallback"] .badge {
+  background-color: rgb(167 139 250 / 20%);
+  color: var(--dvd-violet);
+}
+
+.chipSlide {
+  color: var(--dvd-muted);
+}
+
+.chipInterrupt {
+  border-color: rgb(248 113 113 / 34%);
+  background-color: var(--dvd-red-wash);
+  color: var(--dvd-red);
+}
+
+.chipInterrupt .chipTitle {
+  color: var(--dvd-red);
+}
+
+.chipError {
+  border-color: rgb(251 191 36 / 34%);
+  background-color: var(--dvd-amber-wash);
+}
+
+.chipError .chipTitle {
+  color: var(--dvd-amber);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  letter-spacing: 0.02em;
+}
+
+.chipError[data-recoverable="false"] {
+  border-color: rgb(248 113 113 / 45%);
+  background-color: var(--dvd-red-wash);
+}
+
+.chipError[data-recoverable="false"] .chipTitle {
+  color: var(--dvd-red);
+}
+
+/* --------------------------------------------------------- rules and raw */
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-2);
+  padding-top: var(--dvd-space-1);
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+}
+
+.divider::after {
+  flex: 1;
+  height: 1px;
+  background-color: var(--dvd-line);
+  content: "";
+}
+
+.dividerText {
+  order: -1;
+  white-space: nowrap;
+}
+
+.dividerTime {
+  color: var(--dvd-line-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.divider[data-to="error"] .dividerText {
+  color: var(--dvd-amber);
+}
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--dvd-space-2) var(--dvd-space-3);
+  border: 1px dashed var(--dvd-line-strong);
+  border-radius: var(--dvd-radius-md);
+}
+
+.bannerTitle {
+  color: var(--dvd-text-dim);
+  font-size: var(--dvd-text-sm);
+  font-weight: 600;
+}
+
+.bannerMeta {
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  word-break: break-all;
+}
+
+.rawRow {
+  display: flex;
+  gap: var(--dvd-space-2);
+  color: var(--dvd-faint);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-xs);
+  line-height: 1.5;
+}
+
+.rawLabel {
+  flex: none;
+  color: var(--dvd-line-strong);
+}
+
+.rawText {
+  min-width: 0;
+  word-break: break-word;
+}

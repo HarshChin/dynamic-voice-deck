@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     # --- Model identifiers --------------------------------------------------
     groq_stt_model: str = "whisper-large-v3-turbo"
-    groq_llm_model: str = "openai/gpt-oss-120b"
+    groq_llm_model: str = "qwen/qwen3.8-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_model: str = "llama3.1:8b"

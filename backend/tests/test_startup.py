@@ -113,7 +113,9 @@ def _captured_stdout() -> Iterator[io.StringIO]:
         sys.stdout = original
 
 
-def test_lifespan_stores_an_app_state_holding_the_settings(isolated_env: Path) -> None:
+def test_lifespan_stores_an_app_state_holding_the_settings(
+    isolated_env: Path, fake_providers: None
+) -> None:
     """TC-BE-130: entering the client as a context manager runs startup and builds AppState."""
     app = create_app()
 
@@ -134,7 +136,9 @@ def test_lifespan_stores_an_app_state_holding_the_settings(isolated_env: Path) -
     assert app.state.app_state is state
 
 
-def test_health_answers_from_the_lifespan_state_inside_the_context(isolated_env: Path) -> None:
+def test_health_answers_from_the_lifespan_state_inside_the_context(
+    isolated_env: Path, fake_providers: None
+) -> None:
     """TC-BE-131: with startup complete, the probe answers from the state the lifespan built."""
     app = create_app()
 
@@ -146,7 +150,9 @@ def test_health_answers_from_the_lifespan_state_inside_the_context(isolated_env:
     assert response.json() == {
         "status": "ok",
         "version": __version__,
-        "providers": {"stt": "groq", "llm": "groq", "tts": "kokoro"},
+        # The fixture selects the fakes so startup needs no credential; the
+        # assertion that matters is that the probe reports what was configured.
+        "providers": {"stt": "fake", "llm": "fake", "tts": "fake"},
         "tts_warm": False,
     }
     # `get_app_state` found the lifespan's state and did not substitute a default.
@@ -157,6 +163,7 @@ def test_health_answers_from_the_lifespan_state_inside_the_context(isolated_env:
 def test_startup_logs_the_settings_with_the_secret_masked(
     monkeypatch: pytest.MonkeyPatch,
     isolated_env: Path,
+    fake_providers: None,
     log_json: bool,
 ) -> None:
     """TC-BE-132: TR-180 — the startup line carries ``"***"`` and never the raw key."""
@@ -283,7 +290,12 @@ def test_a_copied_env_example_leaves_no_secret_and_still_boots(
     key_line: str,
 ) -> None:
     """TC-BE-136: the blank key line ``cp .env.example .env`` leaves loads as None."""
-    isolated_env.write_text(f"{key_line}\nSTT_PROVIDER=fake\n", encoding="utf-8")
+    # All three providers are named because startup builds every one (TR-080);
+    # the point of this case is the blank key, not the provider selection.
+    isolated_env.write_text(
+        f"{key_line}\nSTT_PROVIDER=fake\nLLM_PROVIDER=fake\nTTS_PROVIDER=fake\n",
+        encoding="utf-8",
+    )
     get_settings.cache_clear()
 
     settings = Settings()

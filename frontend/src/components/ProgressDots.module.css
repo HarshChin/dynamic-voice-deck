@@ -1,0 +1,38 @@
+/* Deck position. The current slide is a wider bar rather than a differently coloured dot, so the
+   position reads at a glance from the back of a room. */
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: var(--dvd-space-2);
+}
+
+.dot {
+  display: grid;
+  place-items: center;
+  height: 1.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.track {
+  display: block;
+  width: 0.5rem;
+  height: 0.3125rem;
+  border-radius: var(--dvd-radius-pill);
+  background-color: var(--dvd-line-strong);
+  transition:
+    width var(--dvd-transition-slide) var(--dvd-ease),
+    background-color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.dot:hover .track {
+  background-color: var(--dvd-muted);
+}
+
+.dot[aria-current="true"] .track {
+  width: 1.5rem;
+  background-color: var(--dvd-accent);
+}
