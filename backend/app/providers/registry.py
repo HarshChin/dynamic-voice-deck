@@ -36,6 +36,9 @@ logger = get_logger(__name__)
 GROQ: Final = "groq"
 """Provider value that needs ``GROQ_API_KEY``."""
 
+KOKORO: Final = "kokoro"
+"""On-device Kokoro-82M synthesis (TR-083)."""
+
 FAKE: Final = "fake"
 """Provider value served from :mod:`tests.fakes`."""
 
@@ -149,8 +152,17 @@ def _build_tts(settings: Settings) -> TTSProvider:
         from tests.fakes import FakeTTS  # noqa: PLC0415
 
         return FakeTTS()
-    if name == "kokoro":
-        raise ConfigError(_not_implemented("TTS_PROVIDER", name, "KokoroTTS (TR-083)", "M2"))
+    if name == KOKORO:
+        # Deferred import: this module pulls in onnxruntime, which is heavy and
+        # pointless for a process running the fakes.
+        from .kokoro_tts import KokoroTTS  # noqa: PLC0415
+
+        return KokoroTTS(
+            models_dir=settings.kokoro_models_dir,
+            voice=settings.kokoro_voice,
+            speed=settings.kokoro_speed,
+            download=settings.kokoro_download,
+        )
     raise ConfigError(_unknown("TTS_PROVIDER", name, TTS_VALUES))
 
 

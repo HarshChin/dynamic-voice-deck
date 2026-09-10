@@ -206,10 +206,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # and must never reach the logs (TR-180).
     logger.info("app.startup", version=__version__, settings=settings.masked_dump())
 
+    warm = getattr(providers.tts, "warm_up", None)
+    if warm is not None:
+        # Loading weights and running one throwaway synthesis costs about a
+        # second. Paying it here means the first person to speak does not.
+        try:
+            await warm()
+            app.state.app_state.tts_warm = True
+        except AppError as exc:
+            # A voice that will not load is not a reason to refuse to serve: the
+            # deck, the routing and the transcript all still work.
+            logger.error("tts.warm_up_failed", error=str(exc))
+
     logger.info(
         "app.ready",
         decks=[summary.id for summary in decks.list_decks()],
         providers=providers.names,
+        tts_warm=app.state.app_state.tts_warm,
     )
 
     try:

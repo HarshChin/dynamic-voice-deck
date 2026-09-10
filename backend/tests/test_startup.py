@@ -130,7 +130,7 @@ def test_lifespan_stores_an_app_state_holding_the_settings(
         assert isinstance(state.settings, Settings)
         # The lifespan reuses the singleton rather than building a second copy.
         assert state.settings is get_settings()
-        assert state.tts_warm is False
+        assert state.tts_warm is True  # the fake warms instantly
 
     # Shutdown leaves the state in place rather than tearing it down.
     assert app.state.app_state is state
@@ -153,7 +153,7 @@ def test_health_answers_from_the_lifespan_state_inside_the_context(
         # The fixture selects the fakes so startup needs no credential; the
         # assertion that matters is that the probe reports what was configured.
         "providers": {"stt": "fake", "llm": "fake", "tts": "fake"},
-        "tts_warm": False,
+        "tts_warm": True,
     }
     # `get_app_state` found the lifespan's state and did not substitute a default.
     assert app.state.app_state is state

@@ -49,7 +49,7 @@ from app.protocol import (
 )
 from app.providers.base import LLMDone, LLMEvent, Message, TokenDelta, ToolCallDelta, ToolSpec
 
-from tests.fakes import LLMCall
+from tests.fakes import FakeTTS, LLMCall
 
 DECK_ID = "anatomy_of_a_voice_agent"
 
@@ -134,10 +134,12 @@ class Turn:
         slides: The navigation state the turn drove.
         metrics: The timings the turn recorded.
         llm: The provider that served it.
+        audio: Binary frames sent, in order.
     """
 
     result: Any
     messages: list[ServerMessage] = field(default_factory=list)
+    audio: list[bytes] = field(default_factory=list)
     history: ConversationHistory = field(default_factory=lambda: ConversationHistory(1))
     slides: Any = None
     metrics: Any = None
@@ -214,16 +216,22 @@ async def drive(
             on_message(message)
         turn.messages.append(message)
 
+    async def send_audio(frame: bytes) -> None:
+        turn.audio.append(frame)
+
     turn.result = await run_turn(
         turn_id=TURN_ID,
         text=text,
         deck=deck,
         llm=llm,
+        tts=FakeTTS(),
+        voice=None,
         history=log,
         slides=controller,
         prompts=PromptBuilder(),
         metrics=metrics,
         emit=emit,
+        send_audio=send_audio,
     )
     return turn
 
@@ -260,13 +268,24 @@ def start(
             text=text,
             deck=deck,
             llm=llm,
+            tts=FakeTTS(),
+            voice=None,
             history=log,
             slides=slides,
             prompts=PromptBuilder(),
             metrics=TurnMetrics(turn_id=TURN_ID),
             emit=emit,
+            send_audio=_discard_audio,
         )
     )
+
+
+async def _discard_audio(frame: bytes) -> None:
+    """Swallow audio frames for tests that only assert on JSON messages.
+
+    Args:
+        frame: The framed audio, ignored.
+    """
 
 
 def cancel_self() -> None:

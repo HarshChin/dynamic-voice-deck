@@ -191,9 +191,6 @@ def test_missing_groq_key_fails_naming_env_example(
         pytest.param(
             {"llm_provider": "ollama"}, "LLM_PROVIDER", "OllamaLLM", "M4", id="ollama-llm"
         ),
-        pytest.param(
-            {"tts_provider": "kokoro"}, "TTS_PROVIDER", "KokoroTTS", "M2", id="kokoro-tts"
-        ),
     ],
 )
 def test_providers_from_later_milestones_say_when_they_arrive(

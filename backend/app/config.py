@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     llm_max_tokens: int = Field(default=350, gt=0, le=4096)
     kokoro_voice: str = "af_heart"
     kokoro_speed: float = Field(default=1.0, gt=0.0, le=3.0)
+    kokoro_models_dir: Path = MODELS_DIR
+    kokoro_download: bool = True
+    """Fetch missing Kokoro weights on first start (about 340 MB, once)."""
 
     # --- Server -------------------------------------------------------------
     backend_host: str = "0.0.0.0"  # noqa: S104 - local development server

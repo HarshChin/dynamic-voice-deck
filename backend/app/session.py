@@ -136,6 +136,17 @@ class Session:
         except (RuntimeError, ConnectionError):  # pragma: no cover - race on close
             logger.info("session.send_after_close", session_id=self.id)
 
+    async def send_audio(self, frame: bytes) -> None:
+        """Send one binary audio frame, tolerating a client that has gone.
+
+        Args:
+            frame: A framed chunk of PCM16 (see ``protocol.encode_audio_frame``).
+        """
+        try:
+            await self._ws.send_bytes(frame)
+        except (RuntimeError, ConnectionError):  # pragma: no cover - race on close
+            logger.info("session.audio_after_close", session_id=self.id)
+
     async def set_state(self, value: SessionState) -> None:
         """Transition to a state and tell the client (TR-020).
 
@@ -410,11 +421,14 @@ class Session:
                     text=text,
                     deck=self.deck,
                     llm=self._providers.llm,
+                    tts=self._providers.tts,
+                    voice=self.deck.voice,
                     history=self.history,
                     slides=self.slides,
                     prompts=self._prompts,
                     metrics=metrics,
                     emit=self.send,
+                    send_audio=self.send_audio,
                 )
         except asyncio.CancelledError:
             raise

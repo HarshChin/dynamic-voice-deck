@@ -55,6 +55,7 @@ from app.protocol import (
     SessionStartMsg,
     SessionState,
     TextInputMsg,
+    decode_audio_frame,
 )
 from app.providers.base import (
     LLMDone,
@@ -70,6 +71,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
+from tests.fakes import CHUNK_BYTES as FAKE_TTS_CHUNK_BYTES
 from tests.fakes import FakeLLM, FakeSTT, FakeTTS, LLMCall
 
 DECK_ID = "anatomy_of_a_voice_agent"
@@ -352,6 +354,7 @@ class Harness:
     ws: WebSocketTestSession
     llm: Any
     received: list[dict[str, Any]] = field(default_factory=list)
+    audio: list[bytes] = field(default_factory=list)
 
     # -- reading ---------------------------------------------------------- #
 
@@ -391,16 +394,26 @@ class Harness:
         return frame
 
     def recv(self) -> dict[str, Any]:
-        """Read one JSON message.
+        """Read one JSON message, collecting any audio that arrives first.
+
+        A real client receives both kinds on the same socket. Since M2 the
+        server interleaves binary audio frames with the JSON, so this skips past
+        them -- keeping each one in :attr:`audio` so a test can still assert on
+        what was spoken.
 
         Returns:
             The decoded message, also appended to :attr:`received`.
         """
-        frame = self.recv_frame()
-        assert "text" in frame, f"expected a text frame, got {frame!r}"
-        message: dict[str, Any] = json.loads(frame["text"])
-        self.received.append(message)
-        return message
+        while True:
+            frame = self.recv_frame()
+            payload = frame.get("bytes")
+            if payload is not None:
+                self.audio.append(payload)
+                continue
+            assert "text" in frame, f"expected a text or binary frame, got {frame!r}"
+            message: dict[str, Any] = json.loads(frame["text"])
+            self.received.append(message)
+            return message
 
     def recv_until(self, matches: Callable[[dict[str, Any]], bool]) -> list[dict[str, Any]]:
         """Read messages until one satisfies a predicate.
@@ -786,29 +799,40 @@ def test_each_sentence_is_announced_in_order_with_its_own_id(isolated_env: Any) 
     assert [message["text"] for message in sentences] == ["Sure thing.", "Let me answer that."]
 
 
-def test_no_binary_frame_is_sent_to_the_client_in_this_milestone(isolated_env: Any) -> None:
-    """TC-BE-045: TR-141 -- server audio framing lands in M2; nothing binary ships yet.
+def test_audio_frames_ship_alongside_the_transcript(isolated_env: Any) -> None:
+    """TC-BE-045: TR-141/TR-033 -- each sentence's transcript precedes its audio.
 
-    Partially covered until M2. The framing itself -- an 8-byte header followed
-    by at most 4,800 bytes of PCM16 -- is asserted in ``TC-BE-082`` against
-    ``encode_audio_frame``; this row's job here is to prove the server does not
-    yet emit any binary frame that could violate it.
+    Ordering is the point. Captions that lag the voice look broken, so the
+    transcript for a sentence is sent before its first frame, and every frame
+    carries the id of the sentence it belongs to.
     """
     llm = FakeLLM(sentence_script("Sure thing.", "Let me answer that."))
 
     with connect(llm) as harness:
         harness.send(type="text.input", text="How does barge-in work?")
-        frames: list[dict[str, Any]] = []
+        order: list[tuple[str, int]] = []
         while True:
             frame = harness.recv_frame()
-            frames.append(frame)
-            assert "bytes" not in frame, f"unexpected binary frame: {frame!r}"
+            payload = frame.get("bytes")
+            if payload is not None:
+                sentence_id, seq, pcm = decode_audio_frame(payload)
+                order.append((f"audio:{sentence_id}", seq))
+                assert 0 < len(pcm) <= FAKE_TTS_CHUNK_BYTES
+                assert len(pcm) % 2 == 0, "PCM16 frames must contain whole samples"
+                continue
             message = json.loads(frame["text"])
             harness.received.append(message)
+            if message["type"] == "transcript.agent":
+                order.append((f"text:{message['sentence_id']}", 0))
             if is_state(SessionState.LISTENING)(message):
                 break
 
-    assert len(frames) > 1
+    spoken_ids = [label for label, _ in order if label.startswith("text:")]
+    assert spoken_ids == ["text:0", "text:1"]
+    for sentence_id in (0, 1):
+        text_at = order.index((f"text:{sentence_id}", 0))
+        audio_at = next(i for i, (label, _) in enumerate(order) if label == f"audio:{sentence_id}")
+        assert text_at < audio_at, "the transcript must precede its own audio (TR-033)"
 
 
 # --------------------------------------------------------------------------- #
@@ -1535,10 +1559,20 @@ class RecordingSocket:
 
     Attributes:
         sent: Every message sent, decoded, in order.
+        audio: Every binary audio frame sent, in order.
     """
 
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
+        self.audio: list[bytes] = []
+
+    async def send_bytes(self, payload: bytes) -> None:
+        """Record one outbound audio frame.
+
+        Args:
+            payload: The framed PCM16 the session sent.
+        """
+        self.audio.append(payload)
 
     async def send_text(self, raw: str) -> None:
         """Record one outbound frame.
