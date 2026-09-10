@@ -25,6 +25,26 @@ Rules:
 
 ## 2026-09-10
 
+### 2026-09-10 · Phase 0 shipped; a self-inflicted CI failure worth recording · 191b134, 4b0df8e, 56529bc
+**Scope:** `.github/workflows/ci.yml`
+**Change:** Pushed Phase 0 and confirmed CI green on a clean ubuntu-24.04 runner in 26 s. Then bumped
+the three actions off Node 20, broke the build, and fixed it.
+**Why:** GitHub annotates every run with a Node 20 deprecation notice for `actions/checkout@v4`,
+`actions/setup-node@v4`, and `astral-sh/setup-uv@v6`. Clearing it now removes a deadline from the
+critical path later.
+**The mistake:** I read the version from each repository's *latest release* (`setup-uv` reports
+`v10.0.1`) and assumed a matching moving major tag `v10` existed. It does not — `setup-uv` publishes
+releases well ahead of its major aliases, whose newest is `v7`. CI failed with
+`Unable to resolve action astral-sh/setup-uv@v10, unable to find version v10`.
+**Correction:** Query the git refs API for tags matching `^v[0-9]+$` and pin to the newest alias that
+actually exists, then verify every `uses:` line resolves *before* pushing rather than letting the
+runner find out. Now on `checkout@v7`, `setup-uv@v7`, `setup-node@v7`.
+**Lesson worth keeping:** a release name is not a tag. For anything referenced by tag — actions,
+container images, git submodules — resolve the exact ref before committing to it. The
+pre-push verification loop is three lines and would have caught this.
+**Verification:** Run 34488220964 green in 35 s, no annotations. History left honest rather than
+force-pushed over: the red commit and its fix both stand.
+
 ### 2026-09-10 · Phase 0: scaffolding, quality gates, and the review that paid for itself · uncommitted
 **Scope:** `backend/` (pyproject, app/{config,errors,logging_setup,main}.py, tests/), `frontend/`
 (Vite app, ESLint/Prettier/Vitest config, placeholder UI), `Makefile`, `.github/workflows/ci.yml`,
