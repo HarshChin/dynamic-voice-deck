@@ -95,7 +95,14 @@ describe("EventLog", () => {
         source: "llm",
       }),
       entry({ kind: "slide", index: 4, highlight: null, reason: "barge-in question" }),
-      entry({ kind: "agent", turnId: 1, sentenceId: 0, text: "Two tiers.", cancelled: false }),
+      entry({
+        kind: "agent",
+        turnId: 1,
+        sentenceId: 0,
+        text: "Two tiers.",
+        segments: [{ id: 0, text: "Two tiers.", cancelled: false }],
+        cancelled: false,
+      }),
       entry({ kind: "interrupt", turnId: 1, heardSentences: 2 }),
       entry({ kind: "error", code: "llm_failed", text: "upstream said 503", recoverable: true }),
     ];
@@ -174,8 +181,22 @@ describe("EventLog", () => {
 
   it("TC-FE-130: strikes through the sentences the user never heard", () => {
     const events: readonly LogEvent[] = [
-      entry({ kind: "agent", turnId: 1, sentenceId: 0, text: "heard this", cancelled: false }),
-      entry({ kind: "agent", turnId: 1, sentenceId: 2, text: "never heard this", cancelled: true }),
+      entry({
+        kind: "agent",
+        turnId: 1,
+        sentenceId: 0,
+        text: "heard this",
+        segments: [{ id: 0, text: "heard this", cancelled: false }],
+        cancelled: false,
+      }),
+      entry({
+        kind: "agent",
+        turnId: 1,
+        sentenceId: 2,
+        text: "never heard this",
+        segments: [{ id: 2, text: "never heard this", cancelled: true }],
+        cancelled: true,
+      }),
     ];
 
     render(

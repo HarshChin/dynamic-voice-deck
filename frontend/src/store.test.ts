@@ -320,8 +320,19 @@ describe("event log", () => {
     };
     apply(cancelled);
 
-    const sentences = events().filter((event): event is AgentLogEvent => event.kind === "agent");
-    expect(sentences.map((event) => event.cancelled)).toEqual([false, false, true, true]);
+    // One bubble per turn now, so the strike-through is per segment rather than
+    // per event: segments are a synthesis device, not separate replies.
+    const turns = events().filter((event): event is AgentLogEvent => event.kind === "agent");
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.segments.map((segment) => segment.cancelled)).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ]);
+    // The turn as a whole is not cancelled, because two segments were heard.
+    expect(turns[0]?.cancelled).toBe(false);
+    expect(turns[0]?.text).toBe("sentence 0 sentence 1 sentence 2 sentence 3");
     expect(events().at(-1)).toMatchObject({ kind: "interrupt", heardSentences: 2 });
   });
 });

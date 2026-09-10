@@ -137,7 +137,7 @@ def test_the_snapshot_position_appears_in_the_prompt(mode: SessionMode | str) ->
 
     content = system_prompt(make_deck(), snapshot)
 
-    assert "current_slide: 3" in content
+    assert "SLIDE 3" in content
     assert "presentation_cursor: 2" in content
     assert "mode: present" in content
     assert "SessionMode" not in content

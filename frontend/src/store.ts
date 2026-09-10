@@ -81,12 +81,30 @@ export interface UserLogEvent extends LogEventCommon {
   readonly text: string;
 }
 
-/** One agent sentence. `cancelled` entries are rendered struck-through (TR-132). */
+/** One spoken segment of an agent turn. */
+export interface AgentSegment {
+  readonly id: number;
+  readonly text: string;
+  /** Sent by the server but never heard, because the user interrupted (TR-132). */
+  readonly cancelled: boolean;
+}
+
+/**
+ * One agent turn, holding every segment it spoke.
+ *
+ * Segments exist so synthesis can start on the first clause instead of waiting for the whole
+ * answer (TR-042), which is a latency device rather than a message boundary. Rendering one bubble
+ * per segment made a deliberate one-sentence answer look like three separate replies, so the log
+ * keeps the segments but shows them as the single answer they are.
+ */
 export interface AgentLogEvent extends LogEventCommon {
   readonly kind: "agent";
   readonly turnId: number;
+  /** Id of the most recent segment, kept so existing consumers still work. */
   readonly sentenceId: number;
+  readonly segments: readonly AgentSegment[];
   readonly text: string;
+  /** True only when every segment was cancelled. */
   readonly cancelled: boolean;
 }
 
@@ -546,17 +564,39 @@ function reduceServerMessage(
         { kind: "user", message, turnId: message.turn_id, text: message.text },
       ]);
 
-    case "transcript.agent":
+    case "transcript.agent": {
+      const segment: AgentSegment = {
+        id: message.sentence_id,
+        text: message.text,
+        cancelled: false,
+      };
+      const last = state.events[state.events.length - 1];
+      if (last?.kind === "agent" && last.turnId === message.turn_id) {
+        const segments = [...last.segments, segment];
+        const merged: AgentLogEvent = {
+          ...last,
+          segments,
+          sentenceId: message.sentence_id,
+          text: segments.map((entry) => entry.text).join(" "),
+          cancelled: false,
+        };
+        return {
+          events: [...state.events.slice(0, -1), merged],
+          eventSeq: state.eventSeq,
+        };
+      }
       return appendEvents(state.events, state.eventSeq, now, [
         {
           kind: "agent",
           message,
           turnId: message.turn_id,
           sentenceId: message.sentence_id,
+          segments: [segment],
           text: message.text,
           cancelled: false,
         },
       ]);
+    }
 
     case "tool.call":
       return appendEvents(state.events, state.eventSeq, now, [
@@ -601,13 +641,21 @@ function reduceServerMessage(
     case "agent.cancelled": {
       const truncatedAt = message.truncated_at_sentence_id;
       // `null` means playback never started, so nothing of this turn was heard (TR-051).
-      const marked = state.events.map((event) =>
-        event.kind === "agent" &&
-        event.turnId === message.turn_id &&
-        (truncatedAt === null || event.sentenceId > truncatedAt)
-          ? { ...event, cancelled: true }
-          : event,
-      );
+      const marked = state.events.map((event) => {
+        if (event.kind !== "agent" || event.turnId !== message.turn_id) {
+          return event;
+        }
+        const segments = event.segments.map((segment) =>
+          truncatedAt === null || segment.id > truncatedAt
+            ? { ...segment, cancelled: true }
+            : segment,
+        );
+        return {
+          ...event,
+          segments,
+          cancelled: segments.every((segment) => segment.cancelled),
+        };
+      });
       return appendEvents(marked, state.eventSeq, now, [
         {
           kind: "interrupt",

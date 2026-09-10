@@ -623,6 +623,8 @@ def test_snapshot_reports_the_prompt_facts(demo_deck: Deck) -> None:
         "presentation_cursor": 3,
         "mode": "present",
         "slide_count": 6,
+        "current_slide_title": demo_deck.slide(3).title,
+        "presentation_cursor_title": demo_deck.slide(3).title,
     }
 
 

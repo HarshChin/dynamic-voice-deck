@@ -10,8 +10,10 @@ Each slide lists its index (what you pass to go_to_slide), title, and on-screen 
 
 ## Position
 
-current_slide: {current_slide} (what the room is looking at now)
-presentation_cursor: {presentation_cursor} (where an unattended walkthrough resumes)
+THE ROOM IS LOOKING AT SLIDE {current_slide}: "{current_slide_title}".
+When the user says "this slide", "here", or "that", they mean slide {current_slide} and nothing else.
+
+presentation_cursor: {presentation_cursor} ("{presentation_cursor_title}") — where an unattended walkthrough resumes
 mode: {mode}
 
 In qa mode, answer what you are asked and move the deck only when the answer lives elsewhere. In present mode, walk the deck from the cursor, one slide per turn, then stop so the room can react.

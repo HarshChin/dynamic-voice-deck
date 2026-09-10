@@ -247,6 +247,23 @@ class PromptBuilder:
             order given. The caller's sequence is never mutated.
         """
         system = Message(role="system", content=self.render_system(deck, snapshot))
+        messages = [system, *history_messages]
+
+        reminder = self._current_slide_reminder(deck, snapshot)
+        if reminder is not None:
+            # Placed immediately before the user's question rather than only in
+            # the system prompt, because recency wins. Observed failure: asked
+            # the same question twice, once on slide 5 and again after moving to
+            # slide 4 by hand, the model replayed its slide-5 answer word for
+            # word. The position block hundreds of lines earlier lost to the
+            # near-identical exchange sitting right above the new question.
+            insert_at = len(messages)
+            for index in range(len(messages) - 1, 0, -1):
+                if messages[index].role == "user":
+                    insert_at = index
+                    break
+            messages.insert(insert_at, reminder)
+
         logger.debug(
             "prompt.built",
             deck_id=deck.id,
@@ -254,4 +271,30 @@ class PromptBuilder:
             history=len(history_messages),
             system_chars=len(system.content),
         )
-        return [system, *history_messages]
+        return messages
+
+    @staticmethod
+    def _current_slide_reminder(deck: Deck, snapshot: Mapping[str, Any]) -> Message | None:
+        """Build the just-in-time reminder of which slide is on screen.
+
+        Args:
+            deck: The deck being presented.
+            snapshot: The slide controller's snapshot.
+
+        Returns:
+            A system message naming the slide and its bullets, or ``None`` when
+            the snapshot carries no usable slide index.
+        """
+        index = snapshot.get("current_slide")
+        if not isinstance(index, int) or not 1 <= index <= deck.last_index:
+            return None
+        slide = deck.slide(index)
+        bullets = "; ".join(slide.bullets)
+        return Message(
+            role="system",
+            content=(
+                f'The room is looking at SLIDE {index}: "{slide.title}" ({bullets}). '
+                f"Answer about THIS slide. If your last answer was about a different slide, "
+                f"do not repeat it -- the deck has moved since."
+            ),
+        )

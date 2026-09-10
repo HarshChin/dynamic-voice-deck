@@ -25,6 +25,36 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Two bugs found by using the app, not by testing it · uncommitted
+**Scope:** `app/pipeline/{prompt,slides}.py`, `app/prompts/presenter.md`, `frontend/src/store.ts`,
+`frontend/src/components/EventLog.tsx`, and their tests
+**Change:** The owner drove the app and exported a session log. Two defects fell out that the suite
+could not have caught, because both are about how a real model and a real reader behave.
+
+**Bug 1: the agent answered about the wrong slide.** On slide 4, asked "what's this slide about",
+it replied "This is the intro slide." The server log proved the plumbing was right: the manual
+navigation arrived, `current_slide` was 4, and slide 4's notes were in the prompt. The model simply
+failed to connect the bare number in `current_slide: 4` to the deck entry. A second export showed a
+harder version: asked the same question on slide 5 and again after moving to slide 4 by hand, the
+model replayed its slide-5 answer word for word.
+Two fixes. The position block now names the slide rather than numbering it, and states that "this
+slide" means that one and nothing else. And a short system message naming the slide on screen is
+inserted immediately before the user's question, because recency beats a position block hundreds of
+lines earlier when a near-identical exchange is sitting right above the new question. Verified
+against the real model on the exact sequence from the export.
+
+**Bug 2: "tell me in one line" produced three chat bubbles.** The model complied and wrote one
+sentence; the chunker split it into three speakable segments at clause boundaries, and the event log
+rendered one bubble per segment. Segments exist so synthesis can start on the first clause instead
+of waiting for the whole answer (TR-042), which is a latency device, not a message boundary. The
+store now merges consecutive segments of a turn into one entry that keeps the segments inside it, so
+the log shows one answer while barge-in can still strike through exactly the segments nobody heard.
+
+**Why this is worth recording:** 475 backend and 73 frontend tests were green through both defects.
+Neither is reachable by a test, because one depends on how a specific model resolves an ambiguous
+reference and the other on what a person reading the screen concludes. Driving the product remains
+the only way to find this class of bug.
+
 ### 2026-09-11 · Phase 1 review resolved: 35 findings, every fix mutation-tested · uncommitted
 **Scope:** `app/session.py`, `app/pipeline/{history,turn,slides,chunker}.py`,
 `app/providers/{groq_llm,base,registry}.py`, `app/decks/`, `app/prompts/presenter.md`,

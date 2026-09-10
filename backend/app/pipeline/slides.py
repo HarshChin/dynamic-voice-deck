@@ -604,13 +604,21 @@ class SlideController:
     def snapshot(self) -> dict[str, int | str]:
         """Return the position facts the system prompt needs (TR-064, TR-070).
 
+        The current slide's TITLE is included, not just its number. "What's this
+        slide about?" was answered with "This is the intro slide." while the deck
+        was on slide 4, with a correct position block and slide 4's notes in the
+        prompt -- the model simply failed to connect the bare number to the deck
+        entry. Naming it removes that inference.
+
         Returns:
-            The current slide, the presentation cursor, the mode, and the number
-            of slides in the deck.
+            The current slide and its title, the presentation cursor and its
+            title, the mode, and the number of slides in the deck.
         """
         return {
             "current_slide": self.current_slide,
+            "current_slide_title": self.deck.slide(self.current_slide).title,
             "presentation_cursor": self.presentation_cursor,
+            "presentation_cursor_title": self.deck.slide(self.presentation_cursor).title,
             "mode": self.mode.value,
             "slide_count": self.deck.last_index,
         }

@@ -1383,7 +1383,7 @@ def test_manual_navigation_is_told_to_the_model(isolated_env: Any) -> None:
     assert notes == ["[User manually moved to slide 4: Barge-in: Interrupting Gracefully]"]
 
     prompt = system_prompt(llm)
-    assert "current_slide: 4" in prompt
+    assert "SLIDE 4" in prompt
     # The prompt carries the notes of the slide the room is looking at, and only
     # those: slide one's notes are no longer embedded (TR-071).
     assert "Interruption is handled in two tiers." in prompt

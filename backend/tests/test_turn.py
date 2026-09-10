@@ -482,8 +482,8 @@ async def test_a_tool_call_finish_triggers_a_second_request_that_still_offers_to
 
     # The second prompt is rebuilt against the moved deck, so it carries the
     # notes of the slide the model just navigated to.
-    assert "current_slide: 1" in llm.calls[0].messages[0].content
-    assert "current_slide: 4" in llm.calls[1].messages[0].content
+    assert "SLIDE 1" in llm.calls[0].messages[0].content
+    assert "SLIDE 4" in llm.calls[1].messages[0].content
     assert "Interruption is handled in two tiers." in llm.calls[1].messages[0].content
 
     assert turn.order == ["transcript.user", "tool.call", "slide.goto", "transcript.agent"]
@@ -540,7 +540,13 @@ async def test_the_second_request_replays_what_was_already_spoken(deck: Deck) ->
     assert ("assistant", "Two layers, actually.") in turn.replayed(1)
     assert turn.result.text == "Two layers, actually. The browser stops playback first."
     # The first request has nothing to replay, so it is left exactly as it was.
-    assert turn.replayed(0) == [("user", "How do you handle interruptions?")]
+    # A system reminder naming the slide on screen sits immediately before the
+    # question (see PromptBuilder._current_slide_reminder); the user's message is
+    # still the last thing the model reads.
+    replayed = turn.replayed(0)
+    assert replayed[-1] == ("user", "How do you handle interruptions?")
+    assert [role for role, _ in replayed] == ["system", "user"]
+    assert "SLIDE 1" in replayed[0][1]
 
 
 async def test_a_plain_answer_costs_a_single_request(deck: Deck) -> None:

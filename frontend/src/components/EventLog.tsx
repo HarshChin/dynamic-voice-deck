@@ -213,7 +213,12 @@ function AgentEntry({ event }: { readonly event: AgentLogEvent }): JSX.Element {
   return (
     <li className={styles.row} data-kind="agent">
       <p className={styles.bubbleAgent} data-cancelled={event.cancelled ? "true" : undefined}>
-        {event.text}
+        {event.segments.map((segment, index) => (
+          <span key={segment.id} data-cancelled={segment.cancelled ? "true" : undefined}>
+            {index > 0 ? " " : ""}
+            {segment.text}
+          </span>
+        ))}
       </p>
     </li>
   );
