@@ -249,11 +249,25 @@ class Session:
         await self.set_state(SessionState.LISTENING)
 
     async def _on_speech_start(self) -> None:
-        """Handle voice onset, which doubles as barge-in while speaking (TR-023)."""
-        if self.state in (SessionState.THINKING, SessionState.SPEAKING):
+        """Handle voice onset, which is barge-in only while the agent is speaking.
+
+        Onset while merely THINKING is deliberately *not* an interrupt. Nothing
+        has been said yet, so there is nothing to cut short, and cancelling
+        throws away work the user is still waiting for. Observed in a live
+        session: the tail of the user's own sentence arrived a fraction of a
+        second after their turn started and cancelled it, twice, producing an
+        interrupt chip for something nobody interrupted.
+
+        Nothing is lost by waiting. If the onset really is a new question, its
+        utterance arrives a moment later and :meth:`start_turn` supersedes the
+        running turn anyway -- which is the same cancellation, taken at the point
+        where it is known to be wanted.
+        """
+        if self.state is SessionState.SPEAKING:
             await self._on_interrupt(None)
             return
-        await self.set_state(SessionState.HEARING)
+        if self.state is not SessionState.THINKING:
+            await self.set_state(SessionState.HEARING)
 
     async def _on_interrupt(self, last_completed: int | None) -> None:
         """Cancel the in-flight turn, or refine the cut of the one just cancelled.
@@ -414,7 +428,12 @@ class Session:
             await self._ws.close(code=1009, reason="utterance too large")
             return
 
-        await self.set_state(SessionState.THINKING)
+        # Deliberately no state change here. Transcription takes a few hundred
+        # milliseconds and belongs to the utterance, not to a turn: emitting
+        # THINKING now would carry the *previous* turn's id, and the client would
+        # see two THINKING transitions with different ids for one question. The
+        # session stays in HEARING, which is honest -- it is still working out
+        # what was said -- until `start_turn` opens the turn properly.
         try:
             transcript = await self._providers.stt.transcribe(pcm16)
         except ProviderError as exc:
@@ -469,7 +488,7 @@ class Session:
             metrics.set_stt_ms(stt_ms)
         try:
             async with asyncio.timeout(self._settings.turn_timeout_s):
-                result = await run_turn(
+                await run_turn(
                     turn_id=turn_id,
                     text=text,
                     deck=self.deck,
@@ -482,6 +501,7 @@ class Session:
                     metrics=metrics,
                     emit=self.send,
                     send_audio=self.send_audio,
+                    on_speaking=self._on_speaking,
                 )
         except asyncio.CancelledError:
             raise
@@ -509,10 +529,10 @@ class Session:
             return
 
         await self.send(metrics.to_message())
-        # With audio, the client reports playback completion and drives the
-        # return to listening. Until then a turn that produced speech ends here.
-        if result.answered:
-            await self.set_state(SessionState.SPEAKING)
+        # SPEAKING was announced when the first frame left, so the turn only has
+        # to hand the floor back. With audio the client's `playback.progress`
+        # decides when that really is; this is the safety net for a turn that
+        # produced no sound at all.
         await self.set_state(SessionState.LISTENING)
         # Cleared last. While this task is still reachable a turn starting in
         # the window above cancels it (TR-022) instead of racing it, so these
@@ -537,6 +557,23 @@ class Session:
             self.history.truncate_current(self.turn_id, self.history.last_recorded_sentence_id)
         await self.set_state(SessionState.LISTENING)
         self._task = None
+
+    async def _on_speaking(self, turn_id: int) -> None:
+        """Enter SPEAKING as the turn's first audio frame leaves.
+
+        The state has to change here rather than when the turn finishes, because
+        this is when there is finally something for an interrupt to cut short.
+        Announcing it at the end would leave the session in THINKING for the
+        whole time it was talking, and barge-in would never fire.
+
+        Args:
+            turn_id: The turn whose audio started. Checked against the current
+                turn because this runs on the sender's task, which can be parked
+                inside a send when the turn is cancelled; waking up afterwards
+                must not stamp this transition on whatever turn is running now.
+        """
+        if turn_id == self.turn_id and self.state is SessionState.THINKING:
+            await self.set_state(SessionState.SPEAKING)
 
     async def close(self) -> None:
         """Cancel any in-flight turn and release the session (TR-026)."""

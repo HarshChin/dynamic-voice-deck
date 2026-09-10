@@ -62,6 +62,18 @@ Emit = Callable[[ServerMessage], Awaitable[None]]
 SendAudio = Callable[[bytes], Awaitable[None]]
 """Sends one binary audio frame to the client. Supplied by the session."""
 
+OnSpeaking = Callable[[int], Awaitable[None]]
+"""Called once, as the first audio frame of a turn leaves. Supplied by the session.
+
+Receives the turn id, because the sender runs as its own task and can be parked
+in a send when the turn is cancelled. Without the id it would wake up and stamp
+the *next* turn's id on a transition belonging to the one that was abandoned.
+The session uses it to enter SPEAKING at the moment sound actually starts, rather
+than when the turn finishes. That is what makes the state honest, and barge-in
+depends on it: an interrupt is only meaningful while there is something to cut
+short, so the handler keys on SPEAKING.
+"""
+
 MAX_LLM_STEPS = 3
 """Model round trips per turn, at most.
 
@@ -190,6 +202,7 @@ async def run_turn(
     metrics: TurnMetrics,
     emit: Emit,
     send_audio: SendAudio,
+    on_speaking: OnSpeaking | None = None,
 ) -> TurnResult:
     """Run one turn and stream its answer to the client.
 
@@ -211,6 +224,7 @@ async def run_turn(
         metrics: Timings for this turn, mutated in place.
         emit: Sends a message to the client.
         send_audio: Sends one binary audio frame to the client.
+        on_speaking: Called once as the turn's first audio frame leaves.
 
     Returns:
         A summary of what the turn produced.
@@ -239,6 +253,7 @@ async def run_turn(
         metrics=metrics,
         emit=emit,
         send_audio=send_audio,
+        on_speaking=on_speaking,
     )
     spoken = speech.spoken
     navigated = False
@@ -599,6 +614,7 @@ class SpeechSender:
         metrics: TurnMetrics,
         emit: Emit,
         send_audio: SendAudio,
+        on_speaking: OnSpeaking | None = None,
     ) -> None:
         """Start the sender for one turn.
 
@@ -610,6 +626,7 @@ class SpeechSender:
             metrics: Timings for this turn.
             emit: Sends a JSON message to the client.
             send_audio: Sends one binary audio frame to the client.
+            on_speaking: Called once as the first frame leaves.
         """
         self._turn_id = turn_id
         self._tts = tts
@@ -618,6 +635,8 @@ class SpeechSender:
         self._metrics = metrics
         self._emit = emit
         self._send_audio = send_audio
+        self._on_speaking = on_speaking
+        self._announced = False
         self._queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=SPEECH_QUEUE_DEPTH)
         self.spoken: list[str] = []
         # Set before the task exists: `create_task` can schedule `_run` before
@@ -803,6 +822,10 @@ class SpeechSender:
                     # Barge-in: the rest of this sentence is no longer wanted.
                     return
                 self._metrics.mark_first_audio()
+                if not self._announced:
+                    self._announced = True
+                    if self._on_speaking is not None:
+                        await self._on_speaking(self._turn_id)
                 await self._send_audio(encode_audio_frame(sentence_id, seq, frame))
                 seq += 1
         except ProviderError as exc:

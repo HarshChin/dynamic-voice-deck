@@ -25,6 +25,43 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Phase 4 opens with two defects the first voice session exposed · uncommitted
+**Scope:** `app/session.py`, `app/pipeline/turn.py`, `tests/test_session.py`
+**Change:** The owner's first real spoken session worked -- transcription was word-perfect on every
+question -- and surfaced two problems that only voice input can produce.
+
+**The agent interrupted itself.** Twice, a turn was cancelled a fraction of a second after starting,
+showing an interrupt chip for something nobody interrupted. The cause was the tail of the user's own
+sentence arriving as a fresh speech onset, and onset while THINKING was treated as barge-in. It
+should not be: nothing has been said, so there is nothing to cut short, and cancelling throws away
+work the user is still waiting for. Onset now only interrupts while SPEAKING. Nothing is lost by
+waiting -- if the onset really is a new question, its utterance supersedes the running turn a moment
+later, which is the same cancellation taken where it is known to be wanted.
+
+**That exposed a worse problem.** The session only entered SPEAKING *after* a turn finished, so it
+reported THINKING for the entire time it was talking. Keying barge-in on SPEAKING would therefore
+have disabled it completely. SPEAKING is now announced as the first audio frame leaves, which is both
+honest and what makes an interrupt meaningful.
+
+**Which in turn exposed a third.** That announcement comes from the speech sender's own task, and the
+sender can be parked in a send when the turn is cancelled -- deliberately, since cancelling mid-write
+corrupted the socket in Phase 2. Waking up afterwards it would have stamped the *next* turn's id on a
+transition belonging to the abandoned one. The callback now carries its turn id and checks it. The
+test that guarded the old behaviour asserted "cancelled inside the send", which is no longer the
+guarantee; it now asserts the one that replaced it, that each transition carries the id of the turn
+that produced it.
+
+**Also from the same log, and left alone deliberately:** `gpt-oss-120b` answered three questions with
+"Sorry, I lost that one", our own fallback for a turn that produces nothing. The server log shows
+`finish_reason=length` with `chars=0`: a reasoning model spending the whole 350-token response budget
+on reasoning tokens, which are charged against it but never appear in the content. That is a
+model-specific failure. Qwen, the configured default, does not do it, and the owner asked that the
+prompt and token budget not be changed to accommodate a model we are not shipping. Recorded here
+because the same symptom will reappear behind any reasoning model.
+
+**Still pending:** the backend is running on `openai/gpt-oss-120b` because Qwen's daily budget was
+spent. Switch it back.
+
 ### 2026-09-11 · Silero replaced by an energy detector, after four verified failures · uncommitted
 **Scope:** `frontend/src/audio/microphone.ts`, `frontend/public/worklets/capture.js`,
 `frontend/package.json`, `frontend/vite.config.ts`, `app/decks/anatomy_of_a_voice_agent.json`,

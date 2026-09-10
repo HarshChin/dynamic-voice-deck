@@ -683,7 +683,12 @@ def test_an_oversized_text_frame_is_refused_before_parsing(isolated_env: Any) ->
 
 
 def test_a_typed_question_runs_a_turn_and_returns_to_listening(isolated_env: Any) -> None:
-    """TC-BE-041: F13 -- text.input drives THINKING, the answer, SPEAKING, LISTENING."""
+    """TC-BE-041: F13 -- text.input drives THINKING, SPEAKING with the sound, LISTENING.
+
+    SPEAKING lands after the first sentence, not after the last: the state
+    changes when audio actually starts, because that is when there is something
+    for an interrupt to cut short.
+    """
     llm = FakeLLM(sentence_script("Sure thing.", "Let me answer that."))
     question = "How do you handle interruptions?"
 
@@ -694,9 +699,9 @@ def test_a_typed_question_runs_a_turn_and_returns_to_listening(isolated_env: Any
         "state",
         "transcript.user",
         "transcript.agent",
+        "state",
         "transcript.agent",
         "metrics",
-        "state",
         "state",
     ]
     states = [message["value"] for message in only(turn, "state")]
@@ -1034,7 +1039,10 @@ def test_an_interrupt_announces_the_interrupted_state_before_hearing(isolated_en
         harness.send(type="interrupt", last_completed_sentence_id=0)
         after = harness.recv_until(is_state(SessionState.HEARING))
 
+    # SPEAKING is in this window now: it is announced as the first frame leaves,
+    # which is also what makes the interrupt that follows meaningful.
     assert [message["value"] for message in only(after, "state")] == [
+        SessionState.SPEAKING.value,
         SessionState.INTERRUPTED.value,
         SessionState.HEARING.value,
     ]
@@ -1080,30 +1088,34 @@ def test_a_follow_up_interrupt_refines_the_cut_of_the_turn_it_names(isolated_env
     assert replayed == [f"Sentence 0. Sentence 1. {INTERRUPTED_MARKER}"]
 
 
-def test_speech_onset_before_any_sentence_truncates_with_none(isolated_env: Any) -> None:
-    """TC-BE-049: TR-023 -- speech.start during THINKING cancels and truncates at None."""
-    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+def test_speech_onset_while_thinking_does_not_cancel_the_turn(isolated_env: Any) -> None:
+    """TC-BE-049: TR-023 -- onset before any sound is turn-taking, not barge-in.
+
+    Cancelling here throws away work the user is still waiting for, and nothing
+    has been said that an interrupt could cut short. Seen live: the tail of the
+    user's own sentence arrived a fraction of a second after their turn started
+    and cancelled it twice, showing an interrupt chip for something nobody
+    interrupted.
+
+    Nothing is lost by waiting. If the onset really is a new question, its
+    utterance supersedes the running turn a moment later.
+    """
+    # Delayed, so the onset lands while the turn is still thinking rather than
+    # after it has begun speaking -- which would be a genuine barge-in.
+    llm = FakeLLM(sentence_script("Sure thing.", "Let me answer that."), delay_s=STEP_DELAY_S)
 
     with connect(llm) as harness:
         harness.send(type="text.input", text="Tell me everything.")
         harness.recv_until(is_type("transcript.user"))
         harness.send(type="speech.start")
-        after = harness.recv_until(is_type("agent.cancelled"))
-        state = harness.recv()
+        turn = harness.recv_until(is_state(SessionState.LISTENING))
 
-        harness.send(type="text.input", text="Sorry, go on.")
-        harness.recv_until(
-            lambda message: message["type"] == "transcript.agent" and message["turn_id"] == 2
-        )
-
-    cancelled = after[-1]
-    assert cancelled["turn_id"] == 1
-    # Nothing was heard, so nothing may be claimed as said (TR-051).
-    assert cancelled["truncated_at_sentence_id"] is None
-    assert state["value"] == SessionState.HEARING.value
-
-    replayed = [message.content for message in llm.calls[1].messages if message.role == "assistant"]
-    assert replayed == ["[interrupted by user before speaking]"]
+    # The turn ran to completion; no cancellation was announced.
+    assert only(turn, "agent.cancelled") == []
+    assert [message["text"] for message in only(turn, "transcript.agent")] == [
+        "Sure thing.",
+        "Let me answer that.",
+    ]
 
 
 def test_speech_onset_while_listening_only_moves_to_hearing(isolated_env: Any) -> None:
@@ -1782,6 +1794,10 @@ async def test_a_turn_starting_as_another_finishes_cancels_it_first(isolated_env
     the THINKING the new turn had just entered, and telling the client the
     answer it is waiting for is already over.
     """
+    # Gated on SPEAKING, which since audio landed arrives with the first frame,
+    # in the middle of a turn. Parking there is what this test needs: a turn
+    # suspended mid-send, which the next turn must cancel rather than leave to
+    # wake up and stamp its own id on the new turn's transitions.
     socket = GatedSocket(gate_on=SessionState.SPEAKING)
     session = await started_session(socket, llm=FakeLLM(sentence_script("Sure thing.")))
 
@@ -1802,8 +1818,15 @@ async def test_a_turn_starting_as_another_finishes_cancels_it_first(isolated_env
             await asyncio.wait_for(task, timeout=RECEIVE_TIMEOUT_S)
     await session.close()
 
-    # The parked turn was cancelled where it stood, rather than left to wake up.
-    assert socket.cancelled_in_send is True
+    # The parked send is no longer cancelled where it stands: cancelling mid-write
+    # corrupted the socket when audio landed, so a send is allowed to finish. The
+    # guarantee that replaced it is stronger and is what this row is really about
+    # -- a transition belonging to the abandoned turn must never be stamped with
+    # the id of the turn that replaced it.
+    stamped = [
+        turn_id for value, turn_id in socket.states() if value == SessionState.SPEAKING.value
+    ]
+    assert stamped == [1, 2], "each SPEAKING must carry the id of the turn that produced it"
     assert socket.states() == [
         (SessionState.THINKING.value, 1),
         (SessionState.SPEAKING.value, 1),
