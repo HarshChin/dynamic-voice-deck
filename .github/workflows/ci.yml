@@ -28,12 +28,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # actions/setup-python is not needed: `uv sync` reads
       # backend/.python-version and installs CPython 3.12 itself (TR-010).
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           cache-dependency-glob: |
@@ -41,7 +41,7 @@ jobs:
             backend/pyproject.toml
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
