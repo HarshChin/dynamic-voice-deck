@@ -14,8 +14,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { PlaybackQueue } from "../audio/playback";
+
 import { API_BASE_PATH } from "../config";
-import { MAX_TEXT_INPUT_CHARS, type Deck, type SessionMode, type SessionState } from "../protocol";
+import {
+  MAX_TEXT_INPUT_CHARS,
+  decodeAudioFrame,
+  type Deck,
+  type SessionMode,
+  type SessionState,
+} from "../protocol";
 import { useSessionStore } from "../store";
 
 import { SessionClient, type ConnectionStatus } from "./client";
@@ -57,6 +65,8 @@ export interface SessionController {
   readonly connection: ConnectionStatus;
   /** What the orb should portray: the agent's state once connected, the socket's before that. */
   readonly orbState: SessionState;
+  /** Output loudness in `[0, 1]` while the agent speaks, for the orb. */
+  readonly outputLevel: number;
   /** True from the moment `start()` is called until the socket is closed. */
   readonly isActive: boolean;
   /** True when a message sent right now would reach the server. */
@@ -195,6 +205,11 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
   const [previewDeck, setPreviewDeck] = useState<Deck | null>(null);
 
   const clientRef = useRef<SessionClient | null>(null);
+  const playbackRef = useRef<PlaybackQueue | null>(null);
+  // When the current turn's question left the client, so first-audio can be measured the way a
+  // listener experiences it: from asking to hearing (TR-125).
+  const askedAtRef = useRef<number | null>(null);
+  const [outputLevel, setOutputLevel] = useState(0);
 
   // Before a session opens there is still a deck to look at (PRD F1: slide 1 is on screen when the
   // page loads), so the HTTP copy stands in until `session.ready` delivers the authoritative one.
@@ -277,6 +292,20 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     // survive a second session (PRD F13).
     useSessionStore.getState().clearSession();
 
+    const playback = new PlaybackQueue({
+      onSentenceComplete: ({ turnId, sentenceId }) => {
+        // Only the browser knows when a sample actually reached the speakers, so the server is
+        // told rather than guessing. It uses this to decide how much of its answer was heard.
+        clientRef.current?.send({
+          type: "playback.progress",
+          turn_id: turnId,
+          sentence_id: sentenceId,
+        });
+      },
+      onLevel: setOutputLevel,
+    });
+    playbackRef.current = playback;
+
     const client = new SessionClient({
       deckId,
       mode,
@@ -284,6 +313,30 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
       createSocket,
       onMessage: (message) => {
         useSessionStore.getState().applyServerMessage(message);
+        if (message.type === "metrics") {
+          // The turn is over, so its last sentence has no later frame to prove it finished.
+          playback.sealAll();
+        } else if (message.type === "agent.cancelled") {
+          playback.flush();
+        }
+      },
+      onAudio: (frame) => {
+        let decoded;
+        try {
+          decoded = decodeAudioFrame(frame);
+        } catch {
+          useSessionStore.getState().logNotice("dropped a malformed audio frame");
+          return;
+        }
+        const turnId = useSessionStore.getState().turnId;
+        const askedAt = askedAtRef.current;
+        if (askedAt !== null) {
+          askedAtRef.current = null;
+          useSessionStore
+            .getState()
+            .recordClientTimings(turnId, { firstAudioMs: Math.round(performance.now() - askedAt) });
+        }
+        playback.enqueue(turnId, decoded.sentenceId, decoded.pcm);
       },
       onStatus: (status) => {
         useSessionStore.getState().setConnection(status);
@@ -313,6 +366,12 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
   const stop = useCallback((): void => {
     clientRef.current?.close();
     clientRef.current = null;
+    const playback = playbackRef.current;
+    playbackRef.current = null;
+    setOutputLevel(0);
+    // Releasing the device is asynchronous but nothing waits on it; a failure here would only mean
+    // an audio context lingering until the page unloads.
+    void playback?.close();
   }, []);
 
   const selectDeck = useCallback((nextDeckId: string): void => {
@@ -340,6 +399,9 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
         .logNotice("the presenter is still answering; wait for it to finish");
       return false;
     }
+    // Stamped here so first-audio is measured the way a listener experiences it: from asking to
+    // hearing, not from any server-side stage boundary.
+    askedAtRef.current = performance.now();
     return client.send({ type: "text.input", text: trimmed });
   }, []);
 
@@ -370,6 +432,7 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
   return {
     connection,
     orbState: deriveOrbState(connection, agentState),
+    outputLevel,
     isActive:
       connection === "connecting" || connection === "reconnecting" || connection === "connected",
     canSend: connection === "connected",

@@ -25,6 +25,65 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Phase 2: the agent speaks · uncommitted
+**Scope:** `app/providers/kokoro_tts.py`, `app/pipeline/turn.py`, `app/session.py`, `app/main.py`,
+`app/providers/registry.py`, `app/config.py`, `frontend/src/audio/playback.ts`,
+`frontend/src/session/useSession.ts`, `frontend/src/components/{Orb,Controls}.tsx`, and their tests
+**Change:** Kokoro-82M synthesises on this machine, the server streams 100 ms PCM16 frames over the
+same socket as the JSON, and the browser schedules them gaplessly on the Web Audio clock. 474 backend
+and 83 frontend tests pass.
+
+**Measured before designing, which changed the design twice.**
+- Kokoro's `create_stream` exists, which I had not known when writing TR-083. It yields one chunk for
+  sentence-sized input, so it buys nothing here, but it does stop work when abandoned. Kept `create`
+  in a thread for simplicity and documented why.
+- Synthesis costs about **8 ms per character**: a 21-character opener is audible in 259 ms, an
+  ordinary sentence in 440 ms, three sentences in 1,677 ms. This is the measurement that justifies
+  the whole early-split design. The prompt's "open with a short sentence" instruction, written on a
+  hunch in Phase 1, is worth roughly a second and a half of perceived latency.
+- Sample rate confirmed at 24,000 Hz, matching what the client was already built for.
+
+**End to end, measured:** first audio **760 ms** after the question against a 1.5 s budget, with the
+model's first token at 480 ms and synthesis first byte at 272 ms.
+
+**Four bugs that only running it could find:**
+- **Cancelling the speech task mid-send corrupted the WebSocket**, killing the connection rather than
+  the turn. It now sets a flag and lets the sender stop at a frame boundary, which is all barge-in
+  needs: no further audio, not a thread stopped mid-write. Awaiting cleanup inside a `finally` on a
+  coroutine that is itself being cancelled is how cleanup gets interrupted half-done, so `stop()` is
+  deliberately synchronous.
+- **A dead sender deadlocked the queue for ever**, because nothing calls `task_done` after the
+  consumer dies. `submit` and `drain` now re-raise whatever killed it. This defect found itself:
+  the guard turned a hang into a clear `AttributeError` from an unrelated ordering mistake.
+- **The agent said "Two layers, actually. Two layers, actually."** Replaying already-spoken text as a
+  trailing assistant message leaves the conversation ending on the assistant's own turn, and a model
+  asked to continue from there starts its reply again. Merging it into the assistant message that
+  carried the tool call -- the documented shape -- leaves the tool result last, which reads as a
+  request to continue. The repetition stopped.
+- **A flag was read before it was assigned**, because `create_task` can schedule the coroutine before
+  the constructor finishes.
+
+**A design decision worth recording:** an interrupt and an error now do opposite things with queued
+speech. A barge-in drops it, because the user is already talking. A provider failure part-way through
+drains it, because a partial answer beats silence followed by an error. That distinction lives in the
+sender's `__aexit__`, which is why it is a context manager.
+
+**Client-side playback.** Frames are scheduled on `AudioContext.currentTime` rather than played on
+arrival, because that clock advances smoothly where `setTimeout` does not. A late frame is delayed
+rather than overlapped: a short silence is far less noticeable than two frames playing at once. The
+queue also owns two things nothing else can know -- when a sentence actually reached the speakers,
+which the server needs to truncate its memory honestly, and the flush that makes tier one of barge-in
+instant without a round trip.
+
+**I walked into my own IPv6 trap** while writing the capture script, pointing it at `localhost:8000`
+and reaching the unrelated PHP server documented in the Phase 0 entry.
+
+**Follow-ups:**
+- Time to first token is 480 ms against a 250 ms budget. Two model round trips per navigating turn is
+  the structural cause.
+- The orb now scales with measured output level while speaking. Microphone-driven levels arrive with
+  capture in M3.
+
 ### 2026-09-11 · Two bugs found by using the app, not by testing it · uncommitted
 **Scope:** `app/pipeline/{prompt,slides}.py`, `app/prompts/presenter.md`, `frontend/src/store.ts`,
 `frontend/src/components/EventLog.tsx`, and their tests

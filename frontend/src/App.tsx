@@ -128,6 +128,7 @@ export function App(): JSX.Element {
       <footer className="app__controls">
         <Controls
           orbState={session.orbState}
+          outputLevel={session.outputLevel}
           isActive={session.isActive}
           canSend={session.canSend}
           isAnswering={session.isAnswering}

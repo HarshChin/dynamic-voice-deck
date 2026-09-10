@@ -48,8 +48,10 @@ function unknownCopy(state: string): OrbCopy {
 
 /** Inputs to the agent state indicator. */
 export interface OrbProps {
-  /** The state to portray; in Phase 1 this comes from the session, not from audio levels. */
+  /** The state to portray. */
   readonly state: SessionState;
+  /** Output loudness in `[0, 1]`, so the orb moves with the voice rather than on a timer. */
+  readonly level?: number;
   /** Hide the hint line where space is tight. */
   readonly compact?: boolean;
 }
@@ -57,21 +59,28 @@ export interface OrbProps {
 /**
  * The agent state indicator (PRD F11, TR-134).
  *
- * Phase 1 has no audio, so every state animates from the state alone; the amplitude-reactive
- * variants of `hearing` and `speaking` arrive with the audio pipeline and will feed the same
- * `data-state` hook. Colour is never the only signal: the state is also written underneath in a
- * live region, which is what a screen reader announces and what the tests assert on.
+ * While speaking, the orb scales with the measured output level, so it moves with the voice instead
+ * of on a timer -- which is what makes a pause read as a pause rather than as a freeze. Colour is
+ * never the only signal: the state is also written underneath in a live region, which is what a
+ * screen reader announces and what the tests assert on.
  *
  * @param props - The state to show and whether to drop the hint line.
  * @returns The indicator element.
  */
-export function Orb({ state, compact = false }: OrbProps): JSX.Element {
+export function Orb({ state, level = 0, compact = false }: OrbProps): JSX.Element {
   const copy = ORB_COPY[state] ?? unknownCopy(state);
+  // Only while speaking: a level-driven scale during `thinking` would imply the agent is making a
+  // sound it is not. Clamped so a loud passage cannot inflate the orb without bound.
+  const scale = state === "speaking" ? 1 + Math.min(1, Math.max(0, level)) * 0.35 : 1;
   return (
     <div className={styles.orb} data-state={state} data-compact={compact ? "true" : undefined}>
       <span className={styles.halo} aria-hidden="true" />
       <span className={styles.ring} aria-hidden="true" />
-      <span className={styles.core} aria-hidden="true" />
+      <span
+        className={styles.core}
+        aria-hidden="true"
+        style={{ transform: `scale(${scale.toFixed(3)})` }}
+      />
       <span className={styles.caption} role="status" aria-live="polite">
         <span className={styles.label}>{copy.label}</span>
         {!compact && <span className={styles.hint}>{copy.hint}</span>}

@@ -41,6 +41,8 @@ function sendHintFor(canSend: boolean, isAnswering: boolean): string {
 export interface ControlsProps {
   /** What the orb portrays (PRD F11). */
   readonly orbState: SessionState;
+  /** Output loudness in `[0, 1]`, passed through to the orb. */
+  readonly outputLevel?: number;
   /** Whether a session is open or opening; decides Start vs End. */
   readonly isActive: boolean;
   /** Whether a question sent right now would reach the server. */
@@ -78,6 +80,7 @@ export interface ControlsProps {
  */
 export function Controls({
   orbState,
+  outputLevel = 0,
   isActive,
   canSend,
   isAnswering,
@@ -104,7 +107,7 @@ export function Controls({
 
   return (
     <div className={styles.bar}>
-      <Orb state={orbState} />
+      <Orb state={orbState} level={outputLevel} />
 
       <form className={styles.composer} onSubmit={handleSubmit}>
         <div className={styles.field}>
