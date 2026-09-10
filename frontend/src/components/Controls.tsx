@@ -61,6 +61,12 @@ export interface ControlsProps {
   readonly onStop: () => void;
   /** Send a typed question. */
   readonly onSend: (text: string) => void;
+  /** Start the unattended walkthrough (F8). */
+  readonly onPresent: () => void;
+  /** Whether the microphone is currently ignored. */
+  readonly muted: boolean;
+  /** Turn the microphone off or back on without ending the session. */
+  readonly onToggleMute: (muted: boolean) => void;
 }
 
 /**
@@ -90,6 +96,9 @@ export function Controls({
   onStart,
   onStop,
   onSend,
+  onPresent,
+  muted,
+  onToggleMute,
 }: ControlsProps): JSX.Element {
   const [draft, setDraft] = useState("");
   const question = draft.trim();
@@ -158,6 +167,30 @@ export function Controls({
               ))}
             </select>
           </label>
+        )}
+        {isActive && (
+          <>
+            <button
+              className={styles.secondary}
+              type="button"
+              onClick={onPresent}
+              title="Present the whole deck, reading its own notes. Talk over it to interrupt."
+            >
+              Walk me through it
+            </button>
+            <button
+              className={styles.secondary}
+              type="button"
+              data-active={muted ? "true" : undefined}
+              aria-pressed={muted}
+              onClick={() => {
+                onToggleMute(!muted);
+              }}
+              title="Stop listening without ending the session"
+            >
+              {muted ? "Unmute" : "Mute"}
+            </button>
+          </>
         )}
         <button
           className={styles.primary}

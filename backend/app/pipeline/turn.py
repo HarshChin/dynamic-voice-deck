@@ -52,7 +52,7 @@ from .history import ConversationHistory
 from .metrics import TurnMetrics
 from .prompt import PromptBuilder
 from .slides import SlideAction, SlideController
-from .tools import build_tools
+from .tools import GO_TO_SLIDE, build_tools
 
 logger = get_logger(__name__)
 
@@ -1033,3 +1033,100 @@ async def cancel_task(task: asyncio.Task[None] | None) -> None:
         # acknowledging its own cancellation never touches that counter.
         if caller is not None and caller.cancelling() > 0:
             raise
+
+
+PRESENTATION_PAUSE_S = 0.7
+"""Silence between slides during a walkthrough.
+
+Long enough to read as a breath and to leave a natural opening for a question,
+short enough that it does not read as the agent having stopped.
+"""
+
+
+async def run_presentation(
+    *,
+    turn_id: int,
+    deck: Deck,
+    tts: TTSProvider,
+    voice: str | None,
+    history: ConversationHistory,
+    slides: SlideController,
+    metrics: TurnMetrics,
+    emit: Emit,
+    send_audio: SendAudio,
+    on_speaking: OnSpeaking | None = None,
+) -> None:
+    """Present the deck from the cursor to the end, speaking its own notes.
+
+    The model is not involved. Speaker notes are already written to be spoken --
+    that is what they are for -- so a walkthrough reads them rather than asking a
+    model to paraphrase them. Three things follow, and all of them are why this
+    is the right design rather than a shortcut.
+
+    It is free. Presenting six slides through the model would cost roughly 21,000
+    input tokens against a free-tier ceiling of 7,000 a minute, which is three
+    minutes of the agent standing silent between slides. Reading the notes costs
+    nothing and starts immediately.
+
+    It is accurate. The notes are the ground truth the model is otherwise asked
+    to stay faithful to, so speaking them directly removes the one step that
+    could drift.
+
+    And it is still interruptible, which is the point of the demo. Each slide's
+    sentences go through the same sender as an answer, so speech onset cuts it
+    off exactly as it cuts off a reply, and history is truncated to what was
+    actually heard. The question that follows is then answered by the model in
+    the ordinary way, with the deck already on the slide it was interrupted on.
+
+    Args:
+        turn_id: Id stamped on every message of this walkthrough.
+        deck: The deck to present.
+        tts: Synthesis provider.
+        voice: Voice identifier, or ``None`` for the provider's default.
+        history: Conversation history; each slide is recorded as a spoken turn.
+        slides: Navigation state, advanced as the walkthrough moves.
+        metrics: Timings for this turn.
+        emit: Sends a message to the client.
+        send_audio: Sends one binary audio frame to the client.
+        on_speaking: Called once as the first audio frame leaves.
+    """
+    history.begin_assistant_turn(turn_id)
+    chunker = SentenceChunker()
+    spoken_all: list[str] = []
+
+    async with SpeechSender(
+        turn_id=turn_id,
+        tts=tts,
+        voice=voice,
+        history=history,
+        metrics=metrics,
+        emit=emit,
+        send_audio=send_audio,
+        on_speaking=on_speaking,
+    ) as speech:
+        while True:
+            index = slides.presentation_cursor
+            slide = deck.slide(index)
+            action = slides.apply_tool(
+                GO_TO_SLIDE,
+                {"slide_index": index, "reason": f"Presenting slide {index}"},
+            )
+            if action is not None:
+                await _send_goto(turn_id, action, emit)
+
+            for sentence in [*chunker.feed(slide.notes), *chunker.flush()]:
+                await speech.submit(sentence)
+            await speech.drain()
+
+            if not slides.advance_cursor():
+                break
+            await asyncio.sleep(PRESENTATION_PAUSE_S)
+
+        await speech.finish()
+        spoken_all = list(speech.spoken)
+
+    metrics.sentences = len(spoken_all)
+    history.add_assistant(" ".join(spoken_all).strip(), spoken_all)
+    logger.info(
+        "presentation.done", turn_id=turn_id, slides=deck.last_index, sentences=len(spoken_all)
+    )

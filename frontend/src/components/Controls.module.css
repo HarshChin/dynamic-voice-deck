@@ -155,3 +155,33 @@
     flex-basis: 100%;
   }
 }
+
+/*
+ * Quieter than `.primary`: these sit beside "End session" and must not compete with it. Outlined
+ * rather than filled, so the destructive action stays the only solid button in the row.
+ */
+.secondary {
+  padding: 0.625rem var(--dvd-space-4);
+  border: 1px solid var(--dvd-border);
+  border-radius: var(--dvd-radius-pill);
+  background-color: transparent;
+  color: var(--dvd-text-muted);
+  cursor: pointer;
+  font-size: var(--dvd-text-base);
+  font-weight: 560;
+  white-space: nowrap;
+  transition:
+    border-color var(--dvd-transition-slide) var(--dvd-ease),
+    color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.secondary:hover {
+  border-color: var(--dvd-text-muted);
+  color: var(--dvd-text);
+}
+
+/* Muted is a state the user must be able to see at a glance, not a toggle they have to remember. */
+.secondary[data-active="true"] {
+  border-color: var(--dvd-warning, #d9a441);
+  color: var(--dvd-warning, #d9a441);
+}

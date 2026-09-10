@@ -129,6 +129,9 @@ export function App(): JSX.Element {
         <Controls
           orbState={session.orbState}
           outputLevel={session.outputLevel}
+          onPresent={session.present}
+          muted={session.muted}
+          onToggleMute={session.setMuted}
           isActive={session.isActive}
           canSend={session.canSend}
           isAnswering={session.isAnswering}

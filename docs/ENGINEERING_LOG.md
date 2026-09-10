@@ -25,6 +25,34 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · A walkthrough that reads its own notes, and never calls the model · uncommitted
+**Scope:** `app/pipeline/turn.py`, `app/session.py`, `frontend/src/session/useSession.ts`,
+`frontend/src/components/Controls.{tsx,module.css}`, and their tests
+**Change:** "Walk me through it" now presents the whole deck. The model is not involved: the
+walkthrough speaks each slide's speaker notes directly.
+
+**That is the design, not a shortcut.** Notes are already written to be spoken; that is what they are
+for. Asking a model to paraphrase them would cost roughly 21,000 input tokens against a free-tier
+ceiling of 7,000 a minute, which is three minutes of the agent standing silent between slides, and it
+would add the one step that could drift from the source it is otherwise told to stay faithful to.
+Reading them costs nothing and starts immediately: **first audio 202 ms**, against about 800 ms for a
+model turn.
+
+**It is still interruptible, which is the point.** Each slide's sentences go through the same sender
+as an answer, so speech onset cuts the walkthrough off exactly as it cuts off a reply, and history is
+truncated to what was actually heard. The question that follows is then answered by the model in the
+ordinary way, with the deck already on the slide it was interrupted on.
+
+**The trigger phrase is matched in code, not by the model.** Slide 1 tells the listener to say
+exactly those words, so it has to work every time; a model round trip to reach a conclusion we
+already have costs a fifth of a free-tier minute; and the feature it starts involves no model at all,
+so that would have been the only model call in it. Matched on the shared turn path, so typing and
+saying it do the same thing.
+
+**Verified:** all six slides in order, 101 segments, 308 seconds of speech, zero model calls. Buttons
+verified in a real browser, including that mute reports its state rather than being a toggle the user
+has to remember.
+
 ### 2026-09-11 · Phase 4 opens with two defects the first voice session exposed · uncommitted
 **Scope:** `app/session.py`, `app/pipeline/turn.py`, `tests/test_session.py`
 **Change:** The owner's first real spoken session worked -- transcription was word-perfect on every

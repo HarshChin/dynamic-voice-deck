@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import time
 import uuid
 from typing import Any
@@ -36,7 +37,12 @@ from .pipeline.history import ConversationHistory
 from .pipeline.metrics import TurnMetrics
 from .pipeline.prompt import PromptBuilder
 from .pipeline.slides import SlideController
-from .pipeline.turn import cancel_task, provider_error_message, run_turn
+from .pipeline.turn import (
+    cancel_task,
+    provider_error_message,
+    run_presentation,
+    run_turn,
+)
 from .protocol import (
     CLIENT_MESSAGE_ADAPTER,
     AgentCancelledMsg,
@@ -57,10 +63,26 @@ from .protocol import (
     SpeechStartMsg,
     StateMsg,
     TextInputMsg,
+    TranscriptUserMsg,
 )
 from .providers.base import Providers
 
 logger = get_logger(__name__)
+
+PRESENTATION_REQUEST = re.compile(
+    r"\b(walk me through|give me the tour|present the deck|start the presentation"
+    r"|run through the deck|take me through)\b",
+    re.IGNORECASE,
+)
+"""Spoken phrases that start a walkthrough rather than asking a question.
+
+Matched here rather than left to the model, for three reasons. Slide 1 tells the
+listener to say exactly this, so it has to work every time. It costs nothing,
+where a model round trip to reach the same conclusion costs a fifth of a
+free-tier minute. And the walkthrough that follows involves no model at all, so
+routing it through one only to be told what we already know would be the only
+model call in the feature.
+"""
 
 INTERRUPT_DEBOUNCE_S = 0.5
 """How long a turn stays interruptible after it was already interrupted.
@@ -400,8 +422,7 @@ class Session:
         if self.slides is None:
             return
         if action is ControlAction.START_PRESENTATION:
-            self.slides.mode = SessionMode.PRESENT
-            await self.start_turn("Please start presenting from the beginning.")
+            await self.start_presentation()
         elif action in (ControlAction.PAUSE, ControlAction.MUTE):
             await cancel_task(self._task)
             await self._end_turn_abnormally()
@@ -452,6 +473,61 @@ class Session:
 
     # ------------------------------------------------------------------ turn
 
+    async def start_presentation(self, *, from_start: bool = True) -> None:
+        """Walk the deck from the cursor, speaking its notes (F8).
+
+        Args:
+            from_start: Whether to begin at slide one. ``False`` resumes from
+                wherever the walkthrough was interrupted, which is what
+                "carry on" should do.
+        """
+        if self.slides is None or self.deck is None:
+            return
+        await cancel_task(self._task)
+        self.slides.mode = SessionMode.PRESENT
+        if from_start:
+            self.slides.presentation_cursor = 1
+        self.slides.begin_turn()
+        self.turn_id += 1
+        await self.set_state(SessionState.THINKING)
+        self._task = asyncio.create_task(self._run_presentation(), name=f"present-{self.turn_id}")
+
+    async def _run_presentation(self) -> None:
+        """Execute a walkthrough and hand the floor back when it ends."""
+        assert self.slides is not None  # noqa: S101 - guarded by start_presentation
+        turn_id = self.turn_id
+        metrics = TurnMetrics(turn_id=turn_id)
+        try:
+            await run_presentation(
+                turn_id=turn_id,
+                deck=self.deck,
+                tts=self._providers.tts,
+                voice=self.deck.voice,
+                history=self.history,
+                slides=self.slides,
+                metrics=metrics,
+                emit=self.send,
+                send_audio=self.send_audio,
+                on_speaking=self._on_speaking,
+            )
+        except asyncio.CancelledError:
+            raise
+        except ProviderError as exc:
+            await self.send(provider_error_message(exc))
+            await self._end_turn_abnormally()
+            return
+        except Exception:
+            logger.exception("presentation.failed", session_id=self.id, turn_id=turn_id)
+            await self.send_error(ErrorCode.INTERNAL_ERROR, "the walkthrough stopped unexpectedly")
+            await self._end_turn_abnormally()
+            return
+
+        await self.send(metrics.to_message())
+        # The walkthrough is over, so the deck is no longer presenting itself.
+        self.slides.mode = SessionMode.QA
+        self._task = None
+        await self.set_state(SessionState.LISTENING)
+
     async def start_turn(self, text: str, *, stt_ms: int | None = None) -> None:
         """Begin a turn, cancelling any turn already running (TR-022).
 
@@ -466,6 +542,13 @@ class Session:
         # unwinding before ``turn_id`` moves on, or the two would write to the
         # same history at once and the outgoing one would stamp the new id on
         # its own last messages (TR-022).
+        if PRESENTATION_REQUEST.search(text):
+            # On the shared path, so the same words do the same thing whether
+            # they were spoken or typed.
+            await self.send(TranscriptUserMsg(turn_id=self.turn_id, text=text))
+            await self.start_presentation()
+            return
+
         await cancel_task(self._task)
         self.slides.begin_turn()
         self.turn_id += 1

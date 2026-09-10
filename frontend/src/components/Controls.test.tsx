@@ -36,6 +36,9 @@ function renderControls(overrides: Partial<ComponentProps<typeof Controls>> = {}
     onStart: vi.fn(),
     onStop: vi.fn(),
     onSend: vi.fn(),
+    onPresent: vi.fn(),
+    muted: false,
+    onToggleMute: vi.fn(),
     ...overrides,
   };
   return { props, view: render(<Controls {...props} />) };
@@ -143,5 +146,38 @@ describe("Controls", () => {
     expect(
       screen.getByText(`${String(MAX_TEXT_INPUT_CHARS)} / ${String(MAX_TEXT_INPUT_CHARS)}`),
     ).toBeInTheDocument();
+  });
+});
+
+describe("walkthrough and mute", () => {
+  it("TC-FE-130: offers a walkthrough while a session is open", () => {
+    const { props } = renderControls({ isActive: true });
+
+    fireEvent.click(screen.getByRole("button", { name: /walk me through/i }));
+
+    expect(props.onPresent).toHaveBeenCalledOnce();
+  });
+
+  it("TC-FE-131: hides the walkthrough and mute before a session starts", () => {
+    renderControls({ isActive: false });
+
+    expect(screen.queryByRole("button", { name: /walk me through/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mute/i })).toBeNull();
+  });
+
+  it("TC-FE-132: mute is a visible state, not just a toggle", () => {
+    const { props } = renderControls({ isActive: true, muted: false });
+
+    const button = screen.getByRole("button", { name: /^mute$/i });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(button);
+
+    expect(props.onToggleMute).toHaveBeenCalledWith(true);
+  });
+
+  it("TC-FE-133: offers to unmute once muted", () => {
+    renderControls({ isActive: true, muted: true });
+
+    expect(screen.getByRole("button", { name: /unmute/i })).toHaveAttribute("aria-pressed", "true");
   });
 });

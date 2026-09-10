@@ -1463,26 +1463,46 @@ def test_disconnecting_mid_turn_cancels_the_task_and_releases_the_session(
 # --------------------------------------------------------------------------- #
 
 
-def test_start_presentation_switches_mode_and_opens_a_turn(isolated_env: Any) -> None:
-    """TC-BE-059: F8 -- control{start_presentation} presents from the cursor.
+def test_start_presentation_walks_the_whole_deck_without_the_model(isolated_env: Any) -> None:
+    """TC-BE-059: F8 -- a walkthrough speaks the deck's own notes, slide by slide.
 
-    Partially covered until M4: the row also asks that a ``go_to_slide(1)``
-    advance the presentation cursor. Nothing calls ``advance_cursor`` in this
-    milestone -- present mode's unattended walkthrough is M4 -- so the cursor
-    stays where it is and only the mode switch and the opening turn are checked.
+    The model is deliberately not consulted. Speaker notes are already written to
+    be spoken, so presenting reads them; asking a model to paraphrase them would
+    cost roughly 21,000 input tokens against a 7,000-a-minute ceiling and add
+    nothing but the chance of drifting from the source.
     """
-    llm = FakeLLM(sentence_script("Welcome to the deck."))
+    llm = FakeLLM(sentence_script("this should never be requested"))
 
     with connect(llm) as harness:
         harness.send(type="control", action="start_presentation")
         turn = harness.recv_until(is_state(SessionState.LISTENING))
 
-    assert only(turn, "transcript.user")[0]["text"] == (
-        "Please start presenting from the beginning."
-    )
-    prompt = system_prompt(llm)
-    assert "mode: present" in prompt
-    assert "presentation_cursor: 1" in prompt
+    assert llm.calls == [], "a walkthrough must not consult the model"
+
+    visited = [message["index"] for message in only(turn, "slide.goto")]
+    assert visited == [1, 2, 3, 4, 5, 6], "every slide, in order"
+
+    spoken = " ".join(message["text"] for message in only(turn, "transcript.agent"))
+    assert spoken, "the walkthrough must actually say something"
+    # The words come from the deck, not from a model.
+    assert "Dynamic Voice Deck" in spoken
+
+
+def test_a_spoken_request_to_walk_through_starts_the_presentation(isolated_env: Any) -> None:
+    """TC-BE-250: F8 -- "walk me through it" starts a walkthrough, spoken or typed.
+
+    Slide 1 tells the listener to say exactly this, so it has to work every time,
+    and the walkthrough it starts involves no model at all. Matched on the shared
+    turn path so the same words do the same thing however they arrive.
+    """
+    llm = FakeLLM(sentence_script("this should never be requested"))
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Walk me through it, please.")
+        turn = harness.recv_until(is_state(SessionState.LISTENING))
+
+    assert llm.calls == []
+    assert [message["index"] for message in only(turn, "slide.goto")] == [1, 2, 3, 4, 5, 6]
 
 
 def test_pause_cancels_the_turn_and_returns_to_listening(isolated_env: Any) -> None:

@@ -94,6 +94,12 @@ export interface SessionController {
   sendText: (text: string) => boolean;
   /** Move the deck by hand and tell the agent where the user went (PRD F9). */
   goToSlide: (index: number) => void;
+  /** Start the unattended walkthrough (F8). */
+  present: () => void;
+  /** Stop listening without ending the session, for a noisy room. */
+  setMuted: (muted: boolean) => void;
+  /** Whether the microphone is currently ignored. */
+  readonly muted: boolean;
 }
 
 /**
@@ -214,6 +220,7 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
   // listener experiences it: from asking to hearing (TR-125).
   const askedAtRef = useRef<number | null>(null);
   const [outputLevel, setOutputLevel] = useState(0);
+  const [muted, setMutedState] = useState(false);
 
   // Before a session opens there is still a deck to look at (PRD F1: slide 1 is on screen when the
   // page loads), so the HTTP copy stands in until `session.ready` delivers the authoritative one.
@@ -430,6 +437,20 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     void playback?.close();
   }, []);
 
+  const present = useCallback((): void => {
+    clientRef.current?.send({ type: "control", action: "start_presentation" });
+  }, []);
+
+  const setMuted = useCallback((next: boolean): void => {
+    setMutedState(next);
+    const microphone = micRef.current;
+    if (next) {
+      microphone?.mute();
+    } else {
+      microphone?.unmute();
+    }
+  }, []);
+
   const selectDeck = useCallback((nextDeckId: string): void => {
     setDeckId(nextDeckId);
   }, []);
@@ -489,6 +510,9 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     connection,
     orbState: deriveOrbState(connection, agentState),
     outputLevel,
+    present,
+    setMuted,
+    muted,
     isActive:
       connection === "connecting" || connection === "reconnecting" || connection === "connected",
     canSend: connection === "connected",

@@ -484,6 +484,17 @@ parametrised, so 18 test functions expand to 53 collected backend cases.
 | TC-BE-240 | F9 / TR-062, TR-063 | Given the user moved the deck by hand this turn, when the answer's wording scores strongly for another slide, then the keyword fallback stays silent and the deck does not move | `tests/test_slides.py::test_the_fallback_is_suppressed_after_the_user_navigates_by_hand` | passing |
 | TC-BE-241 | TR-062 | Given that suppression, when the next turn begins, then the fallback works again — it lasts one turn, not for ever | `tests/test_slides.py::test_the_fallback_returns_once_a_new_turn_begins` | passing |
 
+### Walkthrough and mute (added 2026-09-11)
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-059 | F8 | Given `control{start_presentation}`, then every slide is visited in order and its notes are spoken, and the model is never called | `tests/test_session.py::test_start_presentation_walks_the_whole_deck_without_the_model` | passing |
+| TC-BE-250 | F8 | Given "walk me through it" typed or spoken, then a walkthrough starts instead of a model turn | `tests/test_session.py::test_a_spoken_request_to_walk_through_starts_the_presentation` | passing |
+| TC-FE-130 | F8 | Given an open session, when the walkthrough button is pressed, then the control message is sent | `src/components/Controls.test.tsx::TC-FE-130` | passing |
+| TC-FE-131 | F8 | Given no session, then neither the walkthrough nor mute is offered | `::TC-FE-131` | passing |
+| TC-FE-132 | F13 | Then mute reports its state through `aria-pressed` and toggles on click | `::TC-FE-132` | passing |
+| TC-FE-133 | F13 | Given a muted session, then the button offers to unmute and reads as pressed | `::TC-FE-133` | passing |
+
 ---
 
 ## Manual checklist (before each release)
