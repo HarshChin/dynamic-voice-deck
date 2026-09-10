@@ -43,7 +43,7 @@ flowchart LR
 
 | Container | Tech | Responsibilities |
 |---|---|---|
-| **Frontend** | React 18, TypeScript, Vite, `@ricky0123/vad-web` (Silero VAD, ONNX/WASM), Web Audio API (AudioWorklet), zustand | Capture and resample mic audio; detect speech on-device; render slides; play streamed audio gaplessly; execute client tier of barge-in; display state, transcript, metrics. |
+| **Frontend** | React 19, TypeScript 6, Vite 8, `@ricky0123/vad-web` (Silero VAD, ONNX/WASM), Web Audio API (AudioWorklet), zustand | Capture and resample mic audio; detect speech on-device; render slides; play streamed audio gaplessly; execute client tier of barge-in; display state, transcript, metrics. |
 | **Backend** | Python 3.12, FastAPI, uvicorn, asyncio, httpx, pydantic v2, pydantic-settings, `groq` SDK, `kokoro-onnx`, numpy | Own session state machine and conversation history; run the STT→LLM→TTS pipeline as a cancellable task; validate and apply slide tool calls; stream audio; emit metrics. |
 | **Providers (external)** | Groq REST API | Whisper large-v3-turbo transcription; `openai/gpt-oss-120b` chat completions with tools and streaming. |
 
@@ -170,7 +170,7 @@ sequenceDiagram
 
 | ID | Requirement |
 |---|---|
-| TR-010 | Backend targets **Python 3.12** managed by `uv` (`.python-version` in `backend/`). Reason: `onnxruntime` wheels for 3.13+ lag; the dev machine has 3.14. |
+| TR-010 | Backend targets **Python 3.12** managed by `uv` (`.python-version` in `backend/`). Reason: `onnxruntime` wheels for 3.13+ lag; the dev machine has 3.14. **Verified 2026-09-10:** `kokoro-onnx` 0.6.1, `onnxruntime` 1.29.0 (CoreML + CPU providers), `numpy` 2.5.3 install cleanly on Python 3.12 arm64. |
 | TR-011 | Frontend targets **Node 20 LTS**; `package.json` declares `"engines": {"node": ">=20"}`. |
 | TR-012 | Kokoro weights (`kokoro-v1.0.onnx` ≈ 310 MB, `voices-v1.0.bin` ≈ 27 MB) are downloaded on first backend start into `backend/models/` with a progress log and SHA-256 check; never committed. |
 | TR-013 | Backend memory at steady state ≤ 1.5 GB; startup ≤ 10 s including a warm-up synthesis. |
@@ -194,10 +194,10 @@ sequenceDiagram
 
 | Package | Purpose |
 |---|---|
-| `react`, `react-dom` | UI |
+| `react`, `react-dom` (19.x) | UI |
 | `zustand` | Store |
 | `@ricky0123/vad-web`, `onnxruntime-web` | Silero VAD in the browser |
-| dev: `vite`, `typescript`, `eslint`, `@typescript-eslint/*`, `prettier`, `vitest`, `@testing-library/react`, `playwright` | Build and test |
+| dev: `vite` 8, `typescript` 6, `eslint` 10 + `typescript-eslint` 8 (type-checked rules), `prettier`, `vitest` 4, `@testing-library/react`, `playwright` | Build and test. The Vite template's default linter (`oxlint`) is removed in favour of typescript-eslint because type-aware rules (`no-floating-promises`, `no-misused-promises`, `await-thenable`) directly guard the async audio and WebSocket code. |
 
 ---
 
@@ -210,6 +210,7 @@ backend/app/
 ├── main.py            FastAPI factory, lifespan (load deck repo, warm providers), routes
 ├── config.py          Settings (pydantic-settings)
 ├── errors.py          AppError hierarchy
+├── logging_setup.py   configure_logging() + get_logger(); structlog with the stdlib bridge
 ├── protocol.py        Client/Server message models, MessageType enum, binary framing helpers
 ├── session.py         Session, SessionState, SessionManager
 ├── pipeline/
@@ -384,7 +385,8 @@ run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|
 | TR-080 | `registry.build_providers(settings)` instantiates implementations from `STT_PROVIDER`, `LLM_PROVIDER`, `TTS_PROVIDER`; unknown values fail fast at startup with a clear message. |
 | TR-081 | `GroqWhisperSTT`: model from `GROQ_STT_MODEL`, `response_format="verbose_json"`, `language="en"`, `temperature=0`. |
 | TR-082 | `GroqLLM`: model from `GROQ_LLM_MODEL`, `temperature=0.4`, `max_tokens=350`, `tool_choice="auto"`, `stream=True`. Parses SSE lines; yields `TokenDelta` / `ToolCallDelta` / `LLMDone`. |
-| TR-083 | `KokoroTTS`: loads model at startup; `synthesize` runs `kokoro.create()` in a thread executor and yields PCM16 in ~100 ms chunks (2,400 samples) so the first frame leaves before the whole sentence is synthesised. Speed 1.0; voice from `KOKORO_VOICE`. |
+| TR-083 | `KokoroTTS`: loads the model at startup. **API fact (verified 2026-09-10):** `Kokoro.create(text, voice, speed=1.0, lang="en-us", ...) -> (NDArray[float32], sample_rate)` synthesises a whole utterance and returns it in one array; it is **not** an incremental generator. `synthesize` therefore runs `create()` in a thread executor, converts float32 to PCM16, and yields ~100 ms chunks (2,400 samples at 24 kHz) for transmission. Intra-sentence streaming is not available; low time-to-first-audio comes from the `SentenceChunker` splitting early (TR-042), not from streaming inside a sentence. Speed from `KOKORO_SPEED`, voice from `KOKORO_VOICE`. |
+| TR-086 | Because synthesis is per-sentence and blocking, `SentenceChunker`'s early-split rule (TR-042) is on the critical path for `first_audio_ms`. The first segment of a turn should be short; the prompt asks the model to open with a brief sentence. |
 | TR-084 | `FasterWhisperSTT` (optional): `large-v3-turbo` int8 on CPU; `OllamaLLM`: OpenAI-compatible endpoint at `OLLAMA_BASE_URL` with the same streaming parser as Groq. |
 | TR-085 | Every provider raises `ProviderError(provider, message, retryable)`; no vendor exception escapes `providers/`. |
 
@@ -392,7 +394,7 @@ run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/health` | `{status: "ok", providers: {stt, llm, tts}, tts_warm: bool}` |
+| GET | `/api/health` | `{status: "ok", version: str, providers: {stt, llm, tts}, tts_warm: bool}` |
 | GET | `/api/decks` | `[{id, title, slide_count}]` |
 | GET | `/api/decks/{id}` | `Deck` JSON; 404 if unknown |
 | WS | `/ws/session` | Protocol §6 |
@@ -610,7 +612,7 @@ Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tt
 
 | ID | Requirement |
 |---|---|
-| TR-190 | `structlog` JSON logs in production mode, coloured console in dev. Bound context per session: `session_id`, `turn_id`. |
+| TR-190 | `structlog` JSON logs when `LOG_JSON=true`, coloured console otherwise, implemented in `app/logging_setup.py`. Standard-library records (uvicorn's especially) are bridged through the same processor chain so one renderer formats every line. `configure_logging` is idempotent. Bound context per session: `session_id`, `turn_id`. |
 | TR-191 | INFO events: `session.opened`, `state.changed`, `stt.done{ms}`, `llm.first_token{ms}`, `tool.call{name,args,source}`, `tts.first_audio{ms}`, `turn.done{ms}`, `turn.cancelled{truncated_at}`, `session.closed`. |
 | TR-192 | `GET /api/health` reports provider names and TTS warm status for smoke tests. |
 | TR-193 | The frontend event log is exportable (§7.2) and is the primary debugging artefact. |
@@ -703,7 +705,7 @@ The runner accepts `--model` so E1 and E4 can be compared across `openai/gpt-oss
 
 | Risk | Mitigation | Owner |
 |---|---|---|
-| `kokoro-onnx` / `onnxruntime` wheel availability on Python 3.12 arm64 | Verified during M2 day 1; fallback to `kokoro` PyPI package (PyTorch) with the same `TTSProvider` interface | backend |
+| ~~`kokoro-onnx` / `onnxruntime` wheel availability on Python 3.12 arm64~~ | **Closed 2026-09-10.** Verified installing and importing on this machine; CoreML execution provider available. | backend |
 | Groq SSE tool-call fragments differ from OpenAI format | Contract tests from recorded SSE fixtures; parser handles both `tool_calls[].function.arguments` deltas and whole-object calls | backend |
 | Browser refuses 24 kHz `AudioContext` | Resample to native rate in `PlaybackQueue` | frontend |
 | Echo-driven self-interruption on speakers | TR-112 consecutive-frame rule, `echoCancellation`, headphone recommendation | frontend |

@@ -1,0 +1,162 @@
+# Backend project definition for Dynamic Voice Deck.
+#
+# Managed by `uv` (TRD TR-010, TR-211). This is an *application*, not a library:
+# there is no build backend and `tool.uv.package = false` keeps `uv sync` from
+# trying to build and install `app/` into the environment. Code is imported from
+# the working directory (`backend/`), which uvicorn, `python -m`, and pytest
+# (via `tool.pytest.ini_options.pythonpath`) each put on `sys.path`.
+
+[project]
+name = "dynamic-voice-deck-backend"
+version = "0.1.0"
+description = "Voice-first slide presenter backend: STT to LLM to TTS pipeline over WebSockets."
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+  # HTTP + WebSocket server. The [standard] extra pulls uvloop, httptools and
+  # the websockets implementation used by FastAPI's WebSocket routes.
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  # Models, protocol messages, and settings.
+  "pydantic>=2.9",
+  "pydantic-settings>=2.5",
+  # Async HTTP: Groq SSE streaming (used directly for cancellation control) and Ollama.
+  "httpx>=0.27",
+  # Official Groq SDK, used for Whisper transcription.
+  "groq>=0.11",
+  # TTS: Kokoro-82M via onnxruntime. Known-good in this environment:
+  # kokoro-onnx 0.6.1, onnxruntime 1.29.0, numpy 2.5.3.
+  "kokoro-onnx>=0.6.1",
+  "onnxruntime>=1.20",
+  "numpy>=2.0",
+  # In-memory WAV encoding for the STT upload. Known-good: soundfile 0.14.0.
+  "soundfile>=0.13",
+  # Structured logging.
+  "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+# Offline STT fallback (STT_PROVIDER=local). Install with `uv sync --extra local`.
+local = [
+  "faster-whisper>=1.1",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.8",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "mypy>=1.13",
+  "hypothesis>=6.115",
+  # anyio: async test helpers and the memory object streams used by fakes.
+  "anyio>=4.6",
+  # websockets: client side of the WebSocket contract tests.
+  "websockets>=13.0",
+]
+
+[tool.uv]
+# Application, not a library: do not build or install this project itself.
+package = false
+
+# --- Lint and format (CLAUDE.md section 4.3) ---------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",     # pycodestyle
+  "F",          # pyflakes
+  "I",          # isort
+  "N",          # pep8-naming
+  "D",          # pydocstyle
+  "UP",         # pyupgrade
+  "B",          # bugbear
+  "ASYNC",      # async pitfalls
+  "SIM",        # simplify
+  "RUF",        # ruff-specific
+  "PL",         # pylint subset
+  "ARG",        # unused arguments
+  "PTH",        # use pathlib
+  "T20",        # no print()
+  "S",          # bandit (security)
+]
+ignore = [
+  "D203", "D213",   # conflict with D211/D212 (Google style)
+  "D107",           # __init__ docstring: Google style documents constructor args
+                    # in the class docstring instead, and duplicating them invites drift
+  "PLR0913",        # too many arguments — provider constructors legitimately take config
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101", "PLR2004", "ARG"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+# --- Tests -------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# `app` is not installed into the venv (see [tool.uv] package = false), and
+# pytest only puts the test directory itself on sys.path, so add `backend/`.
+pythonpath = ["."]
+addopts = [
+  "--strict-markers",
+  "--strict-config",
+  "--cov=app",
+  "--cov-report=term-missing",
+]
+markers = [
+  "integration: requires GROQ_API_KEY and network",
+  "slow: takes more than a couple of seconds to run",
+]
+# NOTE: `filterwarnings = ["error"]` is deliberately not set yet. Several runtime
+# dependencies (onnxruntime, groq, faster-whisper) emit DeprecationWarnings at
+# import time on Python 3.12, which would fail collection. Enable it together
+# with a targeted ignore list once the dependency set is exercised in CI.
+
+# --- Coverage ----------------------------------------------------------------
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+# `fail_under` is intentionally unset in Phase 0: there is almost no code yet, so
+# any threshold would be noise. TRD section 12.3 requires >= 80 % overall and
+# >= 90 % on the pipeline modules (chunker, history, slides, turn, session);
+# fail_under is enabled in a later phase once those modules exist.
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "^\\s*\\.\\.\\.$",
+]
+
+# --- Types -------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+# Third-party packages that ship no type information (TRD TR-211 allows `Any`
+# only at the provider boundary).
+[[tool.mypy.overrides]]
+module = [
+  "kokoro_onnx.*",
+  "onnxruntime.*",
+  "soundfile.*",
+  "faster_whisper.*",
+  "groq.*",
+]
+ignore_missing_imports = true

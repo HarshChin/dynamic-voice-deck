@@ -615,11 +615,11 @@ dynamic-voice-deck/
 
 | When | Milestone | Definition of done |
 |---|---|---|
-| Tue 9 Sep (eve) | **M1 Text loop** | Deck renders; WS session; `text.input` → LLM with tools → `slide.goto` + streamed text in log. No audio yet. |
-| Wed 10 Sep (am) | **M2 Audio out** | Kokoro streaming, PlaybackQueue, orb states, `transcript.agent` captions, metrics. |
-| Wed 10 Sep (pm) | **M3 Audio in + barge-in** | VAD, Groq STT, two-tier interrupt, history truncation, `interrupt_stop_ms` in HUD. **Core product complete.** |
-| Thu 11 Sep (am) | **M4 Polish** | Presentation mode + resume, bidirectional sync, push-to-talk, text fallback, README with trade-offs, test suite and eval run green. |
-| Thu 11 Sep (pm) | **M5 Release v0.1.0** | Repo public, `docs/EVALS.md` populated with the release eval run, engineering log complete. Stretch: deck generation. |
+| Wed 9 Sep (eve) | **M1 Text loop** | Deck renders; WS session; `text.input` → LLM with tools → `slide.goto` + streamed text in log. No audio yet. |
+| Thu 10 Sep (am) | **M2 Audio out** | Kokoro streaming, PlaybackQueue, orb states, `transcript.agent` captions, metrics. |
+| Thu 10 Sep (pm) | **M3 Audio in + barge-in** | VAD, Groq STT, two-tier interrupt, history truncation, `interrupt_stop_ms` in HUD. **Core product complete.** |
+| Fri 11 Sep (am) | **M4 Polish** | Presentation mode + resume, bidirectional sync, push-to-talk, text fallback, README with trade-offs, test suite and eval run green. |
+| Fri 11 Sep (pm) | **M5 Release v0.1.0** | Repo public, `docs/EVALS.md` populated with the release eval run, engineering log complete. Stretch: deck generation. |
 
 ---
 

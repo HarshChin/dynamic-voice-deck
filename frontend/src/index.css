@@ -1,0 +1,66 @@
+/* Base theme. Real design lands in a later phase; this is only enough to look deliberate. */
+
+:root {
+  --dvd-bg: #f7f7f8;
+  --dvd-surface: #ffffff;
+  --dvd-text: #16161a;
+  --dvd-muted: #5c5f66;
+  --dvd-border: #e2e2e6;
+  --dvd-accent: #4c6ef5;
+  --dvd-ok: #2f9e44;
+  --dvd-bad: #e03131;
+  --dvd-pending: #f08c00;
+
+  color-scheme: light dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dvd-bg: #101014;
+    --dvd-surface: #17171c;
+    --dvd-text: #ececf1;
+    --dvd-muted: #a0a0ab;
+    --dvd-border: #2a2a33;
+    --dvd-accent: #748ffc;
+    --dvd-ok: #51cf66;
+    --dvd-bad: #ff6b6b;
+    --dvd-pending: #ffd43b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--dvd-bg);
+  color: var(--dvd-text);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

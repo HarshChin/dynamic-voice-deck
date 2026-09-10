@@ -1,0 +1,65 @@
+# Continuous integration for Dynamic Voice Deck (docs/TRD.md §14, TR-214).
+#
+# This workflow runs `make lint` and `make test` only. It deliberately does NOT
+# run `make test-integration` or `make evals`: both need a real GROQ_API_KEY and
+# consume free-tier quota (TRD §12.1 and TR-204). No secrets are used anywhere
+# in this workflow, so it also runs safely on pull requests from forks.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # actions/setup-python is not needed: `uv sync` reads
+      # backend/.python-version and installs CPython 3.12 itself (TR-010).
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            backend/uv.lock
+            backend/pyproject.toml
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Steps below run from the repository root unless a working-directory is
+      # given, which is exactly what the Makefile's `cd backend` / `cd frontend`
+      # recipes expect.
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --all-extras --frozen
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        run: make lint
+
+      - name: Test
+        run: make test

@@ -1,0 +1,47 @@
+.app {
+  margin: 0 auto;
+  max-width: 46rem;
+  padding: 4rem 1.5rem;
+}
+
+.app__title {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.app__subtitle {
+  margin: 0.5rem 0 2rem;
+  color: var(--dvd-muted);
+  font-size: 1.0625rem;
+}
+
+.app__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--dvd-border);
+  border-radius: 999px;
+  background-color: var(--dvd-surface);
+  color: var(--dvd-muted);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.app__status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--dvd-pending);
+}
+
+.app__status--ok .app__status-dot {
+  background-color: var(--dvd-ok);
+}
+
+.app__status--unreachable .app__status-dot {
+  background-color: var(--dvd-bad);
+}

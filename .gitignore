@@ -11,10 +11,19 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
+# coverage artefacts (.coverage is a binary SQLite file rewritten on every run)
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+coverage/
+
 # node
 node_modules/
 dist/
 *.local
+# `tsc -b` incremental build state
+*.tsbuildinfo
 
 # model weights (downloaded on first run)
 backend/models/

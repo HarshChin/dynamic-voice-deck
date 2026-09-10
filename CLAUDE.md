@@ -15,7 +15,7 @@ Engineering guide for anyone (human or AI) working in this repository. This file
 Dynamic Voice Deck is a voice-first slide presenter. An open-weight STT → LLM → TTS pipeline lets a user talk to a presenter agent that navigates a six-slide deck by tool calls and can be interrupted mid-sentence.
 
 - **Backend:** Python 3.12, FastAPI, asyncio, WebSockets. Providers: Groq Whisper (STT), Groq `gpt-oss-120b` (LLM), Kokoro-82M via `kokoro-onnx` (TTS).
-- **Frontend:** React 18, Vite, TypeScript (strict). Silero VAD runs in the browser.
+- **Frontend:** React 19, Vite 8, TypeScript 6 (strict). Silero VAD runs in the browser.
 - **Distribution:** public GitHub repository that runs locally. No cloud deployment in v0.1.0.
 - **Release target:** v0.1.0 on Friday 11 September 2026.
 
@@ -108,6 +108,8 @@ select = [
 ]
 ignore = [
   "D203", "D213",   # conflict with D211/D212 (Google style)
+  "D107",           # __init__ docstring: Google style documents constructor args
+                    # in the class docstring instead, and duplicating them invites drift
   "PLR0913",        # too many arguments — provider constructors legitimately take config
 ]
 
@@ -137,7 +139,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 
 ### 4.5 Logging and errors
 
-- `logging` module with `structlog`-style key=value messages; module-level `logger = logging.getLogger(__name__)`. No `print`.
+- `structlog` via `app/logging_setup.py`: module-level `logger = get_logger(__name__)`. Log events as a short dotted name plus key-value pairs, e.g. `logger.info("tts.first_audio", turn_id=n, ms=123)`, never a preformatted sentence. Standard-library records are bridged into the same chain, so third-party logs match. No `print`.
 - Log every state transition, tool call, and provider latency at `INFO`; payload contents at `DEBUG`; never log audio bytes or API keys.
 - Custom exception hierarchy in `app/errors.py`: `AppError` → `ProviderError`, `ProtocolError`, `DeckError`. Unhandled errors inside a pipeline task are converted to a single `error` protocol message and the session returns to `LISTENING`.
 

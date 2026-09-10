@@ -160,6 +160,92 @@ Naming: `TC-<layer>-<nnn>` where layer ∈ `BE` (backend unit/contract), `INT` (
 
 ---
 
+## Phase 0 — scaffolding (implemented 2026-09-10)
+
+Settings, health probe, and harness cases added when the scaffold landed. Several of these are
+parametrised, so 18 test functions expand to 52 collected backend cases.
+
+### Configuration (`backend/tests/test_config.py`)
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-090 | TR-014 | Given no environment and no dotenv, when Settings is built, then providers default to groq / groq / kokoro and no API key is set | `tests/test_config.py::test_provider_defaults_are_the_declared_values` | passing |
+| TC-BE-091 | TR-014 | Given the same, then every non-provider default (models, ports, tuning, pipeline limits) equals its declaration | `::test_server_generation_and_pipeline_defaults_are_the_declared_values` | passing |
+| TC-BE-092 | TR-014 | Given `log_level` in any case, when validated, then it is stored upper-case | `::test_log_level_is_normalised_to_upper_case` | passing |
+| TC-BE-093 | TR-014 | Given a level name the logging module does not define, then validation fails | `::test_unknown_log_level_is_rejected` | passing |
+| TC-BE-094 | TR-180 | Given a configured `groq_api_key`, when `masked_dump()` runs, then the value is `"***"` and never the clear text | `::test_masked_dump_replaces_a_configured_secret_with_stars` | passing |
+| TC-BE-099 | TR-014 | Given values exactly at the inclusive ends of every declared range, then they validate | `::test_boundary_values_are_accepted` | passing |
+| TC-BE-100 | TR-180 | Given no `groq_api_key`, then `masked_dump()` reports `None`, not `"***"` | `::test_masked_dump_reports_none_when_no_secret_is_configured` | passing |
+| TC-BE-101 | TR-180 | Given a distinctive fake secret, then neither `repr()` nor `str()` of Settings contains it | `::test_repr_and_str_never_expose_the_raw_secret` | passing |
+| TC-BE-102 | TR-014 | Given out-of-range numerics (port 0 / 70000, temperature 5.0, max_tokens 0), then each raises | `::test_out_of_range_values_are_rejected` | passing |
+| TC-BE-103 | TR-014 | Given repeated `get_settings()` calls, then the same object is returned, and `cache_clear()` starts a new one | `::test_get_settings_returns_the_same_cached_instance` | passing |
+| TC-BE-104 | TR-014 | Given the module constants, then `REPO_ROOT` is the directory holding `docs/` and `CLAUDE.md`, proving the `parents[N]` arithmetic | `::test_repo_root_is_the_directory_holding_docs_and_claude_md` | passing |
+| TC-BE-105 | TR-014 | Given environment variables in either case, then they override defaults | `::test_environment_variables_override_defaults_case_insensitively` | passing |
+| TC-BE-106 | TR-080 | Given a provider name outside the declared literals, then validation fails | `::test_unknown_provider_names_are_rejected` | passing |
+| TC-BE-107 | TR-014 | Given the suite's dotenv redirect, then every Settings instantiation reads the isolated file and never the developer's real `.env` | `::test_settings_read_the_isolated_env_file_not_the_repo_root_one` | passing |
+
+### Health probe (`backend/tests/test_health.py`)
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-095 | TR-192, §4.10 | Given a running app, when `GET /api/health`, then 200 with exactly the four documented keys and a non-empty version | `tests/test_health.py::test_health_returns_ok_with_the_documented_key_set` | passing |
+| TC-BE-096 | TR-192 | Then the `providers` block mirrors the configured settings, with no extra keys | `::test_health_reports_the_configured_providers` | passing |
+| TC-BE-097 | TR-013, TR-192 | Then `tts_warm` is a boolean and is false before any warm-up has run | `::test_health_reports_tts_warm_as_false_before_warm_up` | passing |
+| TC-BE-098 | TR-192 | Given reconfigured providers, then the probe reports the new selection | `::test_health_reflects_overridden_provider_configuration` | passing |
+
+### Structured logging (`backend/tests/test_logging_setup.py`) — added closing a review gap
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-110 | TR-190 | Given `log_json=True`, when a line is logged, then it parses as one JSON object carrying event, level, logger, and an ISO timestamp | `::test_json_mode_emits_one_parsable_object_per_call` | passing |
+| TC-BE-111 | TR-190 | Given `log_json=False`, then output is a human console line that is not JSON | `::test_console_mode_renders_a_human_line_that_is_not_json` | passing |
+| TC-BE-112 | TR-190 | Given a standard-library `uvicorn.access` record, then it renders through the same handler and formatter as a structlog call | `::test_uvicorn_records_are_rendered_by_the_same_handler_as_structlog` | passing |
+| TC-BE-113 | TR-190 | Given `configure_logging` called twice, then exactly one named handler remains on the root logger | `::test_configuring_twice_leaves_exactly_one_named_handler` | passing |
+| TC-BE-114 | TR-190 | Given a logger already in use, when reconfigured from console to JSON, then its output format actually changes | `::test_reconfiguring_from_console_to_json_changes_an_existing_logger` | passing |
+| TC-BE-115 | TR-190 | Then every bridged logger ends with no handlers of its own and propagates to root | `::test_bridged_logger_ends_with_no_handlers_and_propagating` | passing |
+| TC-BE-116 | TR-190 | Then the configured level is applied to the root and to every bridged logger | `::test_configured_level_is_applied_to_root_and_bridged_loggers` | passing |
+| TC-BE-117 | TR-190 | Given a call below the threshold, then nothing is emitted; at the threshold it is | `::test_records_below_the_threshold_are_suppressed` | passing |
+| TC-BE-118 | TR-190 | Given keys bound to a logger, then they appear in every line it renders | `::test_get_logger_supports_bound_context_that_reaches_the_output` | passing |
+| TC-BE-119 | TR-190 | Given context bound via contextvars, then it reaches both structlog-native and bridged records | `::test_context_variables_are_merged_into_native_and_bridged_records` | passing |
+
+### Error hierarchy (`backend/tests/test_errors.py`) — added closing a review gap
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-120 | TR-085, TR-170 | Then every concrete error subclasses `AppError`, the sole condition under which the registered handler fires | `::test_every_application_error_descends_from_app_error` | passing |
+| TC-BE-121 | TR-085 | Then the hierarchy is flat, siblings are unrelated, and no error exists outside the documented set | `::test_the_hierarchy_is_flat_and_the_catalogue_above_is_exhaustive` | passing |
+| TC-BE-122 | TR-085, TR-171 | Then `ProviderError` keeps provider, message, retryable and retry_after, and prefixes the provider in `str()` | `::test_provider_error_carries_its_fields_and_prefixes_the_provider_name` | passing |
+| TC-BE-123 | TR-085 | Given the optional flags omitted, then retryable is False and retry_after is None | `::test_provider_error_defaults_to_not_retryable_with_no_retry_after` | passing |
+| TC-BE-124 | TR-142 | Then `ProtocolError` keeps its code and stringifies to the message | `::test_protocol_error_carries_its_code_and_stringifies_to_the_message` | passing |
+| TC-BE-125 | TR-170 | Then any application error raised is caught by `except AppError` | `::test_every_error_is_raisable_and_caught_as_app_error` | passing |
+| TC-BE-126 | TR-085 | Given a wrapped third-party failure, then the original stays reachable via `__cause__` | `::test_raise_from_preserves_the_original_exception_as_cause` | passing |
+
+### Startup and fail-fast (`backend/tests/test_startup.py`) — added closing a review gap
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-130 | TR-013 | Given the client entered as a context manager, then the lifespan runs and builds an `AppState` holding the settings | `::test_lifespan_stores_an_app_state_holding_the_settings` | passing |
+| TC-BE-131 | TR-192 | Then the health probe answers from the state the lifespan built, not a fallback | `::test_health_answers_from_the_lifespan_state_inside_the_context` | passing |
+| TC-BE-132 | **TR-180** | Given a distinctive key in the environment, when the app starts, then the startup log contains `"***"` and never the raw secret | `::test_startup_logs_the_settings_with_the_secret_masked` | passing |
+| TC-BE-133 | TR-176 | Given an invalid field value, then `_load_settings` raises `ConfigError` with the original as `__cause__` | `::test_load_settings_wraps_a_validation_error_in_config_error` | passing |
+| TC-BE-134 | TR-176 | Given a comma-separated `CORS_ORIGINS`, then the `SettingsError` from the settings source is wrapped in `ConfigError` too (regression, fixed 2026-09-10) | `::test_load_settings_wraps_a_settings_source_error_in_config_error` | passing |
+| TC-BE-135 | TR-176 | Given a blank `GROQ_API_KEY`, then it normalises to `None`, not a set-but-empty secret (regression, fixed 2026-09-10) | `::test_a_blank_groq_api_key_normalises_to_none` | passing |
+| TC-BE-136 | TR-176 | Given the file `cp .env.example .env` produces, then the app boots with no secret configured | `::test_a_copied_env_example_leaves_no_secret_and_still_boots` | passing |
+| TC-BE-137 | TR-170 | Given a route raising `ProviderError`, then the response is 500 with the error class name and message | `::test_an_app_error_becomes_a_500_json_body_naming_the_error` | passing |
+
+### Frontend harness (`frontend/src/smoke.test.ts`)
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-FE-090 | — | Given the vitest harness, then jsdom, the setup file, and the jest-dom matchers are all live (asserts the environment, not arithmetic) | `src/smoke.test.ts::TC-FE-090` | passing |
+| TC-FE-091 | F1 | Given a mocked healthy backend, when App renders, then the deck title heading shows and the status reads ok | `src/smoke.test.ts::TC-FE-091` | passing |
+| TC-FE-092 | F2, TR-175 | Given a health probe that rejects, then the backend is reported unreachable rather than throwing | `src/smoke.test.ts::TC-FE-092` | passing |
+| TC-FE-093 | TR-212 | Given a rendered App, then the probe requests exactly `/api/health` with an abort signal. Mutation-tested: changing the URL fails this case | `src/smoke.test.ts::TC-FE-093` | passing |
+| TC-FE-094 | F2 | Given a 503 response, then the status reads unreachable (exercises the `response.ok` branch, which no test previously reached) | `src/smoke.test.ts::TC-FE-094` | passing |
+| TC-FE-095 | TR-103 | Given a probe that never settles, when App unmounts, then the request is aborted and no state update leaks | `src/smoke.test.ts::TC-FE-095` | passing |
+
+---
+
 ## Manual checklist (before each release)
 
 | ID | Check | Result (v0.1.0) |
