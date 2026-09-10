@@ -512,27 +512,34 @@ async def test_a_tool_call_finish_triggers_a_second_request_that_still_offers_to
     assert turn.result.text == "Two layers, actually."
 
 
-async def test_the_turn_stops_after_two_requests_however_the_model_finishes(deck: Deck) -> None:
-    """TC-BE-175: the two-step ceiling holds even when the second step calls a tool."""
+async def test_the_turn_stops_at_the_step_ceiling_however_the_model_finishes(deck: Deck) -> None:
+    """TC-BE-175: the step ceiling holds even when every step calls a tool.
+
+    Three steps, not two, because of a failure seen live: the model called
+    `go_to_slide` and then `highlight_bullet`, both with empty content, and the
+    turn ended having moved the deck in silence. The extra request is the chance
+    to speak; the ceiling is what stops it looping.
+    """
     navigate = [
         ToolCallDelta(
             call_id="call_1", name=GO_TO_SLIDE, arguments={"slide_index": 2, "reason": "latency"}
         ),
         LLMDone(finish_reason="tool_calls"),
     ]
-    # Only two scripts: a third request raises rather than silently looping.
-    llm = ScriptedLLM(navigate, list(navigate))
+    # Exactly as many scripts as steps: one more request would raise rather than
+    # silently loop.
+    llm = ScriptedLLM(*([list(navigate)] * MAX_LLM_STEPS))
 
     turn = await drive(llm, "How fast are you?", deck=deck)
 
-    assert len(llm.calls) == MAX_LLM_STEPS == 2
+    assert len(llm.calls) == MAX_LLM_STEPS == 3
     # The model navigated on both steps and never spoke, so the turn falls back
     # to naming the slide. Silence after a visible slide change reads as a
     # broken app, which is worse than a plain sentence.
     assert turn.result.answered is True
     assert turn.result.text == "Here's slide 2."
-    # Both steps navigated, and the client was told about each.
-    assert [message.index for message in turn.sent(SlideGotoMsg)] == [2, 2]
+    # Every step navigated, and the client was told about each.
+    assert [message.index for message in turn.sent(SlideGotoMsg)] == [2] * MAX_LLM_STEPS
 
 
 async def test_the_second_request_replays_what_was_already_spoken(deck: Deck) -> None:

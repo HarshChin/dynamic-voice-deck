@@ -62,12 +62,20 @@ Emit = Callable[[ServerMessage], Awaitable[None]]
 SendAudio = Callable[[bytes], Awaitable[None]]
 """Sends one binary audio frame to the client. Supplied by the session."""
 
-MAX_LLM_STEPS = 2
-"""Model round trips per turn: one that may call tools, one that speaks.
+MAX_LLM_STEPS = 3
+"""Model round trips per turn, at most.
 
-Two is a deliberate ceiling rather than a loop-until-done. Each step costs a
-full prompt against a tight free-tier token budget, and a deck this size never
-needs to navigate twice to answer one question.
+Most turns use one or two: a question about the slide on screen answers in one,
+and a question that moves the deck costs a second because the first request
+returns a tool call with no words in it.
+
+Three is the ceiling rather than two because of a failure seen live. Asked "what
+is considered a misfire?", the model called `go_to_slide` on the first request
+and `highlight_bullet` on the second, both times with empty content, and the
+turn ended having moved the deck and said nothing. Telling it in the prompt not
+to call a second tool did not stop it. A third request costs tokens on a tight
+free-tier budget, but a slide changing in silence is the worse outcome, and the
+loop stops as soon as any words are produced, so ordinary turns never pay it.
 """
 
 NO_ANSWER_FALLBACK: Final[str] = "Sorry, I lost that one. Could you ask me again?"
@@ -280,6 +288,8 @@ async def run_turn(
             )
             navigated = navigated or applied
 
+            # Stop as soon as there are words: another request would only add
+            # latency and tokens to an answer that is already complete.
             if finish_reason != "tool_calls" or step == MAX_LLM_STEPS - 1:
                 break
 
@@ -424,6 +434,23 @@ async def _run_step(
     return finish_reason, navigated
 
 
+def _has_tool_call_this_turn(messages: Sequence[Message]) -> bool:
+    """Report whether the current turn has already applied a tool call.
+
+    Args:
+        messages: Provider messages for this request, oldest first.
+
+    Returns:
+        ``True`` when a ``tool`` reply appears after the last user message,
+        which is what distinguishes the second request of a turn from the first.
+    """
+    last_user = -1
+    for index, message in enumerate(messages):
+        if message.role == "user":
+            last_user = index
+    return any(message.role == "tool" for message in messages[last_user + 1 :])
+
+
 def _build_messages(
     *,
     deck: Deck,
@@ -463,6 +490,28 @@ def _build_messages(
         The system prompt followed by the history for this request.
     """
     replayed = history.to_provider_messages()
+    if _has_tool_call_this_turn(replayed):
+        # A later request of a turn. The deck has already moved, so the one
+        # thing left is to speak, and every failure seen live was a failure to
+        # do exactly that: once a second tool call and no words at all, once a
+        # single five-word sentence, once the opening line said twice.
+        if spoken:
+            instruction = (
+                f"You have already moved the deck and said this much aloud: "
+                f'"{" ".join(spoken)}" '
+                "Continue from exactly there, in the same breath. Do NOT repeat any of it and "
+                "do NOT call another tool. Add two or three more sentences from the notes for "
+                "the slide the room is looking at, then stop."
+            )
+        else:
+            instruction = (
+                "You have already moved the deck for this question and have said nothing yet. "
+                "Do NOT call another tool. Answer out loud now, in two to four sentences drawn "
+                "from the notes for the slide the room is looking at. A single short sentence "
+                "is not an answer, and silence leaves the room staring at a slide nobody has "
+                "explained."
+            )
+        replayed.append(Message(role="system", content=instruction))
     if spoken:
         text = " ".join(spoken)
         merged = False

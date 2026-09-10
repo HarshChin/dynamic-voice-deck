@@ -25,6 +25,38 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · The agent moved the deck and said almost nothing · uncommitted
+**Scope:** `app/prompts/presenter.md`, `app/pipeline/turn.py`, `tests/test_turn.py`
+**Change:** The owner exported a session in which every answer was one short sentence, one turn said
+only "Here's slide 3.", and one repeated the previous answer verbatim. Three causes, all in how the
+two-request turn is driven.
+
+**The opener was being treated as the whole answer.** The prompt asks for a short opening sentence
+because the first segment is synthesised before the rest is generated, which is worth about a second
+and a half of perceived latency. The model followed it and stopped: 21 characters, then done. The
+server metrics made it unmistakable, with only three to nine milliseconds between first token and
+finish. The prompt now says outright that the opener is a way into the answer and never the answer,
+and that a single sentence is not a reply.
+
+**The second request kept calling tools instead of speaking.** Asked "what is considered a misfire?",
+the model called `go_to_slide`, then on the next request called `highlight_bullet`, both with empty
+content, and the turn ended having moved the deck in silence. A system note telling it not to call
+another tool did not stop it. Raised the ceiling from two requests to three, so a turn always gets a
+chance to speak, and the loop still exits the moment any words appear, so ordinary turns never pay
+for it. The cost is real on a free tier at 8,000 tokens a minute, but a slide changing in silence is
+the worse outcome.
+
+**The opening line was said twice** when the model spoke before navigating. The continuation note now
+quotes what has already been said aloud and asks the model to carry on from exactly there, rather
+than asking for an answer it has partly given.
+
+**Verified** on the owner's exact questions: "what is considered a misfire?" now answers in seven
+segments on the right slide, and "what are the latency budgets" in nine, with no repetition.
+
+**Worth recording about method:** the log the owner exported was more useful than any test, because
+it contained the model's real output across four turns of accumulated history. Every one of these
+failures needs a real model and a real conversation to appear.
+
 ### 2026-09-11 · Phase 2: the agent speaks · uncommitted
 **Scope:** `app/providers/kokoro_tts.py`, `app/pipeline/turn.py`, `app/session.py`, `app/main.py`,
 `app/providers/registry.py`, `app/config.py`, `frontend/src/audio/playback.ts`,
