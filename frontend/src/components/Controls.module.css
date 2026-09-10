@@ -185,3 +185,16 @@
   border-color: var(--dvd-warning, #d9a441);
   color: var(--dvd-warning, #d9a441);
 }
+
+/*
+ * The push-to-talk hint. It sits beside the orb rather than under the button that turns the mode
+ * on, because what it says is about the microphone's state, which is what the orb is for.
+ */
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  color: var(--dvd-muted);
+  white-space: nowrap;
+}

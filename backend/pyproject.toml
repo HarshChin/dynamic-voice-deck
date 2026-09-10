@@ -96,6 +96,8 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "S101", "PLR2004", "ARG"]
+# Developer scripts report what they did on stdout; that report is their whole purpose.
+"scripts/**" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -114,6 +116,11 @@ addopts = [
   "--strict-config",
   "--cov=app",
   "--cov-report=term-missing",
+  # Integration tests spend a real API key, so the default run excludes them and CI
+  # never reaches the network. `make test-integration` passes its own `-m`, and the
+  # last `-m` on the command line wins over this one.
+  "-m",
+  "not integration",
 ]
 markers = [
   "integration: requires GROQ_API_KEY and network",

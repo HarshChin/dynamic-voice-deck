@@ -25,6 +25,121 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Closing Phase 3: three quiet disagreements between the microphone and its spec · uncommitted
+**Scope:** `frontend/src/audio/microphone.ts`, `frontend/src/session/{useSession.ts,usePushToTalk.ts}`,
+`frontend/src/keyboard.ts`, `frontend/src/components/{Controls.tsx,Controls.module.css,SlideDeck.tsx}`,
+`backend/tests/{fakes.py,test_session.py}`, and five new test files
+
+**Change:** Phase 3 was reported complete while three of its test rows had never been written and two
+backend rows were skipped. Writing those tests found three places where the microphone did something
+other than what TR-112 and TR-114 say, none of which any existing test could see. All three are fixed,
+push-to-talk is implemented, and the two skipped backend rows now run.
+
+**The minimum-speech gate was measuring the wrong thing.** An utterance is assembled as padding plus
+speech, and the gate that rejects a cough subtracted `this.#preRoll.length` from the frame count. By
+that point the pre-roll has been moved into the utterance and the field is empty, so the subtraction
+was always zero and the gate counted 300 ms of padding as speech. A 160 ms cough cleared a 250 ms
+minimum and was uploaded. The fix records how many padding frames were actually prepended, which is
+not recoverable afterwards: an onset in the first third of a second has less padding than a full
+window. Pinned by `TC-FE-022`, which fails against the old arithmetic.
+
+**Every upload carried 600 ms of silence the recogniser did not need.** TR-114 says the utterance is
+`prePad + speech`. The endpointer ends a turn on a run of silent frames and was shipping that run with
+the audio, so a two-second question uploaded as 2.6 seconds and the transcriber waited for all of it.
+Trimming is safe by construction: every frame in that run is below the silence threshold, so none of
+them carries a word.
+
+**Onset always demanded three consecutive loud frames.** TR-112 asks for three only while the agent is
+audible, where the reason is echo leaking through cancellation, and one otherwise. The detector had no
+way to know, so it was cautious always and charged 64 ms of latency for it on every turn that
+interrupts nothing. The session already owns the answer, so it passes `isPlaying` in. A false onset
+while nothing is playing is cheap: it emits `speech.start` and the minimum-speech gate still refuses to
+upload the noise that caused it.
+
+**Push-to-talk (TR-115) is the escape hatch energy detection needs.** The detector has one failure a
+person cannot work around: a room loud enough that every frame reads as speech, where the agent is
+interrupted by the room. A held key is immune to that, and some people simply prefer explicit turns.
+The key path reuses the whole utterance assembly, so padding, the minimum-speech gate and barge-in
+behave identically whichever thing opened the turn. The binding stands aside for typing, for modified
+keys and for auto-repeat, and it treats losing the window as a release, because a key held while the
+user switches applications never reports going up and would otherwise leave the microphone open for
+ever.
+
+**Two backend rows stopped being skipped.** `TC-BE-056` (an oversized utterance closes the socket with
+1009) and `TC-BE-060` (a sentence whose synthesis fails is skipped and the rest still speak) were both
+skipped with a milestone that has since shipped. Implementing them needed a failure hook in `FakeTTS`
+and one honest fix in the WebSocket harness: the raw transport reports a server-side close as an
+ordinary frame, so the harness was silently treating a closed socket as a malformed message. It now
+raises `WebSocketDisconnect` the way a browser would see it, which is what makes a close assertable at
+all. The backend suite now has **zero skipped tests**.
+
+**Verification:**
+
+| Measurement | Value |
+|---|---|
+| Interrupt to `agent.cancelled`, live | 1.9 ms |
+| Audio frames sent after the cancellation | 0 |
+| Audio already in the browser at the moment of the cut | 2.6 s |
+| First audio after asking, `qwen/qwen3.8-27b` | 777 ms |
+| First audio after asking, `openai/gpt-oss-120b` | 2,066 ms |
+
+Backend 503 passing, zero skipped, 96 % coverage. Frontend 133 passing across 15 files. Push-to-talk
+verified in a real browser against the running backend: twelve checks including that a 1.7 second hold
+uploads 61,440 bytes, that the space bar does not scroll the page, and that turning the mode off
+releases the binding, with no console or page errors.
+
+**The number worth keeping is 2.6 seconds.** That is how much audio the browser was already holding
+when the interruption arrived, because the server streams synthesis faster than the room can hear it.
+It is the entire argument for the client tier: the server stopping in 1.9 ms is not what makes the
+agent go quiet, and a design that only cancelled server-side would have kept talking for another two
+and a half seconds.
+
+**A near miss worth recording.** The first live probe decoded sentence ids as 16,777,216. The wire
+header is little-endian on both sides and the probe read it big-endian, which is a bug in the probe.
+The uncomfortable part is that the new browser test had made the same mistake and passed anyway,
+because sentence 0 is identical in either byte order and the assertions only needed ids to be
+distinct and ordered. Both are now little-endian and say so.
+
+**On the model.** The backend had been left running with a `GROQ_LLM_MODEL=openai/gpt-oss-120b`
+override from an earlier testing session while `.env` said `qwen/qwen3.8-27b`. It has been restarted
+from `.env`. Under gpt-oss one turn in three died with `Failed to parse tool call arguments as JSON`
+from upstream and time-to-first-token was 1,530 ms; under Qwen the same question answers in 777 ms.
+Both belong to the model, not the pipeline, and no prompt was changed for either.
+
+**Four more things this closing pass turned up.**
+
+*The audio path had no test at all.* Every session test asked by typing, because for most of the
+state machine the two paths are the same code. They are not the same in ``handle_utterance``, which
+owns the size guard, the transcription call, and the two ways a transcript can be worth nothing.
+That branch had never been executed by a test. It is now, including that the session stays in
+HEARING while the transcriber works: announcing THINKING there would carry the previous turn's id,
+so a client would see two THINKING transitions with different ids for one question. Three rows that
+had been marked *partial* because "no session test uploads an utterance" are now simply passing.
+
+*A green run was popping a crash dialog.* The suite reported success and then aborted at interpreter
+shutdown with a mutex error from ONNX Runtime's destructor, which on macOS means a "Python quit
+unexpectedly" report for a passing build. The test that loads the real Kokoro weights is now marked
+``integration`` alongside the ones that spend an API key, which is the honest classification anyway:
+it loads a 300 MB model, needs weights the repository does not carry, and is not a unit test. It
+runs in isolation without aborting, so ``make test-integration`` is clean too.
+
+*The error mapping keyed off string literals.* ``provider_error_message`` matched provider names as
+strings and defaulted to ``llm_failed``, so renaming the transcriber would have silently reported
+every transcription failure as a model failure. It now keys off the providers' own name constants.
+
+*Integration tests exist now, and four of the five have been run.* ``TC-INT-001`` and ``002``
+transcribe real audio through Groq; ``003`` proves the model, not a keyword, routes a question to
+slide 4; ``005`` measures first audio through the whole pipeline at 777 ms against a 1,500 ms
+budget. The utterances are synthesised by the project's own Kokoro voice and resampled to 16 kHz by
+the same naive interpolation the capture worklet uses, so a fixture is exactly what the browser
+would have uploaded; a better resampler would give the recogniser an easier file than the product
+can actually send. ``TC-INT-004`` is written but unrun: the free tier's daily token budget for the
+configured model was spent.
+
+**Follow-ups:** the free tier's per-minute input ceiling is reachable in normal use, and four turns in
+two minutes hit it. A turn that is rate-limited after it has already spoken stops mid-answer with an
+error in the log. That is TR-171's rate-limit chip, still open in Phase 4.
+
 ### 2026-09-11 · A walkthrough that reads its own notes, and never calls the model · uncommitted
 **Scope:** `app/pipeline/turn.py`, `app/session.py`, `frontend/src/session/useSession.ts`,
 `frontend/src/components/Controls.{tsx,module.css}`, and their tests

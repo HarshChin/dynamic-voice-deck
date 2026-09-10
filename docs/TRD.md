@@ -443,7 +443,7 @@ frontend/src/
 | ID | Requirement |
 |---|---|
 | TR-110 | Detection runs in the browser on an `AudioWorkletProcessor` that downmixes, resamples to 16 kHz, and reports per-frame RMS, with hysteresis and the timings below on the main thread. **Changed 2026-09-11:** the design specified Silero VAD via `@ricky0123/vad-web`; it could not be made to load under Vite (see the engineering log for the four distinct failures) and was replaced by an energy threshold. Adequate for onset and endpointing with echo cancellation on, worse in a noisy room, and swappable in one file. |
-| TR-111 | Parameters per PRD §F3 in `config.ts`: positive 0.6, negative 0.35, redemption 600 ms, min speech 250 ms, pre-pad 300 ms. |
+| TR-111 | Parameters per PRD §F3, all in `config.ts`: speech 0.02 RMS, silence 0.012 RMS, redemption 600 ms, min speech 250 ms, pre-pad 300 ms, onset 3 frames while playing and 1 while idle. **Changed 2026-09-11:** the first two were probabilities (0.6 / 0.35) when detection was Silero; they are amplitudes now that it is an energy threshold (TR-110). The timings are unchanged. |
 | TR-112 | While `PlaybackQueue.isPlaying`, onset requires **3 consecutive** positive frames (≈ 96 ms) to reduce echo-triggered self-interruption; otherwise 1 frame. |
 | TR-113 | On onset: emit `speech.start`; if playing, call `PlaybackQueue.flush()` first and emit `interrupt {last_completed_sentence_id}` (client tier of barge-in). Record `onsetTs = performance.now()`. |
 | TR-114 | On end: assemble `prePad + speech` as one `Int16Array`, emit `speech.end {duration_ms}` then the binary frame. If duration < min speech, emit `interrupt.cancel` if an interrupt was sent, otherwise nothing. |

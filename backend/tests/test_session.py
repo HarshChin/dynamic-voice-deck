@@ -23,10 +23,11 @@ Two deliberate choices:
   produced. Frames dispatched by handlers that ran earlier are necessarily
   ahead of it, because the receive loop handles frames in order.
 
-Audio does not exist in this milestone, so rows that name STT or TTS are
-covered through ``text.input`` where the behaviour is genuinely the same
-(``TC-BE-053``, ``TC-BE-054``) and skipped with a milestone where it is not
-(``TC-BE-056``, ``TC-BE-060``). Each such row says so in its docstring.
+Rows that name STT or TTS are covered two ways. Where the behaviour is
+identical whichever way the question arrived, the cheaper ``text.input`` path
+drives it (``TC-BE-053``, ``TC-BE-054``); where the audio path is the point,
+the fakes are steered into the failure -- an utterance past the cap
+(``TC-BE-056``) or a sentence whose synthesis refuses (``TC-BE-060``).
 """
 
 from __future__ import annotations
@@ -66,8 +67,9 @@ from app.providers.base import (
     ToolCallDelta,
     ToolSpec,
 )
+from app.providers.groq_stt import PROVIDER_NAME as GROQ_STT_NAME
 from app.session import INTERRUPT_DEBOUNCE_S, Session, SessionManager
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocketDisconnect
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
@@ -105,7 +107,10 @@ CANCEL_BUDGET_S = 0.5
 
 TC-BE-046 asks for 50 ms; the assertion is deliberately looser so a loaded CI
 machine does not fail it, while still being far below the 1.5 s a turn that ran
-to completion would take -- which is the regression it exists to catch.
+to completion would take -- which is the regression it exists to catch. The
+number that describes the product is measured against the real providers, not
+here: 1.9 ms from the interrupt leaving the client to ``agent.cancelled``
+arriving, recorded in the engineering log for 2026-09-11.
 """
 
 MESSAGES_WITH_TURN_ID = frozenset(
@@ -316,11 +321,17 @@ def long_script(count: int = LONG_SCRIPT_SENTENCES) -> list[LLMEvent]:
 # --------------------------------------------------------------------------- #
 
 
-def build_app(llm: Any, **overrides: Any) -> FastAPI:
+def build_app(
+    llm: Any, *, tts_fail_on: int | None = None, stt: Any | None = None, **overrides: Any
+) -> FastAPI:
     """Build an application wired to fake providers, without running startup.
 
     Args:
         llm: The model provider this application's sessions will use.
+        tts_fail_on: Index of a sentence whose synthesis should fail, so the
+            skip-and-continue behaviour of TR-173 can be exercised.
+        stt: Transcriber to use, for the tests that drive the audio path;
+            defaults to one that transcribes anything to a fixed sentence.
         **overrides: Field overrides for :class:`~app.config.Settings`, e.g.
             ``turn_timeout_s=0.05``. The environment is already scrubbed by the
             ``isolated_env`` fixture, so everything else takes its default.
@@ -333,7 +344,7 @@ def build_app(llm: Any, **overrides: Any) -> FastAPI:
     app.state.app_state = AppState(
         settings=Settings(**overrides),
         decks=DeckRepository(),
-        providers=Providers(stt=FakeSTT(), llm=llm, tts=FakeTTS()),
+        providers=Providers(stt=stt or FakeSTT(), llm=llm, tts=FakeTTS(fail_on=tts_fail_on)),
         prompts=PromptBuilder(),
     )
     return app
@@ -355,6 +366,10 @@ class Harness:
     llm: Any
     received: list[dict[str, Any]] = field(default_factory=list)
     audio: list[bytes] = field(default_factory=list)
+    # Every frame in arrival order, JSON and binary together: ``("state", None)`` for a message,
+    # ``("audio", sentence_id)`` for a wire frame. The two lists above lose the interleaving, and
+    # the interleaving is the contract for anything asserting that a caption precedes its sound.
+    order: list[tuple[str, int | None]] = field(default_factory=list)
 
     # -- reading ---------------------------------------------------------- #
 
@@ -372,6 +387,10 @@ class Harness:
 
         Raises:
             AssertionError: If nothing arrives within :data:`RECEIVE_TIMEOUT_S`.
+            WebSocketDisconnect: If the server closed the socket. The raw
+                transport reports a close as a frame rather than an exception,
+                so it is re-raised here the way a browser would see it: as the
+                end of the socket, carrying the close code.
         """
         box: list[Any] = []
 
@@ -391,6 +410,8 @@ class Harness:
         if isinstance(frame, BaseException):
             raise frame
         assert isinstance(frame, dict)
+        if frame.get("type") == "websocket.close":
+            raise WebSocketDisconnect(frame.get("code", 1000), frame.get("reason"))
         return frame
 
     def recv(self) -> dict[str, Any]:
@@ -409,10 +430,13 @@ class Harness:
             payload = frame.get("bytes")
             if payload is not None:
                 self.audio.append(payload)
+                sentence_id, _, _ = decode_audio_frame(payload)
+                self.order.append(("audio", sentence_id))
                 continue
             assert "text" in frame, f"expected a text or binary frame, got {frame!r}"
             message: dict[str, Any] = json.loads(frame["text"])
             self.received.append(message)
+            self.order.append((message["type"], message.get("sentence_id")))
             return message
 
     def recv_until(self, matches: Callable[[dict[str, Any]], bool]) -> list[dict[str, Any]]:
@@ -467,6 +491,25 @@ class Harness:
         self.send(type="text.input", text=text)
         return self.recv_until(is_state(SessionState.LISTENING))
 
+    def say(self, audio: bytes = b"\x00\x01" * 8_000, *, duration_ms: int = 1_000) -> list[dict]:
+        """Speak: announce the end of an utterance, upload it, and read the turn.
+
+        This is the audio path a browser drives, and the only difference from
+        :meth:`ask` is how the words arrive. What the audio contains is
+        irrelevant -- the transcriber is a fake -- but it is sent as real bytes
+        so the size guard and the ``expecting binary`` handshake are exercised.
+
+        Args:
+            audio: The utterance's samples.
+            duration_ms: What the client claims the utterance lasted.
+
+        Returns:
+            Every message up to the ``state listening`` that closes the turn.
+        """
+        self.send(type="speech.end", duration_ms=duration_ms)
+        self.ws.send_bytes(audio)
+        return self.recv_until(is_state(SessionState.LISTENING))
+
     def barrier(self) -> list[dict[str, Any]]:
         """Fence the stream and return everything the server had already sent.
 
@@ -503,7 +546,14 @@ class Harness:
 
 
 @contextmanager
-def connect(llm: Any, *, start: bool = True, **overrides: Any) -> Iterator[Harness]:
+def connect(
+    llm: Any,
+    *,
+    start: bool = True,
+    tts_fail_on: int | None = None,
+    stt: Any | None = None,
+    **overrides: Any,
+) -> Iterator[Harness]:
     """Open a session against a freshly built application.
 
     Args:
@@ -514,7 +564,7 @@ def connect(llm: Any, *, start: bool = True, **overrides: Any) -> Iterator[Harne
     Yields:
         The connected harness.
     """
-    app = build_app(llm, **overrides)
+    app = build_app(llm, tts_fail_on=tts_fail_on, stt=stt, **overrides)
     client = TestClient(app)
     try:
         with client.websocket_connect(WS_PATH) as ws:
@@ -789,19 +839,26 @@ def test_the_keyword_fallback_moves_the_deck_when_no_tool_was_called(isolated_en
 
 
 def test_each_sentence_is_announced_in_order_with_its_own_id(isolated_env: Any) -> None:
-    """TC-BE-044: TR-033 -- transcript.agent arrives per sentence, numbered from zero.
+    """TC-BE-044: TR-033 -- transcript.agent arrives per sentence, before that sentence is heard.
 
-    Partially covered until M2: the row also asks that each transcript precede
-    the audio frames carrying the same ``sentence_id``, and no audio exists yet.
+    The ordering is the half that matters to a listener: the caption for a
+    sentence has to be on screen before the sound of it arrives, or the
+    transcript reads as lagging behind the voice.
     """
     llm = FakeLLM(sentence_script("Sure thing.", "Let me answer that."))
 
     with connect(llm) as harness:
         turn = harness.ask("How does barge-in work?")
+        order = list(harness.order)
 
     sentences = only(turn, "transcript.agent")
     assert [message["sentence_id"] for message in sentences] == [0, 1]
     assert [message["text"] for message in sentences] == ["Sure thing.", "Let me answer that."]
+
+    for sentence_id in (0, 1):
+        announced = order.index(("transcript.agent", sentence_id))
+        first_frame = order.index(("audio", sentence_id))
+        assert announced < first_frame, f"sentence {sentence_id} was heard before it was announced"
 
 
 def test_audio_frames_ship_alongside_the_transcript(isolated_env: Any) -> None:
@@ -848,15 +905,16 @@ def test_audio_frames_ship_alongside_the_transcript(isolated_env: Any) -> None:
 def test_an_interrupt_cancels_the_turn_and_truncates_history(isolated_env: Any) -> None:
     """TC-BE-046: TR-022/023 -- the turn stops, agent.cancelled lands, history is cut.
 
-    Partially covered until M2: the row says the turn is in SPEAKING, which only
-    happens once audio is being played. In this milestone an in-flight turn is
-    in THINKING, and the interrupt handler treats the two identically.
+    The turn is interrupted once it is genuinely SPEAKING, which is the state
+    the row names and the only one a listener can barge in on.
     """
     llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
 
     with connect(llm) as harness:
         harness.send(type="text.input", text="Tell me everything.")
-        harness.recv_until(is_type("transcript.agent"))
+        # SPEAKING is announced when the first audio frame leaves, so waiting for it means the
+        # interrupt lands on a turn that is genuinely being heard.
+        harness.recv_until(is_state(SessionState.SPEAKING))
 
         started = time.perf_counter()
         harness.send(type="interrupt", last_completed_sentence_id=0)
@@ -1321,9 +1379,9 @@ def test_an_unexpected_failure_is_reported_and_the_session_recovers(isolated_env
 def test_a_provider_failure_is_reported_as_recoverable(isolated_env: Any) -> None:
     """TC-BE-052: TR-170 -- a failing provider yields one error and state LISTENING.
 
-    Partially covered until M3: the row names ``FakeSTT`` and ``stt_failed``,
-    and there is no transcription stage yet. The failure is injected at the only
-    provider a turn currently uses, which exercises the same handler.
+    Injected at the model here, and at the transcriber in
+    ``test_a_transcriber_failure_is_reported_and_the_session_survives``; both
+    reach the same handler, and between them they cover the two codes it maps.
     """
     llm = FailingLLM()
 
@@ -1350,11 +1408,12 @@ def test_a_provider_failure_is_reported_as_recoverable(isolated_env: Any) -> Non
 def test_an_empty_or_filler_question_is_dropped_without_an_answer(
     isolated_env: Any, text: str
 ) -> None:
-    """TC-BE-053/054: TR-172, F4 -- nothing is transcribed, no model call, back to LISTENING.
+    """TC-BE-053/054: TR-172, F4 -- an empty or filler question costs the model nothing.
 
-    Partially covered until M3: both rows describe what STT returns for silence.
-    The denylist they name lives in ``run_turn`` and is reached identically from
-    ``text.input``, which is what is driven here.
+    Driven by typing here, because the denylist lives in ``run_turn`` and both
+    paths reach it. What silence does when it arrives as *audio* is asserted
+    separately, in the audio-path tests at the end of this file, since that
+    branch belongs to ``handle_utterance`` and never runs for a typed question.
     """
     llm = FakeLLM()
 
@@ -1394,14 +1453,23 @@ def test_a_binary_frame_without_speech_end_is_refused(isolated_env: Any) -> None
     assert error["recoverable"] is True
 
 
-@pytest.mark.skip(reason="utterance size limit arrives with milestone M3 (audio in, TR-182)")
 def test_an_oversized_utterance_closes_the_socket(isolated_env: Any) -> None:
-    """TC-BE-056: TR-182 -- a 3 MB binary frame must close the socket with 1009.
+    """TC-BE-056: TR-182 -- an utterance past the cap closes the socket rather than being sent.
 
-    Deliberately not covered: nothing may upload an utterance before M3, so
-    ``max_utterance_bytes`` has no enforcement point yet and every binary frame
-    is refused outright by TC-BE-055. Implement with the capture path.
+    Closing rather than answering is deliberate. A frame this size is a bug or an
+    attack, and either way it must not reach the transcriber, where it would be
+    billed and would occupy the turn for as long as it took to fail.
     """
+    llm = FakeLLM(sentence_script("Sure thing."))
+    cap = 4096
+
+    with pytest.raises(WebSocketDisconnect) as raised, connect(llm, max_utterance_bytes=cap) as h:
+        h.send(type="speech.end", duration_ms=90_000)
+        h.ws.send_bytes(b"\x00\x01" * cap)
+        # The socket is gone, so the next read raises rather than returning.
+        h.recv()
+
+    assert raised.value.code == 1009
 
 
 def test_manual_navigation_is_told_to_the_model(isolated_env: Any) -> None:
@@ -1550,11 +1618,9 @@ def test_pause_keeps_the_sentences_the_room_already_heard(isolated_env: Any) -> 
 def test_playback_progress_for_another_turn_is_ignored(isolated_env: Any) -> None:
     """TC-BE-062: progress reported against a stale turn changes nothing.
 
-    Partially covered until M2: ``playback.progress`` is what drives the return
-    to LISTENING once the client is actually playing audio. Without audio the
-    turn has already returned by the time any progress could arrive, so what is
-    asserted here is the guard: a report for a turn that is not current, or for
-    a session that is not speaking, is silently dropped.
+    What is asserted is the guard: a report for a turn that is not current, or
+    for a session that is no longer speaking, is silently dropped rather than
+    moving the state machine on someone else's behalf.
     """
     with connect(FakeLLM()) as harness:
         harness.ask("What is this deck about?")
@@ -1907,10 +1973,131 @@ async def test_the_session_manager_releases_every_session(isolated_env: Any) -> 
     assert len(manager) == 0
 
 
-@pytest.mark.skip(reason="synthesis arrives with milestone M2 (audio out, TR-173)")
 def test_a_failing_sentence_is_skipped_and_logged(isolated_env: Any) -> None:
-    """TC-BE-060: TR-173 -- a TTS failure on one sentence must not kill the turn.
+    """TC-BE-060: TR-173 -- synthesis failing on one sentence must not kill the turn.
 
-    Deliberately not covered: no sentence is synthesised in this milestone, so
-    there is no failure to inject. Implement with the Kokoro provider.
+    Losing one sentence of an answer is a far smaller harm than cutting the
+    answer off, and the transcript still shows what was meant, so the listener
+    hears a gap rather than silence.
     """
+    llm = FakeLLM(sentence_script("First point.", "Second point.", "Third point."))
+
+    with connect(llm, tts_fail_on=1) as harness:
+        turn = harness.ask("Tell me about barge-in.")
+
+    # Every sentence was announced, including the one that could not be spoken.
+    assert [message["text"] for message in only(turn, "transcript.agent")] == [
+        "First point.",
+        "Second point.",
+        "Third point.",
+    ]
+    # Audio arrived for the two that worked, and the turn finished normally.
+    assert harness.audio, "the surviving sentences must still be heard"
+    assert only(turn, "error") == []
+
+
+# --------------------------------------------------------------------------- #
+# The audio path                                                              #
+# --------------------------------------------------------------------------- #
+#
+# Every other test here asks by typing, because for most of the state machine
+# the two paths are the same code and typing is cheaper to read. These are the
+# rows where they are not: what happens between the bytes arriving and the turn
+# opening belongs to `handle_utterance` alone.
+
+
+def test_a_spoken_question_is_transcribed_and_answered(isolated_env: Any) -> None:
+    """TC-BE-281: TR-030/TR-140 -- an uploaded utterance becomes a turn, with its cost reported.
+
+    The transcription latency is asserted because it is the one number in the
+    metrics that no other path can produce: a typed question reports ``None``
+    for it, so a regression that dropped it would be invisible everywhere else.
+    """
+    audio = b"\x00\x01" * 8_000
+    stt = FakeSTT({audio: "How do you handle interruptions?"}, latency_ms=265)
+    llm = FakeLLM(sentence_script("Two layers, actually."))
+
+    with connect(llm, stt=stt) as harness:
+        messages = harness.say(audio)
+
+    user = [m for m in messages if m["type"] == "transcript.user"]
+    assert [m["text"] for m in user] == ["How do you handle interruptions?"]
+    # The words the transcriber heard are the words the model is asked about.
+    assert llm.calls[0].messages[-1].content.endswith("How do you handle interruptions?")
+    assert stt.calls[0].pcm16 == audio
+    assert stt.calls[0].sample_rate == 16_000
+    metrics = [m for m in messages if m["type"] == "metrics"]
+    assert metrics[-1]["stt_ms"] == 265
+
+
+def test_the_session_stays_in_hearing_while_the_transcriber_works(isolated_env: Any) -> None:
+    """TC-BE-282: TR-020 -- transcription belongs to the utterance, not to a turn.
+
+    Announcing THINKING here would carry the *previous* turn's id, so a client
+    would see two THINKING transitions with different ids for one question.
+    """
+    llm = FakeLLM(sentence_script("Two layers, actually."))
+
+    with connect(llm) as harness:
+        harness.send(type="speech.start")
+        assert harness.recv()["value"] == SessionState.HEARING
+        harness.send(type="speech.end", duration_ms=900)
+        harness.ws.send_bytes(b"\x00\x01" * 8_000)
+        states = [
+            m for m in harness.recv_until(is_state(SessionState.LISTENING)) if m["type"] == "state"
+        ]
+
+    assert [m["value"] for m in states] == [
+        SessionState.THINKING,
+        SessionState.SPEAKING,
+        SessionState.LISTENING,
+    ]
+    # One THINKING, and it belongs to the turn the utterance opened.
+    thinking = [m for m in states if m["value"] == SessionState.THINKING]
+    assert [m["turn_id"] for m in thinking] == [1]
+
+
+def test_an_utterance_that_transcribes_to_nothing_is_dropped(isolated_env: Any) -> None:
+    """TC-BE-053: TR-172 -- silence reaching the transcriber costs the model nothing."""
+    stt = FakeSTT(default_text="   ")
+    llm = FakeLLM(sentence_script("Never asked."))
+
+    with connect(llm, stt=stt) as harness:
+        harness.send(type="speech.end", duration_ms=400)
+        harness.ws.send_bytes(b"\x00\x01" * 8_000)
+        assert harness.recv()["value"] == SessionState.LISTENING
+        quiet = harness.barrier()
+
+    assert quiet == []
+    assert llm.calls == []
+
+
+def test_a_filler_transcript_is_dropped_the_same_way(isolated_env: Any) -> None:
+    """TC-BE-054: F4 -- Whisper's favourite hallucination on silence never becomes a turn."""
+    stt = FakeSTT(default_text="Thank you.")
+    llm = FakeLLM(sentence_script("Never asked."))
+
+    with connect(llm, stt=stt) as harness:
+        harness.send(type="speech.end", duration_ms=400)
+        harness.ws.send_bytes(b"\x00\x01" * 8_000)
+        harness.recv_until(is_state(SessionState.LISTENING))
+
+    assert llm.calls == []
+
+
+def test_a_transcriber_failure_is_reported_and_the_session_survives(isolated_env: Any) -> None:
+    """TC-BE-052: TR-170 -- an upstream failure is recoverable and named for what it was."""
+    stt = FakeSTT(error=ProviderError(GROQ_STT_NAME, "upstream error: 503"))
+    llm = FakeLLM(sentence_script("Two layers, actually."))
+
+    with connect(llm, stt=stt) as harness:
+        harness.send(type="speech.end", duration_ms=900)
+        harness.ws.send_bytes(b"\x00\x01" * 8_000)
+        error = harness.recv_until(is_type("error"))[-1]
+        assert harness.recv()["value"] == SessionState.LISTENING
+        # The next question is answered normally: the failure cost one turn, not the session.
+        harness.ask("What is this deck about?")
+
+    assert error["code"] == "stt_failed"
+    assert error["recoverable"] is True
+    assert llm.calls, "the session refused to work after a transcription failure"

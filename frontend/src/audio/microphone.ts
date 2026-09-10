@@ -42,22 +42,40 @@ const FRAME_SAMPLES = 512;
 const FRAME_MS = (FRAME_SAMPLES / AUDIO_RATES.input) * 1000;
 
 /**
- * Loudness above which a frame counts as speech.
+ * Loudness above which a frame counts as speech, and the lower level at which it counts as silence.
  *
- * Root-mean-square amplitude, so this is a level rather than a probability, and it is not the
- * `positiveSpeechThreshold` a neural detector would use. Chosen so ordinary speech at a normal
- * distance clears it while room tone does not.
+ * Root-mean-square amplitudes, so these are levels rather than probabilities. The gap between them
+ * is the hysteresis that keeps a dip mid-word from ending an utterance. They live in `config.ts`
+ * with the timings because TR-111 asks for every detection parameter in one place.
  */
-const SPEECH_RMS = 0.02;
+const SPEECH_RMS = VAD.speechRms;
 
-/** Loudness below which a frame counts as silence. The gap is the hysteresis. */
-const SILENCE_RMS = 0.012;
+const SILENCE_RMS = VAD.silenceRms;
 
-/** Consecutive speech frames required to declare onset: about 96 ms, so a click cannot trigger it. */
-const ONSET_FRAMES = 3;
+/**
+ * Consecutive speech frames required to declare onset *while the agent is speaking*: about 96 ms
+ * (TR-112).
+ *
+ * Echo is the reason. Cancellation is good but not perfect, and a leaked fragment of the agent's
+ * own voice is short; requiring three frames in a row means such a fragment cannot cut it off
+ * mid-sentence. With nothing playing there is no echo to resist, so waiting would be pure added
+ * latency on the common case, and a false onset there is cheap: it emits `speech.start` and
+ * nothing else, and the minimum-speech gate still refuses to upload the noise that caused it.
+ */
+const ONSET_FRAMES_WHILE_PLAYING = VAD.onsetFramesWhilePlaying;
+
+const ONSET_FRAMES_WHILE_IDLE = VAD.onsetFramesWhileIdle;
 
 /** What the microphone reports to the session. */
 export interface MicrophoneHandlers {
+  /**
+   * Whether the agent is audible right now.
+   *
+   * Read per frame rather than latched, because it decides how much evidence onset needs
+   * (TR-112) and it changes while the microphone is open. Optional: without it the cautious
+   * three-frame rule applies always.
+   */
+  readonly isPlaying?: () => boolean;
   /** Speech began. The session decides whether this is a barge-in. */
   readonly onSpeechStart: () => void;
   /** A finished utterance, as 16 kHz mono PCM16 ready for the wire. */
@@ -105,11 +123,16 @@ export class Microphone {
   #muted = false;
 
   // Detection state.
+  #pushToTalk = false;
   #speaking = false;
   #loudRun = 0;
   #silentRun = 0;
   #preRoll: Float32Array[] = [];
   #utterance: Float32Array[] = [];
+  // How many of `#utterance`'s leading frames came from the pre-roll, so the minimum-speech gate
+  // can measure speech rather than padding. Not derivable afterwards: the pre-roll is short of
+  // `PRE_ROLL_FRAMES` for an onset in the first third of a second after the microphone opens.
+  #preRollFrames = 0;
 
   /**
    * @param handlers - Callbacks the session supplies.
@@ -121,6 +144,51 @@ export class Microphone {
   /** Whether the microphone is open and not muted. */
   get isListening(): boolean {
     return this.#node !== null && !this.#muted;
+  }
+
+  /** Whether a turn is being captured right now, whether a key or the detector started it. */
+  get isCapturing(): boolean {
+    return this.#speaking;
+  }
+
+  /**
+   * Choose what decides when a turn starts: the detector, or a held key (TR-115).
+   *
+   * The reason to offer the choice at all is that energy detection has a failure mode a person
+   * cannot work around -- a room loud enough that every frame reads as speech -- and in that room
+   * a key still works. Switching abandons any turn in progress rather than finishing it under
+   * rules it did not start under.
+   *
+   * @param enabled - `true` to take orders from {@link beginPush} and {@link endPush} instead.
+   */
+  setPushToTalk(enabled: boolean): void {
+    if (this.#pushToTalk === enabled) {
+      return;
+    }
+    this.#pushToTalk = enabled;
+    this.#resetDetection();
+  }
+
+  /**
+   * Start capturing because the key went down.
+   *
+   * The padding kept for the detector is used here too: a person starts speaking as they press,
+   * not after, so the first syllable is usually already in the buffer.
+   */
+  beginPush(): void {
+    if (!this.#pushToTalk || this.#muted || this.#speaking || this.#node === null) {
+      return;
+    }
+    this.#beginUtterance();
+  }
+
+  /** Stop capturing because the key came up, uploading what was captured. */
+  endPush(): void {
+    if (!this.#pushToTalk || !this.#speaking) {
+      return;
+    }
+    // Nothing to trim: the key ended the turn, so there is no closing silence to drop.
+    this.#finishUtterance(0);
   }
 
   /**
@@ -208,19 +276,25 @@ export class Microphone {
       return;
     }
 
-    if (!this.#speaking) {
-      // Keep a rolling window of what came just before onset, so the first syllable survives.
-      this.#preRoll.push(frame);
-      if (this.#preRoll.length > PRE_ROLL_FRAMES) {
-        this.#preRoll.shift();
+    if (this.#pushToTalk) {
+      // The key decides; the level is not consulted at all. Frames still flow into the same two
+      // buffers, so the padding and the upload are assembled by the same code either way.
+      if (this.#speaking) {
+        this.#utterance.push(frame);
+      } else {
+        this.#rememberForPadding(frame);
       }
+      return;
+    }
+
+    if (!this.#speaking) {
+      this.#rememberForPadding(frame);
       this.#loudRun = rms >= SPEECH_RMS ? this.#loudRun + 1 : 0;
-      if (this.#loudRun >= ONSET_FRAMES) {
-        this.#speaking = true;
-        this.#silentRun = 0;
-        this.#utterance = [...this.#preRoll];
-        this.#preRoll = [];
-        this.#handlers.onSpeechStart();
+      // Absent seam means "assume the agent may be audible": the cautious rule is the safe default.
+      const playing = this.#handlers.isPlaying?.() ?? true;
+      const needed = playing ? ONSET_FRAMES_WHILE_PLAYING : ONSET_FRAMES_WHILE_IDLE;
+      if (this.#loudRun >= needed) {
+        this.#beginUtterance();
       }
       return;
     }
@@ -228,13 +302,34 @@ export class Microphone {
     this.#utterance.push(frame);
     this.#silentRun = rms <= SILENCE_RMS ? this.#silentRun + 1 : 0;
     if (this.#silentRun >= REDEMPTION_FRAMES) {
-      this.#finishUtterance();
+      // TR-114: what is uploaded is the padding plus the speech. The silence that ended the turn
+      // is dropped -- every frame in that run is below the silence threshold by definition, so it
+      // carries no words, and sending it would only make the transcriber wait longer to answer.
+      this.#finishUtterance(REDEMPTION_FRAMES);
     }
   }
 
-  #finishUtterance(): void {
-    const frames = this.#utterance;
-    const spokenFrames = frames.length - REDEMPTION_FRAMES - this.#preRoll.length;
+  /** Keep a rolling window of what came just before a turn, so the first syllable survives. */
+  #rememberForPadding(frame: Float32Array): void {
+    this.#preRoll.push(frame);
+    if (this.#preRoll.length > PRE_ROLL_FRAMES) {
+      this.#preRoll.shift();
+    }
+  }
+
+  /** Open a turn, seeding it with the padding, and tell the session. */
+  #beginUtterance(): void {
+    this.#speaking = true;
+    this.#silentRun = 0;
+    this.#utterance = [...this.#preRoll];
+    this.#preRollFrames = this.#preRoll.length;
+    this.#preRoll = [];
+    this.#handlers.onSpeechStart();
+  }
+
+  #finishUtterance(tailFrames: number): void {
+    const frames = this.#utterance.slice(0, this.#utterance.length - tailFrames);
+    const spokenFrames = frames.length - this.#preRollFrames;
     this.#resetDetection();
 
     if (spokenFrames < MIN_SPEECH_FRAMES) {
@@ -260,6 +355,7 @@ export class Microphone {
     this.#silentRun = 0;
     this.#preRoll = [];
     this.#utterance = [];
+    this.#preRollFrames = 0;
   }
 }
 

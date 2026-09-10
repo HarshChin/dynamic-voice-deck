@@ -100,6 +100,14 @@ export interface SessionController {
   setMuted: (muted: boolean) => void;
   /** Whether the microphone is currently ignored. */
   readonly muted: boolean;
+  /** Take turn-taking off the detector and put it on a held key (TR-115). */
+  setPushToTalk: (enabled: boolean) => void;
+  /** Whether a held key, rather than speech detection, starts a turn. */
+  readonly pushToTalk: boolean;
+  /** The key went down: start capturing, interrupting the agent if it is speaking. */
+  startPush: () => void;
+  /** The key came up: end the turn and upload it. */
+  endPush: () => void;
 }
 
 /**
@@ -220,7 +228,11 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
   // listener experiences it: from asking to hearing (TR-125).
   const askedAtRef = useRef<number | null>(null);
   const [outputLevel, setOutputLevel] = useState(0);
-  const [muted, setMutedState] = useState(false);
+  // The toggles live in the store rather than in this hook because they belong to the user, not to
+  // a session: `clearSession` preserves them deliberately, and a second session must open with the
+  // microphone in the state the user last left it (PRD F13).
+  const muted = useSessionStore((state) => state.settings.muted);
+  const pushToTalk = useSessionStore((state) => state.settings.ptt);
 
   // Before a session opens there is still a deck to look at (PRD F1: slide 1 is on screen when the
   // page loads), so the HTTP copy stands in until `session.ready` delivers the authoritative one.
@@ -318,6 +330,9 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     playbackRef.current = playback;
 
     const microphone = new Microphone({
+      // Onset needs more evidence while the agent is audible, because echo can leak through
+      // cancellation and a leaked fragment must not cut the agent off (TR-112).
+      isPlaying: () => playback.isPlaying,
       onSpeechStart: () => {
         const socket = clientRef.current;
         if (socket === null) {
@@ -362,6 +377,12 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
       },
     });
     micRef.current = microphone;
+    // The toggles survive a session, so a new device has to be told about them before it opens.
+    const settings = useSessionStore.getState().settings;
+    microphone.setPushToTalk(settings.ptt);
+    if (settings.muted) {
+      microphone.mute();
+    }
     void microphone.start();
 
     const client = new SessionClient({
@@ -442,13 +463,26 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
   }, []);
 
   const setMuted = useCallback((next: boolean): void => {
-    setMutedState(next);
+    useSessionStore.getState().updateSettings({ muted: next });
     const microphone = micRef.current;
     if (next) {
       microphone?.mute();
     } else {
       microphone?.unmute();
     }
+  }, []);
+
+  const setPushToTalk = useCallback((next: boolean): void => {
+    useSessionStore.getState().updateSettings({ ptt: next });
+    micRef.current?.setPushToTalk(next);
+  }, []);
+
+  const startPush = useCallback((): void => {
+    micRef.current?.beginPush();
+  }, []);
+
+  const endPush = useCallback((): void => {
+    micRef.current?.endPush();
   }, []);
 
   const selectDeck = useCallback((nextDeckId: string): void => {
@@ -513,6 +547,10 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     present,
     setMuted,
     muted,
+    setPushToTalk,
+    pushToTalk,
+    startPush,
+    endPush,
     isActive:
       connection === "connecting" || connection === "reconnecting" || connection === "connected",
     canSend: connection === "connected",

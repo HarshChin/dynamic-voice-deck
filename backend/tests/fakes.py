@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from app.errors import ProviderError
 from app.providers.base import (
     LLMDone,
     LLMEvent,
@@ -123,6 +124,7 @@ class FakeSTT:
         latency_ms: Value reported in :attr:`Transcript.latency_ms`.
         delay_s: Wall-clock delay before returning, for tests that need the
             transcription step to be interruptible.
+        error: Raised instead of returning, for the upstream-failure path.
 
     Attributes:
         name: Provider name reported to the health probe.
@@ -136,12 +138,14 @@ class FakeSTT:
         default_text: str = DEFAULT_TRANSCRIPT,
         latency_ms: int = 0,
         delay_s: float = 0.0,
+        error: ProviderError | None = None,
     ) -> None:
         self.name = FAKE_STT_NAME
         self._scripted = dict(scripted or {})
         self._default_text = default_text
         self._latency_ms = latency_ms
         self._delay_s = delay_s
+        self._error = error
         self.calls: list[STTCall] = []
 
     async def transcribe(self, pcm16: bytes, sample_rate: int = 16_000) -> Transcript:
@@ -153,9 +157,14 @@ class FakeSTT:
 
         Returns:
             The scripted transcript, or ``default_text`` for unknown audio.
+
+        Raises:
+            ProviderError: If the fake was built with one.
         """
         self.calls.append(STTCall(pcm16=pcm16, sample_rate=sample_rate))
         await asyncio.sleep(self._delay_s)
+        if self._error is not None:
+            raise self._error
         return Transcript(
             text=self._scripted.get(pcm16, self._default_text),
             latency_ms=self._latency_ms,
@@ -237,6 +246,8 @@ class FakeTTS:
         delay_s: Delay before each chunk, so a test can interrupt playback.
         chunk_bytes: Size of each yielded chunk; must be even for PCM16.
         sample_rate: Rate reported to the pipeline.
+        fail_on: Zero-based index of a call that should raise instead of
+            yielding, so a per-sentence failure can be injected.
 
     Attributes:
         name: Provider name reported to the health probe.
@@ -252,6 +263,7 @@ class FakeTTS:
         delay_s: float = 0.0,
         chunk_bytes: int = CHUNK_BYTES,
         sample_rate: int = FAKE_SAMPLE_RATE,
+        fail_on: int | None = None,
     ) -> None:
         if chunk_bytes % BYTES_PER_SAMPLE:
             msg = f"chunk_bytes must be even for PCM16, got {chunk_bytes}"
@@ -263,6 +275,8 @@ class FakeTTS:
         self._chunk_bytes = chunk_bytes
         self.calls: list[TTSCall] = []
         self.warm_ups = 0
+        self._fail_on = fail_on
+        """Index of the call that raises, so TR-173's skip-and-continue is testable."""
 
     async def synthesize(self, text: str, voice: str | None = None) -> AsyncIterator[bytes]:
         """Yield deterministic PCM16 for one sentence.
@@ -274,7 +288,11 @@ class FakeTTS:
         Yields:
             Chunks of at most ``chunk_bytes``; the last one may be shorter.
         """
+        index = len(self.calls)
         self.calls.append(TTSCall(text=text, voice=voice))
+        if self._fail_on is not None and index == self._fail_on:
+            msg = f"synthesis refused sentence {index}"
+            raise ProviderError(FAKE_TTS_NAME, msg)
         audio = _deterministic_pcm16(text, self._bytes_per_char)
         for start in range(0, len(audio), self._chunk_bytes):
             await asyncio.sleep(self._delay_s)

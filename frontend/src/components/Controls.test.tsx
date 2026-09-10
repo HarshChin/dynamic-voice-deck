@@ -39,6 +39,9 @@ function renderControls(overrides: Partial<ComponentProps<typeof Controls>> = {}
     onPresent: vi.fn(),
     muted: false,
     onToggleMute: vi.fn(),
+    pushToTalk: false,
+    onTogglePushToTalk: vi.fn(),
+    pushHeld: false,
     ...overrides,
   };
   return { props, view: render(<Controls {...props} />) };
@@ -179,5 +182,32 @@ describe("walkthrough and mute", () => {
     renderControls({ isActive: true, muted: true });
 
     expect(screen.getByRole("button", { name: /unmute/i })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("push to talk (TR-115)", () => {
+  it("offers the mode while a session is open and reports the switch", () => {
+    const { props } = renderControls();
+
+    fireEvent.click(screen.getByRole("button", { name: "Push to talk" }));
+
+    expect(props.onTogglePushToTalk).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("says which key to hold, and says when it is being held", () => {
+    const { props, view } = renderControls({ pushToTalk: true });
+
+    expect(screen.getByText("hold space to talk")).toBeInTheDocument();
+
+    view.rerender(<Controls {...props} pushToTalk pushHeld />);
+    expect(screen.getByText("listening — release to send")).toBeInTheDocument();
+  });
+
+  it("says nothing about a key when the mode is off, or when no session is open", () => {
+    const { props, view } = renderControls({ pushToTalk: false });
+    expect(screen.queryByText(/hold space/)).not.toBeInTheDocument();
+
+    view.rerender(<Controls {...props} pushToTalk isActive={false} />);
+    expect(screen.queryByText(/hold space/)).not.toBeInTheDocument();
   });
 });

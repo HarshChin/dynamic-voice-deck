@@ -47,6 +47,9 @@ from ..providers.base import (
     ToolSpec,
     TTSProvider,
 )
+from ..providers.groq_llm import PROVIDER_NAME as GROQ_LLM_NAME
+from ..providers.groq_stt import PROVIDER_NAME as GROQ_STT_NAME
+from ..providers.kokoro_tts import PROVIDER_NAME as KOKORO_NAME
 from .chunker import SentenceChunker
 from .history import ConversationHistory
 from .metrics import TurnMetrics
@@ -991,11 +994,16 @@ def provider_error_message(exc: ProviderError) -> ErrorMsg:
         The ``error`` message to send. Provider failures are recoverable: the
         session returns to listening and the user may simply ask again.
     """
+    # Keyed off the providers' own name constants rather than string literals, so renaming a
+    # provider is a type error here instead of silently reporting its failures as the model's.
+    # Keyed off the providers' own name constants rather than string literals, so renaming a
+    # provider cannot silently start reporting its failures as the model's. The default is
+    # `llm_failed` because an unrecognised provider is most likely a model backend that has not
+    # shipped yet -- Ollama is the one named in TR-084.
     code = {
-        "groq_llm": ErrorCode.LLM_FAILED,
-        "ollama": ErrorCode.LLM_FAILED,
-        "groq_stt": ErrorCode.STT_FAILED,
-        "kokoro": ErrorCode.TTS_FAILED,
+        GROQ_LLM_NAME: ErrorCode.LLM_FAILED,
+        GROQ_STT_NAME: ErrorCode.STT_FAILED,
+        KOKORO_NAME: ErrorCode.TTS_FAILED,
     }.get(exc.provider, ErrorCode.LLM_FAILED)
     if exc.retryable and exc.retry_after is not None:
         code = ErrorCode.RATE_LIMITED

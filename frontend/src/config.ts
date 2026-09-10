@@ -50,19 +50,26 @@ export const AUDIO_RATES = {
 } as const;
 
 /**
- * Silero VAD parameters (PRD §F3, TR-111).
+ * Speech detection parameters (PRD §F3, TR-111).
  *
- * The asymmetric thresholds are deliberate: entering speech needs more confidence than staying in
- * it, so a dip mid-word does not end the utterance. `redemptionMs` is the silence tolerated before
- * an utterance is considered over, `minSpeechMs` discards coughs and lip smacks, and
- * `preSpeechPadMs` is how much audio is kept from before the onset so the first phoneme survives.
+ * The two levels are asymmetric on purpose: entering speech takes more energy than staying in it,
+ * so a dip mid-word does not end the utterance. They are root-mean-square amplitudes rather than
+ * the probabilities the design originally specified, because detection is an energy threshold and
+ * not Silero; TR-110 records why. The timings are unchanged from the design: `redemptionMs` is the
+ * silence tolerated before an utterance is considered over, `minSpeechMs` discards coughs and lip
+ * smacks, and `preSpeechPadMs` is how much audio is kept from before the onset so the first
+ * phoneme survives.
  */
 export const VAD = {
-  positiveSpeechThreshold: 0.6,
-  negativeSpeechThreshold: 0.35,
+  speechRms: 0.02,
+  silenceRms: 0.012,
   redemptionMs: 600,
   minSpeechMs: 250,
   preSpeechPadMs: 300,
+  /** Consecutive loud frames required to declare onset while the agent is audible (TR-112). */
+  onsetFramesWhilePlaying: 3,
+  /** Consecutive loud frames required while nothing is playing, where there is no echo to resist. */
+  onsetFramesWhileIdle: 1,
 } as const;
 
 /**

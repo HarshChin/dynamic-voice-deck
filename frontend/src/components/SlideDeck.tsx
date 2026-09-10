@@ -1,5 +1,6 @@
 import { useEffect, type JSX } from "react";
 
+import { isTypingTarget } from "../keyboard";
 import type { Slide as SlideModel } from "../protocol";
 
 import { ProgressDots } from "./ProgressDots";
@@ -16,26 +17,6 @@ export interface SlideDeckProps {
   readonly highlight: number | null;
   /** Called with a 1-based index whenever the user navigates by hand (PRD F9). */
   readonly onNavigate: (index: number) => void;
-}
-
-/**
- * Whether a keystroke belongs to something the user is typing into.
- *
- * Arrow keys move the caret inside the composer, so the deck must not also swallow them; without
- * this check, typing a question would flick through the slides.
- *
- * @param target - The event target that received the keystroke.
- * @returns `true` when the key should be left alone.
- */
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  if (target.isContentEditable) {
-    return true;
-  }
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 /**

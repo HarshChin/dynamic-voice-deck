@@ -4,6 +4,7 @@ import { Controls } from "./components/Controls";
 import { EventLog } from "./components/EventLog";
 import { LatencyHUD } from "./components/LatencyHUD";
 import { SlideDeck } from "./components/SlideDeck";
+import { usePushToTalk } from "./session/usePushToTalk";
 import { useSession } from "./session/useSession";
 import { useSessionStore } from "./store";
 
@@ -56,6 +57,13 @@ export function App(): JSX.Element {
   }, []);
 
   const session = useSession();
+  // Bound here rather than inside the control bar: the key has to work wherever the user is
+  // looking, and the bar is only one part of the page.
+  const pushHeld = usePushToTalk({
+    enabled: session.pushToTalk && session.isActive,
+    onPress: session.startPush,
+    onRelease: session.endPush,
+  });
   const events = useSessionStore((state) => state.events);
   const debug = useSessionStore((state) => state.settings.debug);
   const updateSettings = useSessionStore((state) => state.updateSettings);
@@ -132,6 +140,9 @@ export function App(): JSX.Element {
           onPresent={session.present}
           muted={session.muted}
           onToggleMute={session.setMuted}
+          pushToTalk={session.pushToTalk}
+          onTogglePushToTalk={session.setPushToTalk}
+          pushHeld={pushHeld}
           isActive={session.isActive}
           canSend={session.canSend}
           isAnswering={session.isAnswering}

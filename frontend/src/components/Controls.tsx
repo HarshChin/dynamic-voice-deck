@@ -67,6 +67,12 @@ export interface ControlsProps {
   readonly muted: boolean;
   /** Turn the microphone off or back on without ending the session. */
   readonly onToggleMute: (muted: boolean) => void;
+  /** Whether a held key, rather than speech detection, starts a turn (TR-115). */
+  readonly pushToTalk: boolean;
+  /** Switch between speech detection and the held key. */
+  readonly onTogglePushToTalk: (enabled: boolean) => void;
+  /** Whether the key is down right now, so the bar can say the microphone is open. */
+  readonly pushHeld: boolean;
 }
 
 /**
@@ -99,6 +105,9 @@ export function Controls({
   onPresent,
   muted,
   onToggleMute,
+  pushToTalk,
+  onTogglePushToTalk,
+  pushHeld,
 }: ControlsProps): JSX.Element {
   const [draft, setDraft] = useState("");
   const question = draft.trim();
@@ -117,6 +126,11 @@ export function Controls({
   return (
     <div className={styles.bar}>
       <Orb state={orbState} level={outputLevel} />
+      {pushToTalk && isActive && (
+        <p className={styles.hint} role="status" aria-live="polite">
+          {pushHeld ? "listening — release to send" : "hold space to talk"}
+        </p>
+      )}
 
       <form className={styles.composer} onSubmit={handleSubmit}>
         <div className={styles.field}>
@@ -189,6 +203,18 @@ export function Controls({
               title="Stop listening without ending the session"
             >
               {muted ? "Unmute" : "Mute"}
+            </button>
+            <button
+              className={styles.secondary}
+              type="button"
+              data-active={pushToTalk ? "true" : undefined}
+              aria-pressed={pushToTalk}
+              onClick={() => {
+                onTogglePushToTalk(!pushToTalk);
+              }}
+              title="Hold the space bar to talk instead of letting the microphone decide. Useful in a noisy room."
+            >
+              Push to talk
             </button>
           </>
         )}
