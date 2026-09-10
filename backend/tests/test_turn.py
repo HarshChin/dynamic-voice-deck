@@ -30,8 +30,11 @@ from app.pipeline.tools import GO_TO_SLIDE, HIGHLIGHT_BULLET
 from app.pipeline.turn import (
     FILLER_TRANSCRIPTS,
     MAX_LLM_STEPS,
+    NO_ANSWER_FALLBACK,
+    Emit,
     cancel_task,
     is_filler,
+    is_off_topic_redirect,
     provider_error_message,
     run_turn,
 )
@@ -69,6 +72,10 @@ class ScriptedLLM:
     Attributes:
         name: Provider name, as the health probe would report it.
         calls: Every request, recording the messages and tools it was given.
+        closed: How many of those streams have been closed. A generator the
+            consumer merely abandoned stays suspended and does not count, which
+            is what makes this the observable form of "the HTTP connection was
+            released" without a socket to look at.
     """
 
     def __init__(self, *scripts: Sequence[LLMEvent], delay_s: float = 0.0) -> None:
@@ -76,6 +83,7 @@ class ScriptedLLM:
         self._scripts = [list(script) for script in scripts]
         self._delay_s = delay_s
         self.calls: list[LLMCall] = []
+        self.closed = 0
 
     async def stream(
         self,
@@ -105,9 +113,14 @@ class ScriptedLLM:
         if index >= len(self._scripts):
             msg = f"request {index + 1} was made but only {len(self._scripts)} were scripted"
             raise AssertionError(msg)
-        for event in self._scripts[index]:
-            await asyncio.sleep(self._delay_s)
-            yield event
+        try:
+            for event in self._scripts[index]:
+                await asyncio.sleep(self._delay_s)
+                yield event
+        finally:
+            # Reached when the consumer calls aclose(), and not when it simply
+            # walks away from a suspended generator.
+            self.closed += 1
 
 
 @dataclass(slots=True)
@@ -213,6 +226,58 @@ async def drive(
         emit=emit,
     )
     return turn
+
+
+def start(
+    llm: Any,
+    text: str,
+    *,
+    deck: Deck,
+    slides: SlideController,
+    emit: Emit,
+    history: ConversationHistory | None = None,
+) -> asyncio.Task[Any]:
+    """Start one turn as its own task so a test can cancel it mid-flight.
+
+    ``drive`` awaits the turn inline, which cannot express "cancelled at this
+    exact await". These tests need the turn to be a task they hold a handle to.
+
+    Args:
+        llm: The model provider to use.
+        text: The user's words.
+        deck: The deck being presented.
+        slides: Navigation state.
+        emit: The send callback, which is where the tests land their cancel.
+        history: Conversation history; a fresh one by default.
+
+    Returns:
+        The running task.
+    """
+    log = history if history is not None else ConversationHistory(MAX_HISTORY_TURNS)
+    return asyncio.create_task(
+        run_turn(
+            turn_id=TURN_ID,
+            text=text,
+            deck=deck,
+            llm=llm,
+            history=log,
+            slides=slides,
+            prompts=PromptBuilder(),
+            metrics=TurnMetrics(turn_id=TURN_ID),
+            emit=emit,
+        )
+    )
+
+
+def cancel_self() -> None:
+    """Cancel the task this is called from.
+
+    Used inside an ``emit`` callback so the cut lands on a precisely named
+    ``await`` inside the turn rather than at whatever the scheduler chose.
+    """
+    current = asyncio.current_task()
+    assert current is not None
+    current.cancel()
 
 
 def speaking(*sentences: str) -> list[LLMEvent]:
@@ -451,6 +516,33 @@ async def test_the_turn_stops_after_two_requests_however_the_model_finishes(deck
     assert [message.index for message in turn.sent(SlideGotoMsg)] == [2, 2]
 
 
+async def test_the_second_request_replays_what_was_already_spoken(deck: Deck) -> None:
+    """TC-BE-234: TR-050 -- a model that speaks then navigates must not repeat itself."""
+    llm = ScriptedLLM(
+        [
+            TokenDelta(text="Two layers, actually. "),
+            ToolCallDelta(
+                call_id="call_1",
+                name=GO_TO_SLIDE,
+                arguments={"slide_index": 4, "reason": "User asked about interruption"},
+            ),
+            LLMDone(finish_reason="tool_calls"),
+        ],
+        speaking("The browser stops playback first."),
+    )
+
+    turn = await drive(llm, "How do you handle interruptions?", deck=deck)
+
+    # The opener reached the client during step one but only reaches history
+    # when the whole turn ends, so the second request has to carry it. Without
+    # it the model cannot see its own first sentence, says it again, and the
+    # room hears "Two layers, actually" twice.
+    assert ("assistant", "Two layers, actually.") in turn.replayed(1)
+    assert turn.result.text == "Two layers, actually. The browser stops playback first."
+    # The first request has nothing to replay, so it is left exactly as it was.
+    assert turn.replayed(0) == [("user", "How do you handle interruptions?")]
+
+
 async def test_a_plain_answer_costs_a_single_request(deck: Deck) -> None:
     """TC-BE-173: a turn that finishes with ``stop`` never asks a second time."""
     llm = ScriptedLLM(speaking("Sure thing."))
@@ -515,6 +607,84 @@ async def test_the_fallback_is_not_consulted_once_a_tool_has_fired(deck: Deck) -
     assert [message.source for message in turn.sent(ToolCallMsg)] == [ToolSource.LLM]
     assert [message.index for message in turn.sent(SlideGotoMsg)] == [6]
     assert slides.current_slide == 6
+
+
+async def test_a_rejected_tool_call_still_lets_the_fallback_route_the_answer(deck: Deck) -> None:
+    """TC-BE-232: TR-062 -- a call the deck refused is not the model navigating."""
+    llm = ScriptedLLM(
+        [
+            ToolCallDelta(
+                call_id="call_1",
+                name=GO_TO_SLIDE,
+                arguments={"slide_index": 99, "reason": "invented"},
+            ),
+            LLMDone(finish_reason="tool_calls"),
+        ],
+        speaking(
+            "It comes down to milliseconds.",
+            "The latency budget is mostly endpointing, and time to first audio is "
+            "about one and a half seconds.",
+        ),
+    )
+    slides = SlideController(deck)
+
+    turn = await drive(llm, "How fast are you?", deck=deck, slides=slides)
+
+    # The rejected call moved nothing, so the answer is still unrouted and the
+    # keyword fallback is the only thing that can put the room on slide two.
+    # Counting the call as "the model navigated" would leave the deck on slide
+    # one with the agent describing the latency budget.
+    assert [message.source for message in turn.sent(ToolCallMsg)] == [ToolSource.FALLBACK]
+    assert [message.index for message in turn.sent(SlideGotoMsg)] == [2]
+    assert slides.current_slide == 2
+
+
+async def test_an_off_topic_redirect_leaves_the_deck_where_it_is(deck: Deck) -> None:
+    """TC-BE-233: PRD §8 -- declining a question must not move the deck."""
+    llm = ScriptedLLM(
+        speaking("That's outside this deck, but I can show you the slide on tool calling.")
+    )
+    slides = SlideController(deck)
+
+    turn = await drive(llm, "What's the capital of France?", deck=deck, slides=slides)
+
+    # The sentence is loud with slide five's vocabulary -- "tool calling" is one
+    # of its aliases, and scoring it alone routes there. That is exactly the
+    # mistake: the agent offered the slide, it did not describe it, and the
+    # prompt requires an off-topic answer to navigate nothing at all.
+    assert turn.sent(ToolCallMsg) == []
+    assert turn.sent(SlideGotoMsg) == []
+    assert slides.current_slide == 1
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "That's outside this deck, but I can show you the slide on tool calling.",
+        "That's not in this deck. What I can tell you is why we picked open weights.",
+        "Sorry, that isn't in this deck; the trade-offs slide is the closest thing.",
+        "This deck doesn't cover pricing, but slide six covers the cost trade-off.",
+        "The deck does not go into that.",
+        "That's beyond the deck, though slide two covers latency.",
+    ],
+)
+def test_a_decline_is_recognised_however_it_is_phrased(answer: str) -> None:
+    """TC-BE-233: PRD §8 -- every redirect the prompt asks for is caught."""
+    assert is_off_topic_redirect(answer) is True
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Two layers, actually. The browser flushes playback and the server cancels.",
+        "It comes down to milliseconds; the budget is one and a half seconds.",
+        "This deck is about a voice agent explaining its own architecture.",
+        "Not much, really.",
+    ],
+)
+def test_an_answer_that_engages_with_the_deck_is_not_a_redirect(answer: str) -> None:
+    """TC-BE-233: TR-062 -- the guard must not swallow ordinary answers."""
+    assert is_off_topic_redirect(answer) is False
 
 
 async def test_the_fallback_leaves_the_deck_alone_when_the_answer_is_local(deck: Deck) -> None:
@@ -607,3 +777,158 @@ async def test_cancelling_nothing_is_safe() -> None:
 
     assert done.done()
     assert not done.cancelled()
+
+
+# --------------------------------------------------------------------------- #
+# TC-BE-235 -- a turn that produces nothing
+# --------------------------------------------------------------------------- #
+
+
+async def test_a_turn_that_generates_nothing_still_says_something(deck: Deck) -> None:
+    """TC-BE-235: F5 -- silence reads as a crash, and an empty turn poisons history."""
+    llm = ScriptedLLM([LLMDone(finish_reason="stop")])
+    slides = SlideController(deck)
+
+    turn = await drive(llm, "What is this deck about?", deck=deck, slides=slides)
+
+    assert turn.result.answered is True
+    assert turn.result.text == NO_ANSWER_FALLBACK
+    assert turn.result.sentences == [NO_ANSWER_FALLBACK]
+    assert [message.text for message in turn.sent(TranscriptAgentMsg)] == [NO_ANSWER_FALLBACK]
+    # Nothing moved, so the turn does not pretend the deck did.
+    assert turn.sent(SlideGotoMsg) == []
+    assert slides.current_slide == 1
+    # And no empty assistant entry is left behind. One would be replayed on
+    # every later request as a turn in which the agent answered with nothing.
+    assert [(message.role, message.content) for message in turn.history.messages] == [
+        ("user", "What is this deck about?"),
+        ("assistant", NO_ANSWER_FALLBACK),
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# TC-BE-236 -- cancellation closes what it opened
+# --------------------------------------------------------------------------- #
+
+
+async def test_cancelling_mid_answer_closes_the_model_stream_at_once(deck: Deck) -> None:
+    """TC-BE-236: TR-031, TR-034 -- barge-in releases the HTTP stream, not the collector."""
+    llm = ScriptedLLM(speaking("First point.", "Second point."))
+    slides = SlideController(deck)
+    sent: list[ServerMessage] = []
+
+    async def emit(message: ServerMessage) -> None:
+        sent.append(message)
+        if isinstance(message, TranscriptAgentMsg):
+            cancel_self()
+        # A real send suspends, which is where a pending cancellation lands: in
+        # the consumer's own loop body, with the generator parked on its yield.
+        await asyncio.sleep(0)
+
+    task = start(llm, "Tell me about the deck.", deck=deck, slides=slides, emit=emit)
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # Closed while the turn unwound, not whenever the collector next runs. This
+    # is the property barge-in rests on: the provider uses raw httpx precisely
+    # so that closing the iterator closes the connection.
+    assert llm.closed == 1
+    # Nothing was generated after the cut, either.
+    assert [message.type for message in sent] == ["transcript.user", "transcript.agent"]
+
+
+async def test_an_ordinary_turn_leaves_no_stream_suspended(deck: Deck) -> None:
+    """TC-BE-236: TR-031 -- the loop breaks on ``done``, so it must close on the way out."""
+    plain = ScriptedLLM(speaking("Sure thing."))
+
+    await drive(plain, "What is this deck about?", deck=deck)
+
+    assert plain.closed == 1
+
+    two_step = ScriptedLLM(
+        [
+            ToolCallDelta(
+                call_id="call_1",
+                name=GO_TO_SLIDE,
+                arguments={"slide_index": 4, "reason": "User asked about interruption"},
+            ),
+            LLMDone(finish_reason="tool_calls"),
+        ],
+        speaking("Two layers, actually."),
+    )
+
+    await drive(two_step, "How do you handle interruptions?", deck=deck)
+
+    assert two_step.closed == len(two_step.calls) == 2
+
+
+async def test_a_cancel_between_the_tool_call_and_the_goto_still_moves_the_deck(
+    deck: Deck,
+) -> None:
+    """TC-BE-236: TR-021 -- the pair the audience depends on is never split."""
+    llm = ScriptedLLM(
+        [
+            ToolCallDelta(
+                call_id="call_1",
+                name=GO_TO_SLIDE,
+                arguments={"slide_index": 4, "reason": "User asked about interruption"},
+            ),
+            LLMDone(finish_reason="tool_calls"),
+        ],
+        speaking("Two layers, actually."),
+    )
+    slides = SlideController(deck)
+    sent: list[ServerMessage] = []
+
+    async def emit(message: ServerMessage) -> None:
+        sent.append(message)
+        if isinstance(message, ToolCallMsg):
+            cancel_self()
+        await asyncio.sleep(0)
+
+    task = start(llm, "How do you handle interruptions?", deck=deck, slides=slides, emit=emit)
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # The controller moved the moment the call validated, so a cut here would
+    # otherwise leave the server on slide four and the room on slide one, for
+    # the rest of the session, with nothing to reconcile them.
+    assert slides.current_slide == 4
+    assert [message.type for message in sent] == ["transcript.user", "tool.call", "slide.goto"]
+    assert [message.index for message in sent if isinstance(message, SlideGotoMsg)] == [4]
+
+
+async def test_cancel_task_lets_a_cancellation_aimed_at_the_caller_through() -> None:
+    """TC-BE-237: TR-022 -- the waiter's own cancellation is not the turn's acknowledgement."""
+    started = asyncio.Event()
+    acknowledged = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_to_unwind() -> None:
+        started.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            acknowledged.set()
+            # Cleanup that outlives the caller, so the caller is still parked in
+            # `await task` at the moment it is cancelled itself.
+            await release.wait()
+            raise
+
+    inner = asyncio.create_task(slow_to_unwind())
+    await started.wait()
+    waiter = asyncio.create_task(cancel_task(inner))
+    await acknowledged.wait()
+
+    waiter.cancel()
+    release.set()
+
+    # Two CancelledErrors reach the same await. Swallowing both -- which is all
+    # `contextlib.suppress` can do -- strands whoever cancelled the waiter: they
+    # asked it to stop and it returned as though nothing had happened.
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+    assert waiter.cancelled()
+    assert inner.done()

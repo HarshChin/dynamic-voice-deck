@@ -31,21 +31,31 @@ covered through ``text.input`` where the behaviour is genuinely the same
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import threading
 import time
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+import structlog
 from app.config import Settings
 from app.decks.repository import DeckRepository
 from app.errors import ProviderError
 from app.main import AppState, create_app
+from app.pipeline.history import INTERRUPTED_MARKER
 from app.pipeline.prompt import PromptBuilder
-from app.protocol import SessionState
+from app.protocol import (
+    InterruptMsg,
+    PlaybackProgressMsg,
+    SessionStartMsg,
+    SessionState,
+    TextInputMsg,
+)
 from app.providers.base import (
     LLMDone,
     LLMEvent,
@@ -60,7 +70,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
-from tests.fakes import FakeLLM, FakeSTT, FakeTTS
+from tests.fakes import FakeLLM, FakeSTT, FakeTTS, LLMCall
 
 DECK_ID = "anatomy_of_a_voice_agent"
 """The shipped deck; every session in this module presents it."""
@@ -151,6 +161,98 @@ class FailingLLM:
         yield LLMDone(finish_reason="error")  # pragma: no cover - unreachable
 
 
+class ExplodingLLM:
+    """A model provider that fails in a way the pipeline never anticipated.
+
+    :class:`FailingLLM` raises the one error every layer is written around.
+    This raises the kind that only a bug produces -- a payload shape nobody
+    modelled -- which is what TC-BE-210 is about: it must still reach the client
+    as one recoverable error instead of stranding the session in THINKING.
+
+    Attributes:
+        name: Provider name, as the health probe would report it.
+        calls: How many streams were requested.
+    """
+
+    def __init__(self) -> None:
+        self.name = "exploding_llm"
+        self.calls = 0
+
+    async def stream(
+        self,
+        messages: list[Message],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> AsyncIterator[LLMEvent]:
+        """Raise an unmodelled error instead of streaming.
+
+        Args:
+            messages: Conversation history, ignored.
+            tools: Tools offered, ignored.
+            tool_choice: Whether calls were permitted, ignored.
+
+        Yields:
+            Nothing; the generator raises before its first event.
+
+        Raises:
+            KeyError: Always, standing in for any unhandled failure.
+        """
+        self.calls += 1
+        raise KeyError("choices")
+        yield LLMDone(finish_reason="error")  # pragma: no cover - unreachable
+
+
+class FailingMidAnswerLLM:
+    """A model provider that speaks, then dies the way a rate limit does.
+
+    The free tier running out halfway through an answer is the realistic shape
+    of TC-BE-212: the room has already heard a sentence when the request fails,
+    so what it heard has to survive in history even though nobody interrupted.
+
+    Args:
+        script: Events to yield before failing.
+        error: The failure to raise once the script is exhausted.
+
+    Attributes:
+        name: Provider name, as the health probe would report it.
+        calls: Every call, recorded like :class:`~tests.fakes.FakeLLM` records
+            them, so a test can read the history replayed on the next request.
+    """
+
+    def __init__(self, script: Sequence[LLMEvent], error: ProviderError) -> None:
+        self.name = "failing_mid_answer_llm"
+        self._script = list(script)
+        self._error = error
+        self.calls: list[LLMCall] = []
+
+    async def stream(
+        self,
+        messages: list[Message],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> AsyncIterator[LLMEvent]:
+        """Replay the script, then fail.
+
+        Args:
+            messages: Conversation history, recorded then ignored.
+            tools: Tools offered, recorded then ignored.
+            tool_choice: Whether calls were permitted, recorded then ignored.
+
+        Yields:
+            The scripted events, then nothing.
+
+        Raises:
+            ProviderError: Once the script is exhausted.
+        """
+        self.calls.append(
+            LLMCall(messages=list(messages), tools=list(tools), tool_choice=tool_choice)
+        )
+        for event in self._script:
+            await asyncio.sleep(0)
+            yield event
+        raise self._error
+
+
 # --------------------------------------------------------------------------- #
 # Scripts
 # --------------------------------------------------------------------------- #
@@ -169,6 +271,30 @@ def sentence_script(*sentences: str) -> list[LLMEvent]:
     events: list[LLMEvent] = [TokenDelta(text=f"{sentence} ") for sentence in sentences]
     events.append(LLMDone(finish_reason="stop"))
     return events
+
+
+SHORT_SCRIPT_SENTENCES = 4
+"""Sentences in a script that can be interrupted and still finish quickly.
+
+Long enough that an interrupt lands mid-flight at :data:`SHORT_STEP_DELAY_S`,
+short enough that a whole turn runs to completion inside the interrupt window
+the next case has to stay within.
+"""
+
+SHORT_STEP_DELAY_S = 0.02
+"""Delay between scripted events for :func:`short_script`."""
+
+
+def short_script(count: int = SHORT_SCRIPT_SENTENCES) -> list[LLMEvent]:
+    """Build a script that streams a few sentences and finishes.
+
+    Args:
+        count: How many sentences to stream.
+
+    Returns:
+        The scripted events.
+    """
+    return sentence_script(*(f"Sentence {index}." for index in range(count)))
 
 
 def long_script(count: int = LONG_SCRIPT_SENTENCES) -> list[LLMEvent]:
@@ -756,36 +882,178 @@ def test_an_interrupt_cancel_after_a_misfire_does_nothing(isolated_env: Any) -> 
 
 
 def test_two_interrupts_in_quick_succession_cancel_the_turn_once(isolated_env: Any) -> None:
-    """TC-BE-048: TR-024 -- a repeated interrupt is idempotent within the window."""
+    """TC-BE-048: TR-024 -- a repeated interrupt is idempotent within the window.
+
+    The window is scoped to the turn being interrupted, not to the clock. The
+    second interrupt is absorbed by the turn it names: it cancels nothing more
+    and reports nothing more, and because it carries a better sentence id it
+    only refines where history was cut (TR-023).
+
+    This case used to end by asserting that a *newly started* turn interrupted
+    inside the same 500 ms was left running. That was the bug, not the contract:
+    a wall-clock debounce lets the agent talk over a user who barges in twice in
+    quick succession. The opposite is now asserted in
+    ``test_a_barge_in_on_a_new_turn_is_honoured_inside_the_previous_window``.
+    """
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["sentence_id"] == 1
+        )
+
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+        harness.send(type="interrupt", last_completed_sentence_id=1)
+        settled = harness.barrier()
+        cancelled_streams = llm.cancelled
+
+        # Ask again so the next request shows the history the second interrupt
+        # left behind.
+        harness.send(type="text.input", text="Go on.")
+        harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["turn_id"] == 2
+        )
+
+    assert len(only(settled, "agent.cancelled")) == 1
+    assert only(settled, "agent.cancelled")[0]["truncated_at_sentence_id"] == 0
+    assert cancelled_streams == 1
+
+    replayed = [message.content for message in llm.calls[1].messages if message.role == "assistant"]
+    assert replayed == [f"Sentence 0. Sentence 1. {INTERRUPTED_MARKER}"]
+
+
+def test_a_stray_interrupt_does_not_rewrite_a_turn_that_was_heard_in_full(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-217: TR-024 -- an interrupt names one turn, and only that turn.
+
+    Keeping a finished turn addressable is what lets a barge-in during playback
+    cut it honestly. It also means a stray interrupt -- a VAD misfire, a
+    duplicate from a flaky connection -- arriving once the session is listening
+    again could rewrite an answer the room heard in full, and tell the model it
+    was cut off when it was not. The window is scoped to the turn that was
+    actually cancelled, so this one changes nothing.
+    """
+    llm = FakeLLM(short_script(), delay_s=SHORT_STEP_DELAY_S)
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(is_type("transcript.agent"))
+        interrupted = time.monotonic()
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+        harness.recv_until(is_state(SessionState.HEARING))
+
+        # A second turn, heard in full, inside the window the first one opened.
+        harness.ask("And what else?")
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+        assert harness.barrier() == []
+        elapsed = time.monotonic() - interrupted
+
+        harness.ask("One more.")
+
+    if elapsed >= INTERRUPT_DEBOUNCE_S:
+        pytest.skip("machine too slow to land the stray interrupt inside the window")
+    answers = [message.content for message in llm.calls[2].messages if message.role == "assistant"]
+    assert answers[-1] == " ".join(f"Sentence {index}." for index in range(SHORT_SCRIPT_SENTENCES))
+    assert INTERRUPTED_MARKER not in answers[-1]
+
+
+def test_a_barge_in_on_a_new_turn_is_honoured_inside_the_previous_window(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-203: TR-024 -- the debounce belongs to a turn, not to the wall clock.
+
+    Two questions asked in quick succession, each interrupted, is ordinary
+    impatience. Keying the debounce on time alone dropped the second barge-in
+    and let the agent talk over the user for the rest of that turn, which is the
+    one failure barge-in exists to prevent.
+    """
     llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
 
     with connect(llm) as harness:
         harness.send(type="text.input", text="Tell me everything.")
         harness.recv_until(is_type("transcript.agent"))
-
         first_sent = time.monotonic()
         harness.send(type="interrupt", last_completed_sentence_id=0)
-        harness.send(type="interrupt", last_completed_sentence_id=1)
-        settled = harness.barrier()
+        harness.recv_until(is_state(SessionState.HEARING))
 
-        # A second turn interrupted inside the debounce window must survive: the
-        # state guard alone cannot show that, because the session is already
-        # HEARING after the first cancel.
         harness.send(type="text.input", text="Again please.")
-        harness.recv_until(is_state(SessionState.THINKING))
-        harness.send(type="interrupt", last_completed_sentence_id=None)
-        second_sent = time.monotonic()
-        during_window = harness.barrier()
+        harness.recv_until(is_type("transcript.agent"))
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+        second = harness.recv_until(is_state(SessionState.HEARING))
+        elapsed = time.monotonic() - first_sent
         cancelled_streams = llm.cancelled
 
-    assert len(only(settled, "agent.cancelled")) == 1
-    assert only(settled, "agent.cancelled")[0]["truncated_at_sentence_id"] == 0
-
-    if second_sent - first_sent >= INTERRUPT_DEBOUNCE_S:
+    if elapsed >= INTERRUPT_DEBOUNCE_S:
         pytest.skip("machine too slow to land the second interrupt inside the debounce window")
-    assert only(during_window, "agent.cancelled") == []
-    # Only the first turn's stream was cancelled; the second is still running.
-    assert cancelled_streams == 1
+    cancelled = only(second, "agent.cancelled")
+    assert len(cancelled) == 1
+    assert cancelled[0]["turn_id"] == 2
+    # Both streams really stopped; the second turn was not merely ignored.
+    assert cancelled_streams == 2
+
+
+def test_an_interrupt_announces_the_interrupted_state_before_hearing(isolated_env: Any) -> None:
+    """TC-BE-204: PRD §7 -- INTERRUPTED is a state the client is told about.
+
+    The orb renders it as the flash that acknowledges a barge-in, and PRD §7
+    puts it on the path from SPEAKING back to HEARING. It was in the enum and in
+    the frontend, and the server never sent it, so the contract and the code
+    disagreed.
+    """
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(is_type("transcript.agent"))
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+        after = harness.recv_until(is_state(SessionState.HEARING))
+
+    assert [message["value"] for message in only(after, "state")] == [
+        SessionState.INTERRUPTED.value,
+        SessionState.HEARING.value,
+    ]
+    # The flash goes out before the cancellation is reported, so the audience
+    # sees the agent give way at the moment they spoke rather than once the
+    # model stream has finished closing.
+    order = types_of(after)
+    assert order.index("state") < order.index("agent.cancelled")
+    assert only(after, "state")[0]["turn_id"] == 1
+
+
+def test_a_follow_up_interrupt_refines_the_cut_of_the_turn_it_names(isolated_env: Any) -> None:
+    """TC-BE-205: TR-023 -- the precise truncation point still lands after speech.start.
+
+    ``speech.start`` cancels with no sentence id at all, because VAD fires
+    before the client has read its playback queue; the explicit ``interrupt``
+    that follows carries the id that says what the room actually heard. That
+    follow-up always arrives with the session already in HEARING, where the
+    "nothing to interrupt" guard used to drop it -- so the only accurate cut the
+    client ever sends was the one the server always threw away.
+    """
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["sentence_id"] == 1
+        )
+        harness.send(type="speech.start")
+        harness.recv_until(is_state(SessionState.HEARING))
+
+        harness.send(type="interrupt", last_completed_sentence_id=1)
+        # Refining is silent: the turn was already reported as cancelled, and a
+        # second agent.cancelled would show the user a second interrupt chip.
+        assert harness.barrier() == []
+
+        harness.send(type="text.input", text="Go on.")
+        harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["turn_id"] == 2
+        )
+
+    replayed = [message.content for message in llm.calls[1].messages if message.role == "assistant"]
+    assert replayed == [f"Sentence 0. Sentence 1. {INTERRUPTED_MARKER}"]
 
 
 def test_speech_onset_before_any_sentence_truncates_with_none(isolated_env: Any) -> None:
@@ -858,6 +1126,40 @@ def test_a_cancelled_turn_sends_nothing_further_under_its_own_turn_id(isolated_e
     assert only(later, "transcript.user")[0]["turn_id"] == 2
 
 
+def test_a_new_turn_cancels_the_one_still_running(isolated_env: Any) -> None:
+    """TC-BE-207: TR-022 -- starting a turn cancels and awaits the previous one.
+
+    A user who asks a second question without waiting has not interrupted
+    anything -- there is no ``interrupt`` frame -- so the only thing that can
+    stop the first turn is ``start_turn`` itself. ``llm.cancelled`` is the
+    assertion that kills the mutation: with the cancel removed, both turns write
+    to the same history and the first keeps streaming under its own turn id.
+    """
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(is_type("transcript.agent"))
+
+        harness.send(type="text.input", text="Actually, something else.")
+        opening = harness.recv_until(is_state(SessionState.THINKING))
+        following = harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["turn_id"] == 2
+        )
+        cancelled_streams = llm.cancelled
+
+    assert cancelled_streams == 1
+    assert only(opening, "state")[-1]["turn_id"] == 2
+    # The first turn was finished unwinding before the second one's id was even
+    # allocated, so nothing of it can appear from here on.
+    stale = [
+        message
+        for message in following
+        if message["type"] in MESSAGES_WITH_TURN_ID and message["turn_id"] == 1
+    ]
+    assert stale == []
+
+
 # --------------------------------------------------------------------------- #
 # TC-BE-051 to TC-BE-054 -- failure and empty input
 # --------------------------------------------------------------------------- #
@@ -887,6 +1189,97 @@ def test_a_turn_that_never_finishes_times_out_and_returns_to_listening(
     assert only(turn, "state")[-1]["value"] == SessionState.LISTENING.value
     # The watchdog cancelled the model stream rather than leaving it running.
     assert llm.cancelled == 1
+
+
+TIMEOUT_WITH_ROOM_S = 0.4
+"""Watchdog long enough to hear several sentences of a 30-sentence script.
+
+Eight times :data:`STEP_DELAY_S`, so the turn has certainly spoken by the time
+the watchdog fires, and far short of the 1.5 s the whole script needs.
+"""
+
+
+def test_a_timed_out_turn_keeps_the_sentences_the_room_already_heard(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-208: TR-051 -- the watchdog truncates the answer, it does not delete it.
+
+    The sentences already sent were heard. Abandoning the turn without cutting
+    history left the model with no record of having spoken at all, so the next
+    question was answered from scratch -- and ``begin_assistant_turn`` logged
+    ``history.pending_turn_discarded`` about exactly that.
+    """
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm, turn_timeout_s=TIMEOUT_WITH_ROOM_S) as harness:
+        turn = harness.ask("Tell me everything.")
+        harness.send(type="text.input", text="Go on.")
+        harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["turn_id"] == 2
+        )
+
+    assert only(turn, "error")[0]["code"] == "turn_timeout"
+
+    replayed = [message.content for message in llm.calls[1].messages if message.role == "assistant"]
+    assert len(replayed) == 1
+    assert replayed[0].startswith("Sentence 0.")
+    assert replayed[0].endswith(INTERRUPTED_MARKER)
+
+
+def test_a_provider_failure_keeps_the_sentences_the_room_already_heard(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-209: TR-051 -- a rate limit mid-answer must not unsay what was said.
+
+    The realistic failure on a free tier: one sentence is out of the speakers
+    when the next request is refused. The user heard it, so the model has to
+    know it said it.
+    """
+    llm = FailingMidAnswerLLM(
+        [TokenDelta(text="One. ")],
+        ProviderError("groq_llm", "rate limited", retryable=True, retry_after=2.0),
+    )
+
+    with connect(llm) as harness:
+        turn = harness.ask("Tell me everything.")
+        harness.ask("Try again.")
+
+    assert only(turn, "error")[0]["code"] == "rate_limited"
+    assert only(turn, "transcript.agent")[0]["text"] == "One."
+
+    replayed = [message.content for message in llm.calls[1].messages if message.role == "assistant"]
+    assert replayed == [f"One. {INTERRUPTED_MARKER}"]
+
+
+def test_an_unexpected_failure_is_reported_and_the_session_recovers(isolated_env: Any) -> None:
+    """TC-BE-210: TR-025 -- a bug in the turn must not wedge the client in THINKING.
+
+    Only ``CancelledError``, ``TimeoutError`` and ``ProviderError`` were
+    handled, so anything else died inside the turn task: no error frame, no log,
+    the exception never retrieved, and the session stuck in THINKING until the
+    socket closed. Real sources exist today -- ``json.dumps`` on model-authored
+    arguments, a sentence recorded against a turn that is no longer pending.
+    """
+    llm = ExplodingLLM()
+
+    with structlog.testing.capture_logs() as logged, connect(llm) as harness:
+        turn = harness.ask("What is this deck about?")
+        # Still listening: the user may simply ask again.
+        follow_up = harness.ask("Try again.")
+
+    failures = [entry for entry in logged if entry["event"] == "turn.failed"]
+    # Logged with the traceback, not as a bare message: a bug nobody can see is
+    # a bug nobody fixes.
+    assert [entry["log_level"] for entry in failures] == ["error", "error"]
+    assert all(entry["exc_info"] for entry in failures)
+
+    error = only(turn, "error")[0]
+    assert error["recoverable"] is True
+    assert error["code"] == "internal_error"
+    assert types_of(turn) == ["state", "transcript.user", "error", "state"]
+    assert only(turn, "state")[-1]["value"] == SessionState.LISTENING.value
+    assert llm.calls == 2
+    assert only(follow_up, "transcript.user")[0]["turn_id"] == 2
 
 
 def test_a_provider_failure_is_reported_as_recoverable(isolated_env: Any) -> None:
@@ -1069,6 +1462,32 @@ def test_pause_cancels_the_turn_and_returns_to_listening(isolated_env: Any) -> N
     assert cancelled_streams == 1
 
 
+def test_pause_keeps_the_sentences_the_room_already_heard(isolated_env: Any) -> None:
+    """TC-BE-211: TR-051 -- pausing stops the agent without unsaying it.
+
+    ``control{pause}`` is not a barge-in, so it sends no ``agent.cancelled`` --
+    but the room still heard whatever was already spoken, and resuming with a
+    model that believes it never spoke makes it start the answer again.
+    """
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(is_type("transcript.agent"))
+        harness.send(type="control", action="pause")
+        harness.recv_until(is_state(SessionState.LISTENING))
+
+        harness.send(type="text.input", text="Go on.")
+        harness.recv_until(
+            lambda message: message["type"] == "transcript.agent" and message["turn_id"] == 2
+        )
+
+    replayed = [message.content for message in llm.calls[1].messages if message.role == "assistant"]
+    assert len(replayed) == 1
+    assert replayed[0].startswith("Sentence 0.")
+    assert replayed[0].endswith(INTERRUPTED_MARKER)
+
+
 def test_playback_progress_for_another_turn_is_ignored(isolated_env: Any) -> None:
     """TC-BE-062: progress reported against a stale turn changes nothing.
 
@@ -1087,11 +1506,119 @@ def test_playback_progress_for_another_turn_is_ignored(isolated_env: Any) -> Non
     assert quiet == []
 
 
-def make_session(websocket: Any) -> Session:
+# --------------------------------------------------------------------------- #
+# TC-BE-206 to TC-BE-215 -- states a real socket cannot reach in this milestone
+# --------------------------------------------------------------------------- #
+#
+# Everything above drives the session over a WebSocket, which is the right way
+# to test a protocol. Three behaviours cannot be reached that way in a text-only
+# milestone, and each of them is load-bearing for barge-in in M2/M3:
+#
+# * ``playback.progress`` only does anything while the session is SPEAKING with
+#   no turn in flight, and a text turn passes through SPEAKING and out to
+#   LISTENING in the same breath. With audio this handler is what ends every
+#   turn, and today it could be replaced by ``return`` with nothing noticing.
+# * the window in which a finishing turn makes its last two transitions is
+#   microseconds wide, so a second turn cannot be started inside it on purpose
+#   from the far end of a socket.
+# * an interrupt landing between a turn being created and that turn reaching the
+#   model finds no assistant entry in history to cut.
+#
+# They are driven through ``Session.dispatch`` -- the same entry point
+# ``session_endpoint`` hands every frame it reads to -- with a stand-in socket,
+# and they read and write only the documented public attributes ``state`` and
+# ``turn_id``. No private method is called.
+
+
+class RecordingSocket:
+    """Stands in for the WebSocket, keeping the messages the session sent.
+
+    Attributes:
+        sent: Every message sent, decoded, in order.
+    """
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+
+    async def send_text(self, raw: str) -> None:
+        """Record one outbound frame.
+
+        Args:
+            raw: The JSON the session serialised.
+        """
+        message: dict[str, Any] = json.loads(raw)
+        self.sent.append(message)
+
+    def states(self) -> list[tuple[str, int]]:
+        """Return the transitions sent so far.
+
+        Returns:
+            One ``(value, turn_id)`` pair per ``state`` message, in order.
+        """
+        return [
+            (message["value"], message["turn_id"])
+            for message in self.sent
+            if message["type"] == "state"
+        ]
+
+
+class GatedSocket(RecordingSocket):
+    """A socket that parks the session inside one state message.
+
+    Holding the server still is the only way to make a microsecond-wide window
+    wide enough to aim at: the send of the first matching ``state`` blocks until
+    the test releases it, so a second turn can be started while the first is
+    provably still inside its trailing transitions.
+
+    Args:
+        gate_on: The state whose first send is held.
+
+    Attributes:
+        reached: Set once the session is parked.
+        release: Set by the test to let the parked send finish.
+        cancelled_in_send: Whether the parked turn was cancelled while waiting,
+            which is what proves it was still cancellable.
+    """
+
+    def __init__(self, gate_on: SessionState) -> None:
+        super().__init__()
+        self._gate_on = gate_on
+        self._open = True
+        self.reached = asyncio.Event()
+        self.release = asyncio.Event()
+        self.cancelled_in_send = False
+
+    async def send_text(self, raw: str) -> None:
+        """Record the frame, parking on the first one the gate names.
+
+        Args:
+            raw: The JSON the session serialised.
+
+        Raises:
+            asyncio.CancelledError: If the parked turn is cancelled, re-raised
+                after recording that it happened.
+        """
+        await super().send_text(raw)
+        message = self.sent[-1]
+        gated = message["type"] == "state" and message["value"] == self._gate_on.value
+        if not (self._open and gated):
+            return
+        self._open = False  # the first such message only, so later turns run free
+        self.reached.set()
+        try:
+            await self.release.wait()
+        except asyncio.CancelledError:
+            self.cancelled_in_send = True
+            raise
+
+
+def make_session(websocket: Any, llm: Any = None) -> Session:
     """Build a session outside any socket, for the manager's own tests.
 
     Args:
         websocket: Stand-in for the connection; nothing here sends on it.
+        llm: Model provider for the session; defaults to a fresh
+            :class:`~tests.fakes.FakeLLM`.
 
     Returns:
         A session in its initial state.
@@ -1099,10 +1626,183 @@ def make_session(websocket: Any) -> Session:
     return Session(
         websocket,
         settings=Settings(),
-        providers=Providers(stt=FakeSTT(), llm=FakeLLM(), tts=FakeTTS()),
+        providers=Providers(stt=FakeSTT(), llm=llm or FakeLLM(), tts=FakeTTS()),
         decks=DeckRepository(),
         prompts=PromptBuilder(),
     )
+
+
+async def started_session(socket: RecordingSocket, llm: Any = None) -> Session:
+    """Open a session on the shipped deck, dispatching the opening message.
+
+    Args:
+        socket: The stand-in socket; its record is cleared once the session is
+            admitted, so a test sees only what it caused.
+        llm: Model provider for the session.
+
+    Returns:
+        A session in LISTENING, ready for the frame under test.
+    """
+    session = make_session(socket, llm=llm)
+    await session.dispatch(SessionStartMsg(deck_id=DECK_ID))
+    socket.sent.clear()
+    return session
+
+
+def running_turn(turn_id: int) -> asyncio.Task[None]:
+    """Return the task running one turn, found by the name the session gave it.
+
+    Args:
+        turn_id: The turn whose task is wanted.
+
+    Returns:
+        The single matching task.
+    """
+    name = f"turn-{turn_id}"
+    tasks = [task for task in asyncio.all_tasks() if task.get_name() == name]
+    assert len(tasks) == 1, f"expected exactly one {name} task, found {len(tasks)}"
+    return tasks[0]
+
+
+async def test_playback_progress_ends_a_turn_whose_last_sentence_finished(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-212: TR-020 -- playback completion is client-truth and ends the turn.
+
+    Only the browser knows when a sample reached the speakers, so this frame is
+    what returns an audio turn to LISTENING (PRD §7). The whole handler could be
+    replaced by ``return`` without a single test noticing, which is what this
+    and the two cases below fix.
+    """
+    socket = RecordingSocket()
+    session = await started_session(socket)
+    session.turn_id = 3
+    session.state = SessionState.SPEAKING
+
+    await session.dispatch(PlaybackProgressMsg(turn_id=3, sentence_id=1))
+
+    assert session.state is SessionState.LISTENING
+    assert socket.states() == [(SessionState.LISTENING.value, 3)]
+
+
+@pytest.mark.parametrize(
+    ("state", "reported_turn"),
+    [
+        (SessionState.SPEAKING, 2),
+        (SessionState.THINKING, 3),
+        (SessionState.LISTENING, 3),
+    ],
+    ids=["stale-turn", "still-thinking", "already-listening"],
+)
+async def test_playback_progress_is_ignored_unless_the_current_turn_is_speaking(
+    isolated_env: Any,
+    state: SessionState,
+    reported_turn: int,
+) -> None:
+    """TC-BE-213: TR-131 -- progress from an interrupted or unfinished turn changes nothing."""
+    socket = RecordingSocket()
+    session = await started_session(socket)
+    session.turn_id = 3
+    session.state = state
+
+    await session.dispatch(PlaybackProgressMsg(turn_id=reported_turn, sentence_id=0))
+
+    assert session.state is state
+    assert socket.sent == []
+
+
+async def test_playback_progress_while_the_turn_is_still_running_is_ignored(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-214: a sentence the client finished is not the end of the answer.
+
+    While the turn task is alive the model may still be generating, so a report
+    about sentence zero says nothing about whether the turn is over.
+    """
+    socket = RecordingSocket()
+    session = await started_session(socket, llm=FakeLLM(long_script(), delay_s=STEP_DELAY_S))
+
+    await session.dispatch(TextInputMsg(text="Tell me everything."))
+    # The client is playing sentence zero while the answer runs on.
+    session.state = SessionState.SPEAKING
+    socket.sent.clear()
+
+    await session.dispatch(PlaybackProgressMsg(turn_id=session.turn_id, sentence_id=0))
+
+    assert session.state is SessionState.SPEAKING
+    assert socket.sent == []
+
+    await session.close()
+
+
+async def test_a_turn_starting_as_another_finishes_cancels_it_first(isolated_env: Any) -> None:
+    """TC-BE-215: TR-021/022 -- a finishing turn must not outlive its own turn id.
+
+    ``_run_turn`` closes with two state transitions, and it used to drop its
+    handle on itself before making them. A turn started in that window found
+    nothing to cancel, and the turn that was finishing woke up to stamp the new
+    turn's id on its own trailing ``listening`` -- dragging the session out of
+    the THINKING the new turn had just entered, and telling the client the
+    answer it is waiting for is already over.
+    """
+    socket = GatedSocket(gate_on=SessionState.SPEAKING)
+    session = await started_session(socket, llm=FakeLLM(sentence_script("Sure thing.")))
+
+    await session.dispatch(TextInputMsg(text="What is this deck about?"))
+    first = running_turn(1)
+    await asyncio.wait_for(socket.reached.wait(), timeout=RECEIVE_TIMEOUT_S)
+
+    # A second question, asked while the first turn is parked mid-transition.
+    await asyncio.wait_for(
+        session.dispatch(TextInputMsg(text="Actually, something else.")),
+        timeout=RECEIVE_TIMEOUT_S,
+    )
+    second = running_turn(2)
+
+    socket.release.set()
+    for task in (first, second):
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=RECEIVE_TIMEOUT_S)
+    await session.close()
+
+    # The parked turn was cancelled where it stood, rather than left to wake up.
+    assert socket.cancelled_in_send is True
+    assert socket.states() == [
+        (SessionState.THINKING.value, 1),
+        (SessionState.SPEAKING.value, 1),
+        (SessionState.THINKING.value, 2),
+        (SessionState.SPEAKING.value, 2),
+        (SessionState.LISTENING.value, 2),
+    ]
+
+
+@pytest.mark.parametrize(
+    "last_completed",
+    [None, 2],
+    ids=["nothing-heard", "client-claims-two-sentences"],
+)
+async def test_an_interrupt_before_the_answer_reached_history_claims_no_cut(
+    isolated_env: Any,
+    last_completed: int | None,
+) -> None:
+    """TC-BE-216: agent.cancelled may only report a truncation that happened.
+
+    An interrupt can land after the turn was created and before it reached the
+    model, when history holds no assistant entry for it to rewrite. Reporting a
+    sentence id then tells the client, and the event log, that history was cut
+    at a sentence that was never recorded.
+    """
+    socket = RecordingSocket()
+    session = await started_session(socket)
+    session.turn_id = 1
+    session.state = SessionState.THINKING
+
+    await session.dispatch(InterruptMsg(last_completed_sentence_id=last_completed))
+
+    cancelled = [message for message in socket.sent if message["type"] == "agent.cancelled"]
+    assert len(cancelled) == 1
+    assert cancelled[0]["truncated_at_sentence_id"] is None
+    assert session.state is SessionState.HEARING
 
 
 async def test_the_session_manager_releases_every_session(isolated_env: Any) -> None:

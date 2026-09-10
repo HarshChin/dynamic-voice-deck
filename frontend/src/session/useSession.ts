@@ -61,6 +61,8 @@ export interface SessionController {
   readonly isActive: boolean;
   /** True when a message sent right now would reach the server. */
   readonly canSend: boolean;
+  /** True while the agent is working on an answer, so a new question would cancel it (TR-022). */
+  readonly isAnswering: boolean;
   /** The deck on screen: the session's once it opens, the previewed one before that. */
   readonly deck: Deck | null;
   /** Every deck the backend offers, for the picker. Empty when the listing is unreachable. */
@@ -81,6 +83,19 @@ export interface SessionController {
   sendText: (text: string) => boolean;
   /** Move the deck by hand and tell the agent where the user went (PRD F9). */
   goToSlide: (index: number) => void;
+}
+
+/**
+ * Whether a turn is in flight, so a new question would cancel the one already running.
+ *
+ * Written as explicit comparisons rather than a set of "everything except X" so that a state
+ * leaving or joining the protocol cannot quietly change the answer.
+ *
+ * @param agentState - The last state the server announced.
+ * @returns `true` while the agent is producing an answer.
+ */
+function isTurnInFlight(agentState: SessionState): boolean {
+  return agentState === "thinking" || agentState === "speaking";
 }
 
 /**
@@ -258,7 +273,9 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     // explicitly keeps "one client per session" true and makes a double start a no-op rather than
     // a race between two sets of callbacks.
     clientRef.current?.close();
-    useSessionStore.getState().reset();
+    // `clearSession`, not `reset`: the debug, push-to-talk and mute toggles belong to the user and
+    // survive a second session (PRD F13).
+    useSessionStore.getState().clearSession();
 
     const client = new SessionClient({
       deckId,
@@ -277,11 +294,15 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
           .logNotice(`dropped an unreadable frame: ${detail.slice(0, FRAME_EXCERPT_CHARS)}`);
       },
       onGiveUp: (giveUp) => {
+        // An alert, not an ordinary notice: the orb has just turned amber and told the user to
+        // read the log, so the sentence explaining why has to be there with debug off (TR-175).
         useSessionStore
           .getState()
           .logNotice(
             `connection lost (code ${String(giveUp.code)}) after ${String(giveUp.attempts)} ` +
-              `automatic ${giveUp.attempts === 1 ? "attempt" : "attempts"}`,
+              `automatic ${giveUp.attempts === 1 ? "attempt" : "attempts"}; ` +
+              `press "Start session" to try again`,
+            { alert: true },
           );
       },
     });
@@ -306,6 +327,17 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     const client = clientRef.current;
     if (client?.isOpen !== true) {
       useSessionStore.getState().logNotice("no session is open; start one before asking");
+      return false;
+    }
+    // TR-022: the server cancels the running turn to make room for a new one, but it announces a
+    // cancellation only for a barge-in (`agent.cancelled`, TR-051). A second typed question would
+    // therefore abandon the first answer mid-sentence with nothing in the transcript to say so, so
+    // the question waits for the answer instead. Voice barge-in has a signal of its own and does
+    // not come through here (PRD F7, Phase 3).
+    if (isTurnInFlight(useSessionStore.getState().agentState)) {
+      useSessionStore
+        .getState()
+        .logNotice("the presenter is still answering; wait for it to finish");
       return false;
     }
     return client.send({ type: "text.input", text: trimmed });
@@ -341,6 +373,7 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     isActive:
       connection === "connecting" || connection === "reconnecting" || connection === "connected",
     canSend: connection === "connected",
+    isAnswering: connection === "connected" && isTurnInFlight(agentState),
     deck,
     decks,
     deckId,

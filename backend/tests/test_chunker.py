@@ -16,12 +16,12 @@ drops a clause is far worse than one that breathes in the wrong place.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Sequence
 
 import pytest
 from app.pipeline.chunker import (
     EARLY_SPLIT_MIN_CHARS,
+    EARLY_SPLIT_MIN_HEAD_CHARS,
     HARD_SPLIT_MAX_CHARS,
     SentenceChunker,
 )
@@ -32,8 +32,48 @@ from hypothesis import strategies as st
 MARKDOWN_SYMBOLS = "*_#`"
 """Symbols TR-044 requires to be gone before a segment reaches the synthesiser."""
 
-_MARKDOWN_REFERENCE_RE = re.compile(f"[{re.escape(MARKDOWN_SYMBOLS)}]")
-"""Independent restatement of the stripping rule, used by the property test."""
+INVISIBLE_CHARACTERS = "\u00ad\u200b\u200c\u200d\u200e\u200f\u2060\u2066\u2069\ufeff"
+"""Zero-width and formatting characters that must not reach the synthesiser."""
+
+DASHES = "\u2012\u2013\u2014\u2015"
+"""Figure, en, em, and horizontal dash: a pause in print, a comma out loud."""
+
+SMART_PUNCTUATION = {
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201a": "'",
+    "\u201b": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u201e": '"',
+    "\u201f": '"',
+    "\u2026": "...",
+}
+"""Typographic punctuation and the ASCII a synthesiser can pronounce."""
+
+
+def speakable_reference(text: str) -> str:
+    """Restate ``_clean_segment``'s character rules independently of the code.
+
+    Written character by character, where the implementation uses regular
+    expressions, so the property test checks the rule rather than the spelling
+    of the rule. Whitespace is not normalised here; the callers compare with
+    whitespace removed.
+    """
+    out: list[str] = []
+    for char in text:
+        if char in INVISIBLE_CHARACTERS:
+            continue
+        if char in DASHES:
+            out.append(", ")
+        elif char in SMART_PUNCTUATION:
+            out.append(SMART_PUNCTUATION[char])
+        elif char in MARKDOWN_SYMBOLS:
+            out.append(" ")
+        else:
+            out.append(char)
+    return "".join(out)
+
 
 # 70 characters with no terminator and no clause boundary, so that a boundary
 # appended at index 70 is the first one the early-split rule can ever see.
@@ -44,13 +84,23 @@ LONG_TAIL = " and then some more"
 # limit can break it, and every space sits at a predictable index.
 UNPUNCTUATED = "word " * 50
 
-PROSE_ALPHABET = "abcdefgXYZ 0123456789.,;:!?—-'\"()/\n\t" + MARKDOWN_SYMBOLS
+PROSE_ALPHABET = (
+    "abcdefgXYZ 0123456789.,;:!?-'\"()/\n\t"
+    + MARKDOWN_SYMBOLS
+    + DASHES
+    + "".join(SMART_PUNCTUATION)
+    + INVISIBLE_CHARACTERS
+)
 """Characters the property test draws from.
 
 Bracket characters are deliberately absent. Markdown *link* syntax is the one
 transformation that is not a per-character filter, so a segment boundary landing
 inside ``[label](url)`` would strip differently from the whole text -- a real but
 uninteresting edge, pinned by the worked example in TC-BE-015 instead.
+
+Everything ``_clean_segment`` rewrites *is* here, including the dashes, the
+curly quotes, and a zero-width space, so the property covers the rewriting and
+not only the stripping.
 """
 
 
@@ -131,9 +181,13 @@ def test_a_decimal_split_across_two_tokens_still_does_not_end_a_sentence() -> No
     assert chunker.feed("5 seconds. ") == ["Latency is 3.5 seconds."]
 
 
-@pytest.mark.parametrize("boundary", [",", ";", ":", "—"])
-def test_a_long_buffer_splits_at_a_clause_boundary(boundary: str) -> None:
-    """TC-BE-013: past 60 characters, a clause boundary releases the segment early."""
+@pytest.mark.parametrize(("boundary", "spoken"), [(",", ","), (";", ";"), (":", ":"), ("—", ",")])
+def test_a_long_buffer_splits_at_a_clause_boundary(boundary: str, spoken: str) -> None:
+    """TC-BE-013: past 60 characters, a clause boundary releases the segment early.
+
+    The em dash splits like the others but is not *spoken* like the others: it
+    reaches the listener as the comma it means (TC-BE-020).
+    """
     text = LONG_HEAD + boundary + LONG_TAIL
     assert len(LONG_HEAD) == 70
     assert len(text) == 90
@@ -141,17 +195,75 @@ def test_a_long_buffer_splits_at_a_clause_boundary(boundary: str) -> None:
 
     # Released the moment the boundary arrives, without waiting for a full stop:
     # this is the split that decides first_audio_ms (TR-042, TR-086).
-    assert chunker.feed(text) == [LONG_HEAD + boundary]
+    assert chunker.feed(text) == [LONG_HEAD + spoken]
     assert chunker.flush() == [LONG_TAIL.strip()]
 
 
 def test_the_clause_split_uses_the_last_boundary_before_the_limit() -> None:
     """TC-BE-013: with several boundaries in the buffer, the latest one is chosen."""
-    text = "ab, cd, " + "e" * 53
-    assert len(text) == EARLY_SPLIT_MIN_CHARS + 1
+    text = "ab, " + "c" * 24 + ", " + "e" * 33
+    assert len(text) == EARLY_SPLIT_MIN_CHARS + 3
 
-    # The comma at index 6, not the one at index 2.
-    assert chunk_whole(text) == ["ab, cd,", "e" * 53]
+    # The comma at index 28, not the one at index 2 -- and the head that the
+    # later comma produces is the only one long enough to speak anyway.
+    assert chunk_whole(text) == ["ab, " + "c" * 24 + ",", "e" * 33]
+
+
+def test_a_leading_connective_is_not_spoken_on_its_own() -> None:
+    """TC-BE-013a: a boundary too near the front of the buffer does not release a segment.
+
+    Without a floor on the head this answered ``["So,", "the browser ..."]``:
+    two characters synthesised as a finished utterance, then an audible gap in
+    the middle of the sentence while the other eighty were still being made.
+    """
+    text = "So, the browser flushes the playback queue the instant it hears you speak."
+    assert len(text) > EARLY_SPLIT_MIN_CHARS
+
+    assert chunk_whole(text) == [text]
+
+
+def test_the_early_split_needs_a_head_worth_speaking() -> None:
+    """TC-BE-013b: the head floor is exact -- one character short and the split is skipped."""
+    padding = "y" * 40
+
+    short = "x" * (EARLY_SPLIT_MIN_HEAD_CHARS - 2) + ","
+    assert len(short) == EARLY_SPLIT_MIN_HEAD_CHARS - 1
+    assert chunk_whole(f"{short} {padding}") == [f"{short} {padding}"]
+
+    exact = "x" * (EARLY_SPLIT_MIN_HEAD_CHARS - 1) + ","
+    assert len(exact) == EARLY_SPLIT_MIN_HEAD_CHARS
+    assert chunk_whole(f"{exact} {padding}") == [exact, padding]
+
+
+def test_a_usable_boundary_still_releases_the_first_clause_early() -> None:
+    """TC-BE-013c: the floor must not become a way of never splitting early.
+
+    The early split is what buys ``first_audio_ms`` (TR-042, TR-086), so a
+    boundary that clears the floor still fires before the sentence ends.
+    """
+    text = "Endpointing costs six hundred milliseconds, because that is how long I wait."
+    chunker = SentenceChunker()
+
+    released = chunker.feed(text)
+
+    assert released == ["Endpointing costs six hundred milliseconds,"]
+    assert len(released[0]) >= EARLY_SPLIT_MIN_HEAD_CHARS
+    # Released before the full stop arrived, which is the whole point.
+    assert len(released[0]) < len(text)
+    assert chunker.flush() == ["because that is how long I wait."]
+
+
+def test_an_unspeakable_boundary_does_not_wedge_the_chunker() -> None:
+    """TC-BE-014a: a skipped boundary still leaves the hard limit free to fire."""
+    text = "So, " + UNPUNCTUATED
+    chunker = SentenceChunker()
+
+    emitted = chunker.feed(text)
+
+    assert len(emitted) == 1
+    assert len(emitted[0]) <= HARD_SPLIT_MAX_CHARS
+    remainder = chunker.flush()
+    assert " ".join([*emitted, *remainder]).split() == ["So,", *["word"] * 50]
 
 
 def test_a_short_buffer_is_never_split_at_a_boundary() -> None:
@@ -194,6 +306,49 @@ def test_markdown_is_stripped_before_a_segment_is_emitted(raw: str, expected: st
 
     assert segments == [expected]
     assert not any(symbol in segments[0] for symbol in MARKDOWN_SYMBOLS)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("We don\u2019t wait.", "We don't wait."),
+        ("She said \u201cstop\u201d and I did.", 'She said "stop" and I did.'),
+        ("Two layers\u2014the browser and the server", "Two layers, the browser and the server"),
+        ("Two layers \u2014 the browser", "Two layers, the browser"),
+        ("It stops\u2026 eventually", "It stops... eventually"),
+        ("A \u2013 B", "A, B"),
+    ],
+)
+def test_typographic_punctuation_is_normalised_for_speech(raw: str, expected: str) -> None:
+    """TC-BE-020: curly quotes, dashes, and ellipses reach the synthesiser as ASCII.
+
+    A live run produced curly quotes and an em dash in one answer. None of them
+    is a character a grapheme-to-phoneme front end is trained on: the apostrophe
+    decides whether "don't" is a contraction or two words.
+    """
+    assert chunk_whole(raw) == [expected]
+
+
+def test_stripping_a_symbol_separates_the_words_it_sat_between() -> None:
+    """TC-BE-020a: markdown removal must not weld two words into one.
+
+    Deleting the symbol turned ``snake_case`` into one unpronounceable word;
+    replacing it with a space says both.
+    """
+    assert chunk_whole("The snake_case name") == ["The snake case name"]
+    assert chunk_whole("a*b*c") == ["a b c"]
+
+
+def test_invisible_characters_never_reach_the_synthesiser() -> None:
+    """TC-BE-020b: a segment of zero-width characters is dropped, not spoken.
+
+    ``gpt-oss-120b`` ended one live turn with 221 characters of zero-width space
+    (``docs/EVALS.md``). They are not whitespace to :meth:`str.split`, so the
+    segment survived the emptiness check with nothing in it to say.
+    """
+    assert chunk_whole("\u200b" * 221) == []
+    assert chunk_whole("Fine.\u200b\u200b") == ["Fine."]
+    assert chunk_whole("soft\u00adhyphen") == ["softhyphen"]
 
 
 def test_flush_returns_the_partial_sentence_once_and_empties_the_buffer() -> None:
@@ -263,13 +418,12 @@ def test_chunking_does_not_depend_on_how_the_stream_was_fragmented(
 @given(st.text(alphabet=PROSE_ALPHABET, max_size=400))
 @hypothesis_settings(max_examples=400, deadline=None)
 def test_segments_preserve_every_non_whitespace_character_in_order(text: str) -> None:
-    """TC-BE-018: concatenated segments equal the markdown-stripped input, whitespace aside."""
+    """TC-BE-018: concatenated segments equal the speech-normalised input, whitespace aside."""
     segments = chunk_whole(text)
 
     # Whitespace is normalised and consumed at the splits, so it is removed from
     # both sides; everything else must survive, unduplicated and in order. This
     # is stronger than "the words are preserved": a clause split at "a,b" leaves
     # two segments where there was one word, and no character is lost either way.
-    stripped = _MARKDOWN_REFERENCE_RE.sub("", text)
-    assert without_whitespace(segments) == without_whitespace([stripped])
+    assert without_whitespace(segments) == without_whitespace([speakable_reference(text)])
     assert all(segment and segment == segment.strip() for segment in segments)

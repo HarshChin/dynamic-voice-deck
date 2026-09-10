@@ -125,7 +125,8 @@
 .chipTool,
 .chipSlide,
 .chipInterrupt,
-.chipError {
+.chipError,
+.chipNotice {
   display: flex;
   align-items: flex-start;
   gap: var(--dvd-space-2);
@@ -234,6 +235,22 @@
 
 .chipError[data-recoverable="false"] .chipTitle {
   color: var(--dvd-red);
+}
+
+/* A client-side alert: the same amber as a recoverable error, because it is one -- the connection
+   is gone and the user has to start the session again (TR-175). */
+.chipNotice {
+  border-color: rgb(251 191 36 / 34%);
+  background-color: var(--dvd-amber-wash);
+}
+
+.chipNotice .chipIcon {
+  color: var(--dvd-amber);
+  font-weight: 700;
+}
+
+.chipNotice .chipTitle {
+  color: var(--dvd-amber);
 }
 
 /* --------------------------------------------------------- rules and raw */

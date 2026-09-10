@@ -8,6 +8,13 @@ awaits the previous one (TR-022), so two turns can never write to the same
 history concurrently. Every outbound message carries the ``turn_id`` it belongs
 to, letting the client discard output from a turn it has already interrupted
 (TR-021).
+
+The second rule is that no turn ever just disappears. However a turn ends --
+barge-in, the watchdog, a provider failure, an unexpected exception, a pause --
+history is cut to the sentences the room actually heard before the session goes
+back to listening (TR-051). Dropping the turn instead leaves the model with no
+record of having spoken, so the next question is answered from the top and the
+audience hears the same two sentences twice.
 """
 
 from __future__ import annotations
@@ -55,7 +62,16 @@ from .providers.base import Providers
 logger = get_logger(__name__)
 
 INTERRUPT_DEBOUNCE_S = 0.5
-"""Interrupts closer together than this are treated as one (TR-024)."""
+"""How long a turn stays interruptible after it was already interrupted.
+
+Scoped to the turn, not to the clock (TR-024). A second interrupt naming the
+turn just cancelled is absorbed -- refining where history was cut if it carries
+a better sentence id (TR-023), and otherwise doing nothing -- while a barge-in
+on a *newly started* turn is always honoured, however soon it arrives. Keying
+this on wall-clock time alone would let the agent talk over a user who
+interrupts twice in quick succession, which is the one thing barge-in exists to
+prevent.
+"""
 
 
 class Session:
@@ -102,7 +118,8 @@ class Session:
         self.turn_id = 0
 
         self._task: asyncio.Task[None] | None = None
-        self._last_interrupt = 0.0
+        self._interrupted_turn: int | None = None
+        self._interrupted_at = 0.0
         self._expecting_binary = False
         self._started = False
 
@@ -222,28 +239,93 @@ class Session:
         await self.set_state(SessionState.HEARING)
 
     async def _on_interrupt(self, last_completed: int | None) -> None:
-        """Cancel the in-flight turn and truncate history to what was heard.
+        """Cancel the in-flight turn, or refine the cut of the one just cancelled.
 
         Args:
             last_completed: Id of the last sentence the user actually heard, or
                 ``None`` if playback had not begun.
         """
-        if self.state not in (SessionState.THINKING, SessionState.SPEAKING):
-            return  # TR-024: nothing to interrupt
-        now = time.monotonic()
-        if now - self._last_interrupt < INTERRUPT_DEBOUNCE_S:
-            return  # TR-024: idempotent within the debounce window
-        self._last_interrupt = now
+        if self.state in (SessionState.THINKING, SessionState.SPEAKING):
+            await self._cancel_turn(last_completed)
+            return
+        # TR-023: `speech.start` cancels with no sentence id at all, and the
+        # client follows it with the precise one it read off the playback queue.
+        # That follow-up always arrives with the session already in HEARING, so
+        # the guard above would drop the only accurate truncation point the
+        # client ever sends. Accepting it for the turn just cancelled is also
+        # what makes a repeated interrupt idempotent rather than an error
+        # (TR-024): re-cutting at the same sentence changes nothing.
+        if last_completed is None or not self._recently_interrupted(self.turn_id):
+            return  # TR-024: nothing to interrupt, and nothing more precise to say
+        if self.history.truncate_current(self.turn_id, last_completed):
+            logger.info(
+                "turn.truncation_refined",
+                session_id=self.id,
+                turn_id=self.turn_id,
+                truncated_at=last_completed,
+            )
 
+    def _recently_interrupted(self, turn_id: int) -> bool:
+        """Report whether this turn was interrupted within the debounce window.
+
+        Args:
+            turn_id: The turn a follow-up interrupt names.
+
+        Returns:
+            ``True`` while a further interrupt for that turn should still be
+            absorbed rather than treated as a barge-in on something new.
+        """
+        if self._interrupted_turn != turn_id:
+            return False
+        return time.monotonic() - self._interrupted_at < INTERRUPT_DEBOUNCE_S
+
+    async def _cancel_turn(self, last_completed: int | None) -> None:
+        """Stop the running turn and cut history to what the room actually heard.
+
+        Args:
+            last_completed: Id of the last sentence the user heard in full, or
+                ``None`` when playback had not begun.
+        """
+        # PRD §7 names INTERRUPTED as a state of its own, and the orb renders it
+        # as the flash that acknowledges the barge-in. Sent before the cancel so
+        # the audience sees the agent give way at the moment they spoke, rather
+        # than once the model stream has finished closing.
+        await self.set_state(SessionState.INTERRUPTED)
         await cancel_task(self._task)
         self._task = None
-        self.history.truncate_current(self.turn_id, last_completed)
+        self._interrupted_turn = self.turn_id
+        self._interrupted_at = time.monotonic()
+
+        truncated = self.history.truncate_current(self.turn_id, last_completed)
         await self.send(
-            AgentCancelledMsg(turn_id=self.turn_id, truncated_at_sentence_id=last_completed)
+            AgentCancelledMsg(
+                turn_id=self.turn_id,
+                # Only claim a cut that actually happened: when history holds no
+                # entry for this turn, nothing was rewritten and nothing kept.
+                truncated_at_sentence_id=last_completed if truncated else None,
+            )
         )
-        logger.info(
-            "turn.cancelled", session_id=self.id, turn_id=self.turn_id, truncated_at=last_completed
-        )
+        if truncated:
+            logger.info(
+                "turn.cancelled",
+                session_id=self.id,
+                turn_id=self.turn_id,
+                truncated_at=last_completed,
+            )
+        elif last_completed is None:
+            # The interrupt beat the turn to the model: there is no assistant
+            # entry yet and nothing was heard, so there is nothing to lose.
+            logger.info("turn.cancelled_before_answer", session_id=self.id, turn_id=self.turn_id)
+        else:
+            # The client heard sentences that history has no entry to hold, so
+            # the model will not learn they were said. Loud on purpose.
+            logger.error(
+                "turn.truncation_refused",
+                session_id=self.id,
+                turn_id=self.turn_id,
+                history_turn_id=self.history.current_turn_id,
+                last_completed=last_completed,
+            )
         await self.set_state(SessionState.HEARING)
 
     def _on_user_navigation(self, index: int) -> None:
@@ -271,7 +353,10 @@ class Session:
             message: Which sentence of which turn finished.
         """
         if message.turn_id != self.turn_id:
-            return
+            return  # TR-131: progress for a turn that is no longer current
+        # ``_task is None`` means this turn is done generating. Progress
+        # reported while it is still running names a sentence the client has
+        # finished but the answer has not, so it is not the end of the turn.
         if self.state is SessionState.SPEAKING and self._task is None:
             await self.set_state(SessionState.LISTENING)
 
@@ -288,8 +373,7 @@ class Session:
             await self.start_turn("Please start presenting from the beginning.")
         elif action in (ControlAction.PAUSE, ControlAction.MUTE):
             await cancel_task(self._task)
-            self._task = None
-            await self.set_state(SessionState.LISTENING)
+            await self._end_turn_abnormally()
 
     # ------------------------------------------------------------------ turn
 
@@ -301,6 +385,10 @@ class Session:
         """
         if self.slides is None or self.deck is None:
             return
+        # Awaited, not fired and forgotten: the previous turn must be finished
+        # unwinding before ``turn_id`` moves on, or the two would write to the
+        # same history at once and the outgoing one would stamp the new id on
+        # its own last messages (TR-022).
         await cancel_task(self._task)
         self.turn_id += 1
         await self.set_state(SessionState.THINKING)
@@ -333,22 +421,55 @@ class Session:
         except TimeoutError:
             # TR-025: never leave the client stuck in `thinking`.
             await self.send_error(ErrorCode.TURN_TIMEOUT, "the agent took too long to answer")
-            self._task = None
-            await self.set_state(SessionState.LISTENING)
+            await self._end_turn_abnormally()
             return
         except ProviderError as exc:
             await self.send(provider_error_message(exc))
-            self._task = None
-            await self.set_state(SessionState.LISTENING)
+            await self._end_turn_abnormally()
+            return
+        except Exception:
+            # Everything the pipeline did not anticipate ends here: a
+            # model-authored tool argument that will not serialise, a sentence
+            # recorded against a turn that is no longer pending, the chunker fed
+            # something strange. Without this the exception dies inside the task,
+            # never retrieved and never logged, and the client sits in THINKING
+            # until the socket closes. `CancelledError` derives from
+            # `BaseException` and is re-raised above, so barge-in still
+            # propagates (CLAUDE.md §4.4).
+            logger.exception("turn.failed", session_id=self.id, turn_id=turn_id)
+            await self.send_error(ErrorCode.INTERNAL_ERROR, "the turn failed unexpectedly")
+            await self._end_turn_abnormally()
             return
 
         await self.send(metrics.to_message())
-        self._task = None
         # With audio, the client reports playback completion and drives the
         # return to listening. Until then a turn that produced speech ends here.
         if result.answered:
             await self.set_state(SessionState.SPEAKING)
         await self.set_state(SessionState.LISTENING)
+        # Cleared last. While this task is still reachable a turn starting in
+        # the window above cancels it (TR-022) instead of racing it, so these
+        # trailing transitions can never be stamped with the next turn's id nor
+        # drag the session out of the state that turn just entered.
+        self._task = None
+
+    async def _end_turn_abnormally(self) -> None:
+        """Abandon the running turn while keeping what the room already heard.
+
+        The watchdog, a provider failure, an unexpected exception, and
+        ``control{pause}``/``control{mute}`` all end a turn that the user did not
+        interrupt. Each one used to drop the turn from history entirely, so the
+        model never learned it had already said the sentences the audience heard
+        and repeated them on the next question. Cutting to the last sentence
+        actually sent is the same repair a barge-in makes (TR-051), with ``None``
+        -- nothing was heard -- when the turn had not spoken yet.
+
+        The caller cancels the task first when it is not the task itself.
+        """
+        if self.state in (SessionState.THINKING, SessionState.SPEAKING):
+            self.history.truncate_current(self.turn_id, self.history.last_recorded_sentence_id)
+        await self.set_state(SessionState.LISTENING)
+        self._task = None
 
     async def close(self) -> None:
         """Cancel any in-flight turn and release the session (TR-026)."""

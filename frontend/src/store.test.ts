@@ -78,6 +78,24 @@ function agentSentence(turnId: number, sentenceId: number, text: string): Transc
 }
 
 /**
+ * Build a `slide.goto` message.
+ *
+ * @param turnId - The turn the navigation belongs to; the stale-turn guard reads it.
+ * @param index - The requested 1-based slide index, which may be out of range.
+ * @param highlight - Zero-based bullet to emphasise, or `null`.
+ * @param reason - The sentence shown beside the entry in the log.
+ * @returns The message.
+ */
+function goto(
+  turnId: number,
+  index: number,
+  highlight: number | null,
+  reason: string,
+): SlideGotoMessage {
+  return { type: "slide.goto", turn_id: turnId, index, highlight, reason };
+}
+
+/**
  * Build a `metrics` message with only the stages a test cares about.
  *
  * @param turnId - Turn the metrics describe.
@@ -186,10 +204,70 @@ describe("session lifecycle", () => {
     apply(agentSentence(5, 0, "current answer"));
     expect(events().at(-1)).toMatchObject({ kind: "agent", text: "current answer" });
 
-    // `state` is exempt (TR-131): a server that resets its turn counter must still be able to
-    // drive the machine.
+    // `state` is exempt from being *dropped* (TR-131), so the machine can never freeze; it does
+    // not rewind the counter, which is TC-FE-140.
     apply(state("listening", 0));
+    expect(useSessionStore.getState().agentState).toBe("listening");
+    expect(useSessionStore.getState().turnId).toBe(5);
+  });
+
+  it("TC-FE-140: a stale state message never rewinds the turn counter", () => {
+    apply(ready(), state("thinking", 5));
+
+    // A `state` frame belonging to a turn that has already been superseded. Taking its turn id at
+    // face value would reopen the TR-131 gate for every other message of that dead turn.
+    apply(state("speaking", 3));
+
+    expect(useSessionStore.getState().turnId).toBe(5);
+    const before = events().length;
+    apply(agentSentence(3, 0, "tail of the interrupted turn"));
+    expect(events()).toHaveLength(before);
+
+    // The counter still follows the server forward, which is what the exemption exists for.
+    apply(state("listening", 6));
+    expect(useSessionStore.getState().turnId).toBe(6);
+
+    // A malformed turn id must not land in the counter either: `NaN` compares false against
+    // everything, so it would switch the guard off for the rest of the session.
+    apply({ ...state("listening", 6), turn_id: Number.NaN });
+    expect(useSessionStore.getState().turnId).toBe(6);
+    const beforeGarbage = events().length;
+    apply(agentSentence(5, 0, "still from a dead turn"));
+    expect(events()).toHaveLength(beforeGarbage);
+  });
+
+  it("TC-FE-141: session.ready restarts the turn counter for a reconnected session", () => {
+    apply(ready(), state("speaking", 5));
+
+    // TR-175's automatic reconnect sends a fresh `session.start`, and the server answers with a
+    // new session whose turns are numbered from zero again.
+    apply(ready(), state("thinking", 0));
+
     expect(useSessionStore.getState().turnId).toBe(0);
+    apply(agentSentence(0, 0, "answer from the reconnected session"));
+    expect(events().at(-1)).toMatchObject({
+      kind: "agent",
+      text: "answer from the reconnected session",
+    });
+  });
+
+  it("TC-FE-143: clearSession drops the session but keeps the user's toggles", () => {
+    apply(ready(), state("thinking", 2), agentSentence(2, 0, "an answer"));
+    useSessionStore.getState().updateSettings({ debug: true, ptt: true });
+
+    useSessionStore.getState().clearSession();
+
+    const store = useSessionStore.getState();
+    expect(store.settings).toEqual({ ptt: true, debug: true, muted: false });
+    expect(store.deck).toBeNull();
+    expect(store.events).toEqual([]);
+    expect(store.turnId).toBe(0);
+    expect(store.currentSlide).toBe(1);
+
+    // `reset()` remains the between-tests door and still clears the toggles too.
+    useSessionStore.getState().updateSettings({ debug: true });
+    useSessionStore.getState().reset();
+    expect(useSessionStore.getState().settings).toEqual({ ptt: false, debug: false, muted: false });
   });
 });
 
@@ -252,34 +330,59 @@ describe("slide navigation", () => {
   it("TC-FE-002: clamps an out-of-range slide.goto into the deck", () => {
     apply(ready(makeDeck(DECK_SLIDE_COUNT)));
 
-    const goto: SlideGotoMessage = {
-      type: "slide.goto",
-      index: 42,
-      highlight: null,
-      reason: "hallucinated slide",
-    };
-    apply(goto);
+    apply(goto(0, 42, null, "hallucinated slide"));
 
     expect(useSessionStore.getState().currentSlide).toBe(DECK_SLIDE_COUNT);
+  });
+
+  it("TC-FE-142: a slide.goto from a superseded turn does not move the deck", () => {
+    apply(ready(), state("speaking", 4), goto(4, 3, null, "answering about the latency budget"));
+    expect(useSessionStore.getState().currentSlide).toBe(3);
+
+    // The user cut in and turn 5 began. The navigation the dead turn asked for is the one message
+    // that changes what the audience is looking at, so it is exactly the one that must be dropped.
+    apply(state("thinking", 5));
+    const before = events().length;
+    apply(goto(4, 6, 1, "late tool call from the interrupted turn"));
+
+    expect(useSessionStore.getState().currentSlide).toBe(3);
+    expect(useSessionStore.getState().highlight).toBeNull();
+    expect(events()).toHaveLength(before);
+
+    // The live turn still moves the deck, so the guard is about the turn and not about the type.
+    apply(goto(5, 2, 0, "the new question is about slide two"));
+    expect(useSessionStore.getState().currentSlide).toBe(2);
+    expect(useSessionStore.getState().highlight).toBe(0);
   });
 
   it("TC-FE-109: records the clamp as an event instead of failing (TR-133)", () => {
     apply(ready());
     const before = events().length;
 
-    apply({ type: "slide.goto", index: 0, highlight: 2, reason: "off the front" });
+    apply(goto(0, 0, 2, "off the front"));
 
     const added = events().slice(before);
     expect(added.map((event) => event.kind)).toEqual(["notice", "slide"]);
-    expect(added[0]).toMatchObject({ kind: "notice" });
+    // The clamp is debugging detail, not something the user must act on (PRD F10).
+    expect(added[0]).toMatchObject({ kind: "notice", alert: false });
     expect(added[1]).toMatchObject({ kind: "slide", index: 1, highlight: 2 });
     expect(useSessionStore.getState().currentSlide).toBe(1);
     expect(useSessionStore.getState().highlight).toBe(2);
 
     // An in-range move logs the slide entry alone: the notice is the exception, not the rule.
-    apply({ type: "slide.goto", index: 3, highlight: null, reason: "user asked about latency" });
+    apply(goto(0, 3, null, "user asked about latency"));
     expect(events().at(-1)).toMatchObject({ kind: "slide", index: 3 });
     expect(events().filter((event) => event.kind === "notice")).toHaveLength(1);
+  });
+});
+
+describe("notices", () => {
+  it("TC-FE-144: a notice is quiet by default and can be marked as an alert", () => {
+    useSessionStore.getState().logNotice("moved to slide 3 by hand");
+    useSessionStore.getState().logNotice("connection lost", { alert: true });
+
+    expect(events()[0]).toMatchObject({ kind: "notice", alert: false });
+    expect(events()[1]).toMatchObject({ kind: "notice", alert: true });
   });
 });
 
@@ -310,7 +413,7 @@ describe("exportEvents", () => {
     vi.setSystemTime(new Date("2026-09-10T09:00:00.000Z"));
 
     apply(ready(), state("thinking", 1));
-    apply({ type: "slide.goto", index: 99, highlight: null, reason: "out of range" });
+    apply(goto(1, 99, null, "out of range"));
 
     const exported = useSessionStore.getState().exportEvents();
 

@@ -29,6 +29,7 @@ function renderControls(overrides: Partial<ComponentProps<typeof Controls>> = {}
     orbState: "listening" as const,
     isActive: true,
     canSend: true,
+    isAnswering: false,
     decks: ONE_DECK,
     deckId: "anatomy_of_a_voice_agent",
     onSelectDeck: vi.fn(),
@@ -92,6 +93,35 @@ describe("Controls", () => {
     expect(screen.getByRole("combobox")).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "End session" }));
     expect(props.onStop).toHaveBeenCalledOnce();
+  });
+
+  it("TC-FE-151: waits for the answer rather than cancelling it with a second question", () => {
+    const { props, view } = renderControls();
+    const input = screen.getByLabelText(COMPOSER_LABEL);
+
+    fireEvent.change(input, { target: { value: "and what about the LLM?" } });
+    expect(screen.getByRole("button", { name: "Ask" })).toBeEnabled();
+
+    view.rerender(<Controls {...props} isAnswering />);
+
+    // The field keeps the draft and stays typable; only sending waits, and the placeholder says
+    // what it is waiting for rather than leaving a dead button unexplained.
+    expect(screen.getByLabelText(COMPOSER_LABEL)).toBeEnabled();
+    expect(screen.getByLabelText(COMPOSER_LABEL)).toHaveValue("and what about the LLM?");
+    expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ask" })).toHaveAttribute(
+      "title",
+      "Wait for the answer to finish",
+    );
+    expect(screen.getByPlaceholderText("The presenter is answering…")).toBeInTheDocument();
+
+    fireEvent.submit(screen.getByLabelText(COMPOSER_LABEL).closest("form")!);
+    expect(props.onSend).not.toHaveBeenCalled();
+
+    // When the answer ends the draft is still there to send, so nothing the user typed is lost.
+    view.rerender(<Controls {...props} isAnswering={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(props.onSend).toHaveBeenCalledExactlyOnceWith("and what about the LLM?");
   });
 
   it("shows the orb's state in words next to the composer", () => {

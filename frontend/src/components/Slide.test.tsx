@@ -88,6 +88,34 @@ describe("Slide", () => {
     expect(bulletItem("TTS first byte costs 200 ms")).not.toHaveAttribute("data-highlighted");
   });
 
+  it("TC-FE-146: emphasises the same bullet again when it is highlighted a second time", () => {
+    const view = render(<Slide slide={makeSlide()} highlight={1} />);
+
+    act(() => {
+      vi.advanceTimersByTime(HIGHLIGHT_DURATION_MS);
+    });
+    expect(bulletItem("STT costs 300 ms")).not.toHaveAttribute("data-highlighted");
+
+    // A navigation with no highlight clears the emphasis, and then the agent comes back to the
+    // same bullet. Remembering the expiry by (slide, bullet) alone made that second highlight dead
+    // on arrival for as long as the slide stayed mounted.
+    view.rerender(<Slide slide={makeSlide()} highlight={null} />);
+    view.rerender(<Slide slide={makeSlide()} highlight={1} />);
+
+    expect(bulletItem("STT costs 300 ms")).toHaveAttribute("data-highlighted", "true");
+
+    // And it gets four seconds of its own, not the remains of the first highlight's clock.
+    act(() => {
+      vi.advanceTimersByTime(HIGHLIGHT_DURATION_MS - 1);
+    });
+    expect(bulletItem("STT costs 300 ms")).toHaveAttribute("data-highlighted", "true");
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(bulletItem("STT costs 300 ms")).not.toHaveAttribute("data-highlighted");
+  });
+
   it("renders the slide number and title as the slide's heading", () => {
     render(<Slide slide={makeSlide(4)} highlight={null} />);
 

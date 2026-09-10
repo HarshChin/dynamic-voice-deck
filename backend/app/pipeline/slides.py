@@ -14,11 +14,20 @@ exists because the two ways a slide can change are both untrustworthy:
 
 Both paths return the same :class:`SlideAction`, tagged with its
 :class:`~app.protocol.ToolSource`, so the UI can show which one fired.
+
+The fallback has a failure mode of its own, and the scoring below is shaped
+around it. The same word is worth three points to the slide that owns it as an
+alias and one to the slide that merely prints it in a bullet, so an agent
+describing the slide on screen, in that slide's own words, can hand another
+slide a winning score and be dragged away mid-explanation. Evidence the slide on
+screen already shows is therefore not counted for anybody else; see
+:meth:`SlideController.keyword_fallback`.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final, NamedTuple
 
@@ -269,12 +278,21 @@ class _SlideTerms:
         title_words: Content words of the title.
         bullet_words: Content words of the bullets, minus any already counted
             as title words so a repeated word scores once at its higher weight.
+        shown_words: Every content word this slide puts on screen, title and
+            bullets together.
+        shown_lines: The title and each bullet as its own token sequence, kept
+            in order so another slide's alias can be tested for occurrence in
+            this slide's on-screen text. One sequence per line, because a phrase
+            spanning the end of the title and the start of a bullet is not a
+            phrase this slide shows.
     """
 
     index: int
     aliases: tuple[tuple[str, tuple[str, ...]], ...]
     title_words: frozenset[str]
     bullet_words: frozenset[str]
+    shown_words: frozenset[str]
+    shown_lines: tuple[tuple[str, ...], ...]
 
     @classmethod
     def build(cls, slide: Slide) -> _SlideTerms:
@@ -292,14 +310,31 @@ class _SlideTerms:
             if alias_tokens:  # An alias of pure punctuation can never match.
                 aliases.append((alias, alias_tokens))
 
-        title_words = _content_words(_tokenize(slide.title))
-        bullet_tokens = [token for bullet in slide.bullets for token in _tokenize(bullet)]
+        title_tokens = _tokenize(slide.title)
+        bullet_lines = [_tokenize(bullet) for bullet in slide.bullets]
+        title_words = _content_words(title_tokens)
+        bullet_words = (
+            _content_words([token for line in bullet_lines for token in line]) - title_words
+        )
         return cls(
             index=slide.index,
             aliases=tuple(aliases),
             title_words=title_words,
-            bullet_words=_content_words(bullet_tokens) - title_words,
+            bullet_words=bullet_words,
+            shown_words=title_words | bullet_words,
+            shown_lines=tuple(tuple(line) for line in [title_tokens, *bullet_lines]),
         )
+
+    def shows(self, phrase: tuple[str, ...]) -> bool:
+        """Report whether this slide's own title or bullets contain a phrase.
+
+        Args:
+            phrase: Another slide's alias, tokenised.
+
+        Returns:
+            ``True`` when the phrase appears in this slide's on-screen text.
+        """
+        return any(_contains_phrase(line, phrase) for line in self.shown_lines)
 
 
 def _tokenize(text: str) -> list[str]:
@@ -328,7 +363,7 @@ def _content_words(tokens: list[str]) -> frozenset[str]:
     )
 
 
-def _contains_phrase(haystack: list[str], needle: tuple[str, ...]) -> bool:
+def _contains_phrase(haystack: Sequence[str], needle: tuple[str, ...]) -> bool:
     """Report whether a token sequence appears contiguously in another.
 
     Aliases are matched as phrases rather than as loose bags of words: an answer
@@ -458,6 +493,16 @@ class SlideController:
         current slide stays in the ranking rather than being excluded, so an
         answer that is equally about here and there keeps the deck still.
 
+        Words the slide on screen already shows are struck out of every *other*
+        slide's evidence first. Without that, a word can be worth one point to
+        the slide being described, as a bullet word, and three to a rival that
+        happens to own it as an alias: an answer about the latency budget that
+        says "endpointing" and "silence" -- both printed on the latency slide's
+        own bullet -- scored 10 for the hearing slide against 8 for the slide the
+        audience was looking at, and the deck jumped mid-explanation. An answer
+        made of the current slide's own words is evidence that the agent is on
+        topic, so it may not be read as evidence of somewhere else.
+
         Args:
             answer_text: The assistant's full answer for the turn.
 
@@ -470,8 +515,22 @@ class SlideController:
             return None
 
         content = _content_words(tokens)
+        # Deck validation guarantees indices are 1..n in order (TR-150), so the
+        # slide on screen sits at this position.
+        on_screen = self._terms[self.current_slide - 1]
         ranked = sorted(
-            (self._score_slide(terms, tokens, content) for terms in self._terms),
+            (
+                self._score_slide(
+                    terms,
+                    tokens,
+                    content,
+                    # The slide on screen keeps its full score: it is the
+                    # incumbent, and discounting it would only make it easier
+                    # for a rival to clear the margin.
+                    on_screen=None if terms.index == self.current_slide else on_screen,
+                )
+                for terms in self._terms
+            ),
             key=lambda scored: (-scored.score, scored.slide_index),
         )
         best = ranked[0]
@@ -664,7 +723,11 @@ class SlideController:
         )
 
     def _score_slide(
-        self, terms: _SlideTerms, tokens: list[str], content: frozenset[str]
+        self,
+        terms: _SlideTerms,
+        tokens: list[str],
+        content: frozenset[str],
+        on_screen: _SlideTerms | None = None,
     ) -> _Score:
         """Score one slide against a tokenised answer.
 
@@ -677,15 +740,23 @@ class SlideController:
             terms: The slide's pre-tokenised vocabulary.
             tokens: The answer's tokens, in order, for alias phrase matching.
             content: The answer's distinct content words.
+            on_screen: Vocabulary of the slide the audience is looking at, when
+                scoring some *other* slide. Terms it already shows are struck
+                out, so an on-topic answer cannot be read as evidence of
+                elsewhere. ``None`` when scoring the slide on screen itself.
 
         Returns:
             The slide's score and its strongest matching term.
         """
         matched_aliases = [
-            alias for alias, alias_tokens in terms.aliases if _contains_phrase(tokens, alias_tokens)
+            alias
+            for alias, alias_tokens in terms.aliases
+            if _contains_phrase(tokens, alias_tokens)
+            and (on_screen is None or not on_screen.shows(alias_tokens))
         ]
-        matched_title = terms.title_words & content
-        matched_bullets = terms.bullet_words & content
+        shown: frozenset[str] = on_screen.shown_words if on_screen is not None else frozenset()
+        matched_title = (terms.title_words & content) - shown
+        matched_bullets = (terms.bullet_words & content) - shown
         score = (
             ALIAS_WEIGHT * len(matched_aliases)
             + TITLE_WEIGHT * len(matched_title)

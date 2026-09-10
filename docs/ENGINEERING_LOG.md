@@ -23,6 +23,74 @@ Rules:
 
 ---
 
+## 2026-09-11
+
+### 2026-09-11 · Phase 1 review resolved: 35 findings, every fix mutation-tested · uncommitted
+**Scope:** `app/session.py`, `app/pipeline/{history,turn,slides,chunker}.py`,
+`app/providers/{groq_llm,base,registry}.py`, `app/decks/`, `app/prompts/presenter.md`,
+`app/protocol.py`, `frontend/src/`, `docs/TEST_CASES.md`, and their tests
+**Change:** Resolved all 35 findings from the five-lens Phase 1 review, 14 of them high severity.
+Six agents worked disjoint areas in parallel; each reverted its own fix individually and re-ran the
+suite to confirm the new test actually failed against the old behaviour. Test count rose from 402 to
+475 backend and 61 to 73 frontend, at 99% coverage.
+
+**The findings that mattered most were all in the barge-in foundation**, which is harmless in a
+text-only milestone and fatal the moment audio lands:
+- **History could never be truncated once the model finished generating.** `add_assistant` cleared
+  the pending turn, so `truncate_current` silently returned False and every unheard sentence stayed
+  in history as though it had been spoken. With audio this becomes the common case, because the
+  model finishes generating long before playback finishes. The pending turn now stays addressable
+  until the next turn begins, and the session acts on the returned boolean instead of reporting
+  success regardless.
+- **Three abnormal exits discarded what the user had already heard.** The watchdog, the provider
+  error path, and pause all cancelled without truncating, so a rate limit mid-answer left history
+  claiming the agent never spoke. All abnormal ends now funnel through one helper that cuts history
+  to the last sentence actually sent.
+- **An unexpected exception wedged the session in `thinking`** with no error frame and nothing logged,
+  because only three exception types were caught. Real sources existed already.
+- **The interrupt debounce was keyed on wall-clock time alone**, so a legitimate barge-in on a newly
+  started turn within 500 ms of the previous one was dropped and the agent talked over the user for
+  the rest of that turn. The window is now scoped to the turn being interrupted.
+
+**Two tests were proved hollow.** A reviewer showed the playback handler could be replaced with a
+bare `return`, and the cancellation call enforcing the single-turn rule (TR-022) could be deleted
+outright, with all 402 tests still passing. Both mutations are now killed.
+
+**The deck was asserting falsehoods about the system it demonstrates.** Slide 5 described an
+architecture that stopped being true when the prompt changed earlier in the phase. For a deck whose
+subject is its own architecture, that is a product defect, not a documentation nit.
+
+**Cross-cutting fixes I made directly**, because they span both languages: `slide.goto` now carries
+`turn_id`, so the one message that changes what the audience sees is no longer the only one exempt
+from the stale-turn guard; and `internal_error` is now a distinct error code, so an unexpected
+failure no longer reports itself as a model failure.
+
+**Catalogue reconciliation.** Parallel authoring produced 20 duplicate TC ids across test files.
+Renumbered `test_history.py` into the 220 block and `test_turn.py` into 232-237, then rebuilt the
+catalogue's ids from the code rather than by hand, since the code is the authority. The document is
+now 293 rows with no duplicate id on either side and one uncatalogued reference, which is a section
+comment rather than a claim.
+
+**Interruption during a run cost roughly an evening.** The organisation's monthly spend limit killed
+all six agents mid-flight. They had written nothing, leaving only a self-labelled temporary probe
+file that broke lint. Recovery was to remove it, commit the working checkpoint so a second
+interruption could not cost the work, and relaunch from the saved workflow script. Worth recording
+as a process lesson: commit a green checkpoint before a long parallel run, not after.
+
+**Verification:** `make lint` and `make test` clean. Against the real API after the fixes, all three
+smoke questions behave: navigation to slide 5 and 4 with the turn id now stamped on the navigation,
+and an off-topic question declined without moving the deck.
+
+**Follow-ups:**
+- Time to first token measured 0.9-1.2 s, better than the 3.5 s seen before the prompt was cut, but
+  still far outside the 250 ms budget in TRD §8.1. Two model round trips per navigating turn is the
+  structural cause. Revisit before audio sits behind it.
+- The abnormal-exit path writes `[interrupted by user]` even when the cause was a timeout or a
+  provider failure. It produces the right model behaviour but is slightly untrue; a distinct marker
+  is worth considering in M2.
+- TRD TR-023 sets the interrupt refinement window at 200 ms while the implementation reuses the
+  500 ms debounce constant. One window instead of two; reconcile the document.
+
 ## 2026-09-10
 
 ### 2026-09-10 · Phase 1: two bugs the first end-to-end run exposed · uncommitted

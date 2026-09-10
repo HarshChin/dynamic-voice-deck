@@ -195,7 +195,11 @@ describe("EventLog", () => {
     const events: readonly LogEvent[] = [
       entry({ kind: "user", turnId: 1, text: "what is this?" }),
       entry({ kind: "metrics", turnId: 1, sample: sample(1) }),
-      entry({ kind: "notice", text: "slide 42 is outside the deck (1-6); showing 6" }),
+      entry({
+        kind: "notice",
+        alert: false,
+        text: "slide 42 is outside the deck (1-6); showing 6",
+      }),
     ];
     const onDebugChange = vi.fn();
 
@@ -225,6 +229,30 @@ describe("EventLog", () => {
 
     expect(screen.getByText(/ttft 210ms/)).toHaveTextContent("llm 640ms");
     expect(screen.getByText(/outside the deck/)).toBeInTheDocument();
+  });
+
+  it("TC-FE-145: shows an alert notice even with the debug toggle off", () => {
+    const events: readonly LogEvent[] = [
+      entry({ kind: "notice", alert: false, text: "moved to slide 3 by hand" }),
+      entry({
+        kind: "notice",
+        alert: true,
+        text: "connection lost (code 1006) after 1 automatic attempt",
+      }),
+    ];
+
+    render(
+      <EventLog
+        events={events}
+        debug={false}
+        onDebugChange={vi.fn()}
+        exportEvents={() => EMPTY_EXPORT}
+      />,
+    );
+
+    // Ordinary notices stay behind the toggle; the one the user has to act on does not.
+    expect(screen.queryByText(/by hand/)).not.toBeInTheDocument();
+    expect(screen.getByText(/connection lost \(code 1006\)/)).toBeInTheDocument();
   });
 
   it("TC-FE-132: copies the replayable envelope and says so", async () => {

@@ -52,6 +52,7 @@ export const ERROR_CODES = [
   "llm_failed",
   "tts_failed",
   "turn_timeout",
+  "internal_error",
   "deck_not_found",
   "rate_limited",
 ] as const;

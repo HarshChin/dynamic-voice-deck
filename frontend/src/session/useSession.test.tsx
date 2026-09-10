@@ -9,6 +9,8 @@ import { useSessionStore } from "../store";
 import { useSession } from "./useSession";
 
 const SOCKET_URL = "ws://test.invalid/ws/session";
+/** `RECONNECT.delayMs`; the hook does not expose the seam `SessionClient` has for it. */
+const RECONNECT_DELAY_MS = 500;
 const DECK_ID = "anatomy_of_a_voice_agent";
 const SOCKET_OPEN = 1;
 const SOCKET_CLOSED = 3;
@@ -52,6 +54,12 @@ class FakeSocket extends EventTarget {
   /** Simulate an inbound text frame. */
   receive(message: ServerMessage): void {
     this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
+  }
+
+  /** Simulate the socket closing from the other end. */
+  closeFromServer(code: number, reason = ""): void {
+    this.readyState = SOCKET_CLOSED;
+    this.dispatchEvent(new CloseEvent("close", { code, reason, wasClean: code === 1000 }));
   }
 
   /** The messages sent as parsed JSON, for readable assertions. */
@@ -158,6 +166,7 @@ function Harness(): JSX.Element {
         ask-long
       </button>
       <p data-testid="connection">{session.connection}</p>
+      <p data-testid="answering">{session.isAnswering ? "yes" : "no"}</p>
       <p data-testid="orb">{session.orbState}</p>
       <p data-testid="deck">{session.deck?.title ?? "none"}</p>
       <SlideDeck
@@ -280,6 +289,7 @@ describe("useSession", () => {
     act(() => {
       socket.receive({
         type: "slide.goto",
+        turn_id: 1,
         index: 3,
         highlight: 1,
         reason: "asked about the latency budget",
@@ -292,6 +302,83 @@ describe("useSession", () => {
     // PRD F2: ending a session returns the orb to idle and leaves the transcript in place.
     expect(screen.getByTestId("orb")).toHaveTextContent("idle");
     expect(useSessionStore.getState().events.length).toBeGreaterThan(0);
+  });
+
+  it("TC-FE-148: starting a session keeps the user's toggles", () => {
+    render(<Harness />);
+    act(() => {
+      useSessionStore.getState().updateSettings({ debug: true, ptt: true });
+    });
+
+    openSession(makeDeck());
+
+    // The session's own state is cleared, but the toggles are the user's (PRD F13).
+    expect(useSessionStore.getState().settings).toEqual({ ptt: true, debug: true, muted: false });
+    expect(useSessionStore.getState().deck?.id).toBe(DECK_ID);
+  });
+
+  it("TC-FE-149: explains a connection it has given up on where the user can see it", () => {
+    vi.useFakeTimers();
+    try {
+      render(<Harness />);
+      const first = openSession(makeDeck());
+
+      act(() => {
+        first.closeFromServer(1006, "abnormal");
+      });
+      // TR-175 allows exactly one silent retry.
+      act(() => {
+        vi.advanceTimersByTime(RECONNECT_DELAY_MS);
+      });
+      expect(FakeSocket.instances).toHaveLength(2);
+      const second = FakeSocket.instances[1]!;
+
+      act(() => {
+        second.closeFromServer(1006, "abnormal");
+      });
+
+      expect(screen.getByTestId("orb")).toHaveTextContent("error");
+      expect(useSessionStore.getState().events.at(-1)).toMatchObject({
+        kind: "notice",
+        // The orb has just turned amber and pointed at the log, so this sentence has to be
+        // readable without the debug toggle.
+        alert: true,
+        text: expect.stringContaining("connection lost (code 1006)"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("TC-FE-150: refuses a second question while the agent is still answering", () => {
+    render(<Harness />);
+    const socket = openSession(makeDeck());
+
+    fireEvent.click(screen.getByRole("button", { name: "ask" }));
+    expect(socket.sentMessages.at(-1)).toMatchObject({ type: "text.input" });
+
+    act(() => {
+      socket.receive({ type: "state", value: "thinking", turn_id: 1, server_ts: 2 });
+    });
+    expect(screen.getByTestId("answering")).toHaveTextContent("yes");
+
+    const sentBefore = socket.sentMessages.length;
+    fireEvent.click(screen.getByRole("button", { name: "ask" }));
+
+    // The server would cancel the running turn without announcing it (TR-022), leaving the first
+    // answer in the transcript looking finished, so the question is refused rather than sent.
+    expect(socket.sentMessages).toHaveLength(sentBefore);
+    expect(useSessionStore.getState().events.at(-1)).toMatchObject({
+      kind: "notice",
+      text: expect.stringContaining("still answering"),
+    });
+
+    act(() => {
+      socket.receive({ type: "state", value: "listening", turn_id: 1, server_ts: 3 });
+    });
+    expect(screen.getByTestId("answering")).toHaveTextContent("no");
+    fireEvent.click(screen.getByRole("button", { name: "ask" }));
+    expect(socket.sentMessages).toHaveLength(sentBefore + 1);
   });
 
   it("shows the deck and navigates it before any session is open (PRD F1)", async () => {

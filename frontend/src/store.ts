@@ -5,8 +5,10 @@
  * `applyServerMessage`, which is where the two rules that matter live:
  *
  * - TR-131 stale-turn guard: anything carrying a `turn_id` older than the current turn is dropped,
- *   because a barge-in makes the previous turn's tail irrelevant. `state` is exempt — it is the
- *   message that advances the turn, so guarding it would freeze the machine.
+ *   because a barge-in makes the previous turn's tail irrelevant. `state` is exempt from being
+ *   dropped — it is the message that advances the turn, so guarding it would freeze the machine —
+ *   but it cannot move the counter backwards either: only `session.ready`, which begins a new
+ *   session with its own turn numbering, restarts it.
  * - TR-133 clamping: an out-of-range `slide.goto` is clamped into the deck and logged, never
  *   allowed to index past the end of the slide list.
  *
@@ -127,10 +129,18 @@ export interface ErrorLogEvent extends LogEventCommon {
   readonly recoverable: boolean;
 }
 
-/** A client-side remark, such as a clamped slide index or a reconnect. */
+/**
+ * A client-side remark, such as a clamped slide index or a reconnect.
+ *
+ * Most notices are debugging detail and stay behind the debug toggle (PRD F10). `alert` marks the
+ * ones a user has to see regardless: a connection the client has given up on is not a detail, and
+ * hiding its explanation leaves the amber orb pointing at an empty log (TR-175, PRD F2).
+ */
 export interface NoticeLogEvent extends LogEventCommon {
   readonly kind: "notice";
   readonly text: string;
+  /** Render the entry even when the debug toggle is off. */
+  readonly alert: boolean;
 }
 
 /** Any entry in the event log. */
@@ -244,6 +254,12 @@ export interface EventsExport {
   readonly events: readonly Readonly<Record<string, unknown>>[];
 }
 
+/** How a notice should be surfaced. */
+export interface NoticeOptions {
+  /** Show the entry even with the debug toggle off; defaults to `false`. */
+  readonly alert?: boolean;
+}
+
 /** Everything that mutates the store. */
 export interface SessionActions {
   /** Record a connection lifecycle change from `SessionClient`. */
@@ -253,12 +269,14 @@ export interface SessionActions {
   /** Merge client-measured latencies into a turn's sample (PRD F12, TR-125). */
   recordClientTimings: (turnId: number, timings: ClientTimings) => void;
   /** Append a client-side remark to the event log. */
-  logNotice: (text: string) => void;
+  logNotice: (text: string, options?: NoticeOptions) => void;
   /** Update one or more user toggles. */
   updateSettings: (patch: Partial<SessionSettings>) => void;
   /** Build the replayable JSON envelope of the whole log (TRD §7.2). */
   exportEvents: () => EventsExport;
-  /** Return to the initial state; used when a session ends and between tests. */
+  /** Drop everything the last session produced, keeping the user's toggles (PRD F13). */
+  clearSession: () => void;
+  /** Return to the initial state, toggles included; used between tests. */
   reset: () => void;
 }
 
@@ -486,6 +504,10 @@ function reduceServerMessage(
         connection: "connected",
         currentSlide: 1,
         highlight: null,
+        // A reconnect opens a *new* server session whose turns start at zero again (TR-175), so
+        // the counter the stale-turn guard compares against has to start over with it. Without
+        // this the guard would drop every message of the reconnected session.
+        turnId: 0,
         ...appendEvents(state.events, state.eventSeq, now, [
           {
             kind: "session",
@@ -500,7 +522,12 @@ function reduceServerMessage(
     case "state":
       return {
         agentState: message.value,
-        turnId: message.turn_id,
+        // Monotonic, and only ever from a turn id that is really a number: a `state` frame from a
+        // superseded turn must not reopen the TR-131 gate for the rest of that dead turn's
+        // messages, and a malformed one must not leave `NaN` in the counter, which compares false
+        // against everything and would switch the guard off for the whole session. Turn numbering
+        // restarts only at `session.ready`, which is a new session rather than a late frame.
+        turnId: Math.max(state.turnId, turnIdOf(message) ?? state.turnId),
         lastStateAt: now,
         ...appendEvents(state.events, state.eventSeq, now, [
           {
@@ -553,6 +580,7 @@ function reduceServerMessage(
         drafts.push({
           kind: "notice",
           message: null,
+          alert: false,
           text: `slide ${message.index} is outside the deck (1-${slideCount}); showing ${index}`,
         });
       }
@@ -698,10 +726,10 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
     });
   },
 
-  logNotice(text) {
+  logNotice(text, options) {
     set((state) =>
       appendEvents(state.events, state.eventSeq, Date.now(), [
-        { kind: "notice", message: null, text },
+        { kind: "notice", message: null, text, alert: options?.alert ?? false },
       ]),
     );
   },
@@ -718,6 +746,12 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       started_at: startedAt,
       events: events.map(toExportedEvent),
     };
+  },
+
+  clearSession() {
+    // Everything a session produced goes; the toggles are the user's, not the session's, so
+    // starting a second session must not silently turn debug or push-to-talk back off (PRD F13).
+    set((state) => ({ ...createInitialData(), settings: state.settings }));
   },
 
   reset() {

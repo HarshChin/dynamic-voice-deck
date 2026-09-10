@@ -3,7 +3,9 @@
 A turn is a single cancellable coroutine. That is the whole design: barge-in is
 implemented by cancelling this task (TR-034), which propagates into the model's
 HTTP stream and closes it, so the agent stops generating rather than merely
-being ignored.
+being ignored. Every ``await`` here is therefore a place a cut can land, and the
+two that must not be cut in half -- the model stream and the pair of messages
+that moves the deck -- say so explicitly.
 
 Phase 1 runs the text half of the pipeline: input, model stream, tool calls,
 sentence chunking, and the per-sentence transcript. Synthesis is wired through
@@ -13,10 +15,11 @@ the same sentence loop in a later milestone; the seam is marked below.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
-from collections.abc import Awaitable, Callable
+import re
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from typing import Final
 
 from ..decks.models import Deck
 from ..errors import ProviderError
@@ -31,7 +34,15 @@ from ..protocol import (
     TranscriptAgentMsg,
     TranscriptUserMsg,
 )
-from ..providers.base import LLMDone, LLMProvider, TokenDelta, ToolCallDelta
+from ..providers.base import (
+    LLMDone,
+    LLMEvent,
+    LLMProvider,
+    Message,
+    TokenDelta,
+    ToolCallDelta,
+    ToolSpec,
+)
 from .chunker import SentenceChunker
 from .history import ConversationHistory
 from .metrics import TurnMetrics
@@ -52,6 +63,15 @@ full prompt against a tight free-tier token budget, and a deck this size never
 needs to navigate twice to answer one question.
 """
 
+NO_ANSWER_FALLBACK: Final[str] = "Sorry, I lost that one. Could you ask me again?"
+"""Spoken when a turn produces no content at all and moved nothing.
+
+Silence is the one outcome a listener cannot tell apart from a crash: the client
+went to ``thinking``, and then nothing ever came back. A short apology is a poor
+answer and a far better outcome than none, and it also keeps an empty assistant
+entry -- which every later request would replay -- out of history.
+"""
+
 FILLER_TRANSCRIPTS: frozenset[str] = frozenset(
     {
         "thank you.",
@@ -68,6 +88,27 @@ Transcribing near-silence reliably produces one of these, and answering them
 makes the agent look like it is talking to itself.
 """
 
+_APOSTROPHE_RE: Final[re.Pattern[str]] = re.compile("['\u2019]")
+"""Straight and curly apostrophes, removed so "doesn't" and "doesnt" match alike."""
+
+_DECK: Final[str] = r"(?:this|the|my|our) deck"
+"""How the agent refers to the deck when declining a question."""
+
+OFF_TOPIC_PATTERNS: Final[tuple[str, ...]] = (
+    rf"(?:outside|beyond)(?: of)? {_DECK}",
+    rf"(?:not|isnt|arent) (?:in|on|part of|covered in|covered by) {_DECK}",
+    rf"not (?:something|a topic) {_DECK}",
+    rf"{_DECK} (?:doesnt|does not|cant|cannot|wont|will not) "
+    r"(?:cover|include|have|go into|get into|touch|mention|talk about)",
+)
+"""Ways the presenter declines a question as outside the deck (PRD §8).
+
+Matched against the answer with apostrophes stripped and whitespace collapsed,
+so both "doesn't cover" and "does not cover" are one pattern's business.
+"""
+
+_OFF_TOPIC_RE: Final[re.Pattern[str]] = re.compile("|".join(OFF_TOPIC_PATTERNS))
+
 
 def is_filler(text: str) -> bool:
     """Report whether a transcript is empty or a known silence artefact.
@@ -80,6 +121,27 @@ def is_filler(text: str) -> bool:
     """
     stripped = text.strip()
     return not stripped or stripped.lower() in FILLER_TRANSCRIPTS
+
+
+def is_off_topic_redirect(answer: str) -> bool:
+    """Report whether an answer declined the question as outside the deck.
+
+    The prompt has the agent answer an off-topic question with one sentence
+    turning back to the deck and *no* tool call, and that sentence names another
+    slide by design: "that's outside this deck, but I can show you the slide on
+    tool calling". Handed to the keyword fallback, the offer scores as strong
+    evidence for the slide it merely mentioned, so the deck moves on precisely
+    the answer that promised not to move it.
+
+    Args:
+        answer: The assistant's full answer for the turn.
+
+    Returns:
+        ``True`` when the answer declines rather than describes, and so must not
+        be scored for navigation.
+    """
+    normalised = " ".join(_APOSTROPHE_RE.sub("", answer.lower()).split())
+    return _OFF_TOPIC_RE.search(normalised) is not None
 
 
 @dataclass(slots=True)
@@ -147,12 +209,14 @@ async def run_turn(
     history.add_user(text)
     history.begin_assistant_turn(turn_id)
 
-    messages = prompts.build(deck, slides.snapshot(), history.to_provider_messages())
-    tools = build_tools(len(deck.slides))
-
     chunker = SentenceChunker()
     spoken: list[str] = []
-    called_tool = False
+    navigated = False
+
+    messages = _build_messages(
+        deck=deck, slides=slides, prompts=prompts, history=history, spoken=spoken
+    )
+    tools = build_tools(len(deck.slides))
 
     metrics.mark_llm_start()
 
@@ -178,8 +242,130 @@ async def run_turn(
     # silence, and once the literal text "highlightbullet(1)" spoken aloud,
     # because the model wanted a tool, could not see one, and typed it instead.
     for step in range(MAX_LLM_STEPS):
-        finish_reason = "stop"
-        async for event in llm.stream(messages, tools):
+        finish_reason, applied = await _run_step(
+            turn_id=turn_id,
+            messages=messages,
+            tools=tools,
+            llm=llm,
+            chunker=chunker,
+            spoken=spoken,
+            history=history,
+            slides=slides,
+            result=result,
+            metrics=metrics,
+            emit=emit,
+        )
+        navigated = navigated or applied
+
+        if finish_reason != "tool_calls" or step == MAX_LLM_STEPS - 1:
+            break
+
+        # Rebuilt, not reused: the deck has moved and the model has already
+        # spoken, and the next request has to reflect both.
+        messages = _build_messages(
+            deck=deck, slides=slides, prompts=prompts, history=history, spoken=spoken
+        )
+
+    metrics.mark_llm_done()
+
+    # Captured before any sentence of this module's own is added, because the
+    # keyword fallback must judge what the *model* said and never a line written
+    # here to cover for it.
+    model_answer = " ".join(spoken).strip()
+
+    if not spoken:
+        # A turn that says nothing is indistinguishable from a crash, and if the
+        # deck moved it is worse than that: the room watched a slide change and
+        # heard silence. Saying something short and true also keeps an empty
+        # assistant entry out of history, which would otherwise be replayed on
+        # every later request as an answer that consisted of nothing.
+        fallback = f"Here's slide {slides.current_slide}." if navigated else NO_ANSWER_FALLBACK
+        await _emit_sentence(
+            turn_id=turn_id,
+            sentence=fallback,
+            spoken=spoken,
+            history=history,
+            metrics=metrics,
+            emit=emit,
+        )
+        logger.warning(
+            "turn.empty_answer",
+            turn_id=turn_id,
+            navigated=navigated,
+            slide=slides.current_slide,
+        )
+
+    answer = " ".join(spoken).strip()
+    result.text = answer
+    result.sentences = spoken
+    result.answered = bool(answer)
+    metrics.sentences = len(spoken)
+
+    # Fallback routing (TR-062): the model answered about a different slide
+    # without calling the tool. Two conditions gate it, and neither is "a tool
+    # call was seen". Only a call the deck *applied* counts, so a rejected call
+    # no longer suppresses the fallback -- nothing moved, and something still
+    # has to route the answer. And an answer that declines the question as
+    # outside the deck is never scored at all: the prompt has it name a slide it
+    # is offering rather than describing, and scoring that offer would move the
+    # deck on the one answer that must leave it alone (PRD §8).
+    if not navigated and model_answer and not is_off_topic_redirect(model_answer):
+        action = slides.keyword_fallback(model_answer)
+        if action is not None:
+            await _emit_action(
+                turn_id=turn_id, action=action, history=history, result=result, emit=emit
+            )
+
+    history.add_assistant(answer, spoken)
+    logger.info(
+        "turn.done",
+        turn_id=turn_id,
+        sentences=len(spoken),
+        navigated=navigated,
+        slide=slides.current_slide,
+    )
+    return result
+
+
+async def _run_step(
+    *,
+    turn_id: int,
+    messages: list[Message],
+    tools: list[ToolSpec],
+    llm: LLMProvider,
+    chunker: SentenceChunker,
+    spoken: list[str],
+    history: ConversationHistory,
+    slides: SlideController,
+    result: TurnResult,
+    metrics: TurnMetrics,
+    emit: Emit,
+) -> tuple[str, bool]:
+    """Consume one model response, speaking and navigating as it arrives.
+
+    Args:
+        turn_id: The turn being answered.
+        messages: The request for this step.
+        tools: Tools declared on the request.
+        llm: Model provider.
+        chunker: Sentence chunker for the turn, carried across both steps so a
+            sentence split by the step boundary is still spoken once.
+        spoken: Accumulator of segments sent so far, appended to.
+        history: Conversation history, mutated in place.
+        slides: Navigation state, mutated in place.
+        result: Turn summary, appended to when an action is applied.
+        metrics: Timings for this turn, mutated in place.
+        emit: Sends a message to the client.
+
+    Returns:
+        The reason generation stopped, and whether any tool call in this step
+        was actually applied to the deck.
+    """
+    finish_reason = "stop"
+    navigated = False
+    stream = llm.stream(messages, tools)
+    try:
+        async for event in stream:
             if isinstance(event, TokenDelta):
                 metrics.mark_first_token()
                 for sentence in chunker.feed(event.text):
@@ -192,8 +378,7 @@ async def run_turn(
                         emit=emit,
                     )
             elif isinstance(event, ToolCallDelta):
-                called_tool = True
-                await _apply_tool_call(
+                applied = await _apply_tool_call(
                     turn_id=turn_id,
                     event=event,
                     slides=slides,
@@ -201,6 +386,11 @@ async def run_turn(
                     result=result,
                     emit=emit,
                 )
+                # Only a call the deck honoured counts as "the model navigated".
+                # A rejected call left the deck exactly where it was, so
+                # treating it as navigation would silence the keyword fallback
+                # for a turn in which nothing moved at all.
+                navigated = navigated or applied
             elif isinstance(event, LLMDone):
                 finish_reason = event.finish_reason
                 for sentence in chunker.flush():
@@ -213,57 +403,72 @@ async def run_turn(
                         emit=emit,
                     )
                 break
+    finally:
+        await _aclose(stream)
+    return finish_reason, navigated
 
-        if finish_reason != "tool_calls" or step == MAX_LLM_STEPS - 1:
-            break
 
-        # Rebuild against the moved deck: the snapshot now names the slide the
-        # model just navigated to, so the prompt carries that slide's notes,
-        # which is precisely what it needs in order to speak about it.
-        messages = prompts.build(deck, slides.snapshot(), history.to_provider_messages())
+def _build_messages(
+    *,
+    deck: Deck,
+    slides: SlideController,
+    prompts: PromptBuilder,
+    history: ConversationHistory,
+    spoken: Sequence[str],
+) -> list[Message]:
+    """Build the message list for one model request.
 
-    metrics.mark_llm_done()
+    Two things make the second request of a turn differ from the first. The
+    snapshot names the slide the model just navigated to, so the prompt carries
+    that slide's notes, which is precisely what it needs in order to speak about
+    it. And anything already spoken this turn is replayed as an assistant
+    message: history only learns the answer text once the turn ends, so without
+    this the model cannot see the sentence it opened with, says it again, and
+    the room hears it twice.
 
-    if not spoken and called_tool:
-        # The deck moved but the model said nothing. Rare, but silence after a
-        # visible slide change reads as a broken app, so say something true and
-        # short rather than nothing at all.
-        fallback = f"Here's slide {slides.current_slide}."
-        await _emit_sentence(
-            turn_id=turn_id,
-            sentence=fallback,
-            spoken=spoken,
-            history=history,
-            metrics=metrics,
-            emit=emit,
-        )
-        logger.warning("turn.empty_answer_after_tool", turn_id=turn_id, slide=slides.current_slide)
+    The replayed sentences sit at the end, after the tool call and its result,
+    rather than merged into the assistant entry that carried the call. Merging
+    them is :mod:`~app.pipeline.history`'s business, not this module's; the
+    order still reads correctly to the model, which is what the fix is for.
 
-    answer = " ".join(spoken).strip()
-    result.text = answer
-    result.sentences = spoken
-    result.answered = bool(answer)
-    metrics.sentences = len(spoken)
+    Args:
+        deck: The deck being presented.
+        slides: Navigation state, for the position snapshot.
+        prompts: Builder for the system prompt.
+        history: Conversation history.
+        spoken: Segments already sent to the client during this turn.
 
-    # Fallback routing (TR-062): the model answered about a different slide
-    # without calling the tool. Only consult it when no tool fired, so a
-    # deliberate "stay here" answer is never overridden by keyword noise.
-    if not called_tool and answer:
-        action = slides.keyword_fallback(answer)
-        if action is not None:
-            await _emit_action(
-                turn_id=turn_id, action=action, history=history, result=result, emit=emit
-            )
+    Returns:
+        The system prompt followed by the history for this request.
+    """
+    replayed = history.to_provider_messages()
+    if spoken:
+        replayed.append(Message(role="assistant", content=" ".join(spoken)))
+    return prompts.build(deck, slides.snapshot(), replayed)
 
-    history.add_assistant(answer, spoken)
-    logger.info(
-        "turn.done",
-        turn_id=turn_id,
-        sentences=len(spoken),
-        tool_called=called_tool,
-        slide=slides.current_slide,
-    )
-    return result
+
+async def _aclose(stream: AsyncIterator[LLMEvent]) -> None:
+    """Close a model stream now rather than when the collector notices it.
+
+    :func:`contextlib.aclosing` says exactly this in one line, but
+    :meth:`~app.providers.base.LLMProvider.stream` is declared to return a plain
+    ``AsyncIterator``, which is not statically known to have ``aclose``. Every
+    implementation is in fact an async generator; the check degrades to a no-op
+    for one that is not.
+
+    Determinism is the whole point (TR-031, TR-034). Cancelling a turn while the
+    consumer is awaiting inside its own loop body leaves the generator suspended
+    at its ``yield``, and the provider's raw ``httpx`` stream then stays open
+    until the garbage collector runs the finaliser -- which is the very
+    connection barge-in needs closed at once. The ordinary path needs it too:
+    the loop leaves the generator suspended one statement from its end when it
+    breaks on ``LLMDone``.
+
+    Args:
+        stream: The iterator the provider returned.
+    """
+    if isinstance(stream, AsyncGenerator):
+        await stream.aclose()
 
 
 async def _emit_sentence(
@@ -307,7 +512,7 @@ async def _apply_tool_call(
     history: ConversationHistory,
     result: TurnResult,
     emit: Emit,
-) -> None:
+) -> bool:
     """Validate a tool call, apply it, and tell both the client and the model.
 
     An invalid call is not an error: the model is told why it was rejected so it
@@ -320,6 +525,12 @@ async def _apply_tool_call(
         history: History, which records the call and its result.
         result: Turn summary, appended to when an action is applied.
         emit: Sends a message to the client.
+
+    Returns:
+        ``True`` when the deck acted on the call, ``False`` when it was
+        rejected. The caller needs the difference: a rejected call moved
+        nothing, so the turn has not navigated and the keyword fallback is still
+        the only thing that can route the answer.
     """
     history.add_tool_call(event.call_id, event.name, event.arguments)
     action = slides.apply_tool(event.name, event.arguments)
@@ -328,24 +539,27 @@ async def _apply_tool_call(
         reason = slides.last_error or "rejected"
         logger.warning("tool.rejected", turn_id=turn_id, name=event.name, reason=reason)
         history.add_tool_result(event.call_id, event.name, reason)
-        return
+        return False
 
     history.add_tool_result(
         event.call_id,
         event.name,
         json.dumps({"ok": True, "current_slide": slides.current_slide}),
     )
-    await emit(
-        ToolCallMsg(
+    await _announce_navigation(
+        turn_id=turn_id,
+        call=ToolCallMsg(
             turn_id=turn_id,
             name=event.name,
             args=event.arguments,
             source=ToolSource.LLM,
-        )
+        ),
+        action=action,
+        emit=emit,
     )
-    await _send_goto(turn_id, action, emit)
     if result.actions is not None:
         result.actions.append(action)
+    return True
 
 
 async def _emit_action(
@@ -367,17 +581,51 @@ async def _emit_action(
     """
     logger.info("tool.fallback", turn_id=turn_id, slide=action.index, reason=action.reason)
     history.add_system_note(f"[Deck moved to slide {action.index} by keyword match]")
-    await emit(
-        ToolCallMsg(
+    await _announce_navigation(
+        turn_id=turn_id,
+        call=ToolCallMsg(
             turn_id=turn_id,
             name="go_to_slide",
             args={"slide_index": action.index, "reason": action.reason},
             source=ToolSource.FALLBACK,
-        )
+        ),
+        action=action,
+        emit=emit,
     )
-    await _send_goto(turn_id, action, emit)
     if result.actions is not None:
         result.actions.append(action)
+
+
+async def _announce_navigation(
+    *,
+    turn_id: int,
+    call: ToolCallMsg,
+    action: SlideAction,
+    emit: Emit,
+) -> None:
+    """Send the event-log entry and the slide change as one indivisible pair.
+
+    The controller has already moved by the time this runs, so a client told
+    that a tool fired but never told where the deck went shows a different slide
+    from the one the agent is describing -- for the rest of the session, with
+    nothing to reconcile the two. Cancellation is delivered at an ``await``, and
+    the ``await`` between these two sends is the one place it must not land;
+    ``finally`` moves it to after the pair.
+
+    A cut arriving *before* the pair degrades to sending the ``slide.goto``
+    alone, which costs a line in the event log and keeps the deck honest. That
+    is the right way round: the audience sees slides, not logs.
+
+    Args:
+        turn_id: The turn this navigation belongs to.
+        call: The event-log entry naming who asked for the move.
+        action: The navigation the controller applied.
+        emit: Sends a message to the client.
+    """
+    try:
+        await emit(call)
+    finally:
+        await _send_goto(turn_id, action, emit)
 
 
 async def _send_goto(turn_id: int, action: SlideAction, emit: Emit) -> None:
@@ -429,12 +677,25 @@ async def cancel_task(task: asyncio.Task[None] | None) -> None:
 
     Args:
         task: The task to cancel, or ``None``.
+
+    Raises:
+        asyncio.CancelledError: If *this* coroutine is cancelled while waiting.
+            Two different cancellations surface at the same ``await``: the turn
+            acknowledging the one issued here, which is the expected reply and
+            is swallowed, and one aimed at this coroutine, which must be allowed
+            to keep unwinding. :func:`contextlib.suppress` cannot tell them
+            apart and swallowed both, which silently stranded a caller that had
+            itself been cancelled.
     """
     if task is None or task.done():
         return
+    caller = asyncio.current_task()
     task.cancel()
-    # Suppressing CancelledError is correct here and only here: this coroutine
-    # issued the cancel, so the exception is the expected acknowledgement rather
-    # than a signal that *we* are being cancelled.
-    with contextlib.suppress(asyncio.CancelledError):
+    try:
         await task
+    except asyncio.CancelledError:
+        # `cancelling()` counts cancel requests made against *this* task, so it
+        # is non-zero only when somebody asked this coroutine to stop. The turn
+        # acknowledging its own cancellation never touches that counter.
+        if caller is not None and caller.cancelling() > 0:
+            raise

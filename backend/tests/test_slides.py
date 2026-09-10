@@ -15,12 +15,19 @@ Expected ``scoring_deck`` scores, from the weights in TR-062
     "charlie sierra delta echo tango"         S2 = 5, S3 = 4        (margin 1)
     "charlie sierra delta point echo tango"   S2 = 6, S3 = 4        (margin 2)
     "we compare charlie sierra with echo tango"  S2 = 4, S3 = 4     (tie)
+
+``overlap_deck`` is the same idea aimed at one asymmetry: slide 2 prints
+"delta" and "echo" as its own bullet, while slide 3 owns both as aliases. The
+answer "delta echo point" therefore scores S3 = 6 (two alias phrases) against
+S2 = 3 (three bullet words) -- until the deck is *on* slide 2, where those two
+words are what an on-topic answer is made of and count for nobody else.
 """
 
 from __future__ import annotations
 
 import pytest
 from app.decks.models import Deck, Slide
+from app.decks.repository import DeckRepository
 from app.pipeline.slides import (
     MAX_REASON_CHARS,
     MIN_FALLBACK_SCORE,
@@ -115,6 +122,34 @@ def scoring_deck() -> Deck:
             _slide(5, "India Metrics", ["Numbers"], ["time to first token", "first token latency"]),
         ],
     )
+
+
+@pytest.fixture
+def overlap_deck() -> Deck:
+    """Five slides where slide 2 prints two words slide 3 owns as aliases."""
+    return Deck(
+        id="overlap",
+        title="Overlap Fixture",
+        slides=[
+            _slide(1, "Alpha", ["Bravo"], ["alpha overview", "aa"]),
+            _slide(2, "Charlie Sierra", ["Delta echo point"], ["charlie sierra channel", "cc"]),
+            _slide(3, "Foxtrot", ["Golf"], ["delta", "echo"]),
+            _slide(4, "Hotel", ["India"], ["hotel channel", "hh"]),
+            _slide(5, "Juliett", ["Kilo"], ["juliett channel", "jj"]),
+        ],
+    )
+
+
+@pytest.fixture
+def shipped_deck() -> Deck:
+    """The deck the demo ships, loaded the way the application loads it.
+
+    The rest of this module builds its own decks so the arithmetic stays
+    readable, but two cases below are about real deck copy: an alias one slide
+    owns and another slide prints is a property of the words someone wrote, and
+    only the shipped file can show whether it is there.
+    """
+    return DeckRepository().get("anatomy_of_a_voice_agent")
 
 
 @pytest.fixture
@@ -425,12 +460,99 @@ def test_bullet_words_alone_never_clear_the_threshold(scoring_deck: Deck) -> Non
     assert controller.current_slide == 1
 
 
+def test_fallback_ignores_evidence_the_slide_on_screen_already_shows(
+    overlap_deck: Deck,
+) -> None:
+    """TC-BE-036k: a word printed on the current slide is not evidence of another slide.
+
+    Scoring is asymmetric by design -- an alias is worth three points, a bullet
+    word one -- so a slide that owns "delta" as an alias out-scores the slide
+    that merely prints it, and the deck walks away from the slide it is busy
+    describing.
+    """
+    controller = SlideController(overlap_deck, current_slide=2)
+
+    assert controller.keyword_fallback("delta echo point") is None
+    assert controller.current_slide == 2
+
+
+def test_the_slide_on_screen_only_shields_itself(overlap_deck: Deck) -> None:
+    """TC-BE-036l: the same answer from elsewhere still routes.
+
+    The rule is scoped to the slide the audience is looking at. Read from any
+    other slide, "delta echo point" is ordinary evidence for slide 3 and moves
+    the deck, so the fix is a discount and not a mute button.
+    """
+    controller = SlideController(overlap_deck, current_slide=1)
+
+    action = controller.keyword_fallback("delta echo point")
+
+    assert action is not None
+    assert action.index == 3
+
+
 def test_repetition_alone_does_not_move_the_deck(scoring_deck: Deck) -> None:
     """TC-BE-036i."""
     controller = SlideController(scoring_deck, current_slide=1)
 
     # "charlie delta" scores 3; saying it six times must still score 3.
     assert controller.keyword_fallback(" ".join([BELOW_THRESHOLD_ANSWER] * 6)) is None
+
+
+# --------------------------------------------------------------------------- #
+# Keyword fallback against the shipped deck (TR-062, PRD F5)
+# --------------------------------------------------------------------------- #
+
+
+def test_fallback_does_not_drag_the_shipped_deck_off_the_latency_slide(
+    shipped_deck: Deck,
+) -> None:
+    """TC-BE-036m: describing slide 2 in slide 2's own words leaves the deck on slide 2.
+
+    Reproduced from the shipped copy rather than a fixture, because this is a
+    property of the words in the file: "endpointing" and "silence" are both
+    printed on slide 2's first bullet and both owned by slide 3 as aliases, so
+    they were worth three points each to slide 3 and one each to slide 2. The
+    answer scored 10 for slide 3 against 8 for the slide the room was looking
+    at, and the deck jumped in the middle of the explanation.
+    """
+    bullet = shipped_deck.slide(2).bullets[0].lower()
+    assert "endpointing" in bullet
+    assert "silence" in bullet
+    assert "endpointing" in shipped_deck.slide(3).aliases
+    assert "silence" in shipped_deck.slide(3).aliases
+
+    controller = SlideController(shipped_deck, current_slide=2)
+    answer = (
+        "It comes down to milliseconds. Endpointing costs six hundred, because that is "
+        "how long I wait in silence before deciding you have finished. Transcription "
+        "takes about three hundred."
+    )
+
+    assert controller.keyword_fallback(answer) is None
+    assert controller.current_slide == 2
+
+
+def test_fallback_still_routes_the_shipped_deck_when_the_answer_is_elsewhere(
+    shipped_deck: Deck,
+) -> None:
+    """TC-BE-036n: an answer about barge-in still moves the shipped deck to slide 4.
+
+    The companion to TC-BE-036m: the fallback is the recovery path for a missed
+    tool call (PRD F5), so it has to keep firing on real copy.
+    """
+    controller = SlideController(shipped_deck, current_slide=1)
+    answer = (
+        "Two layers, actually. The browser flushes the playback queue the instant it "
+        "hears you, and the server cancels the pipeline task. Then I truncate the "
+        "history to the sentences you actually heard."
+    )
+
+    action = controller.keyword_fallback(answer)
+
+    assert action is not None
+    assert action.index == 4
+    assert action.source is ToolSource.FALLBACK
 
 
 # --------------------------------------------------------------------------- #

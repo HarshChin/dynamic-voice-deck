@@ -23,6 +23,23 @@ const COPY_FEEDBACK_MS = 2_000;
 /** Entry kinds that are noise during a demo and detail during debugging (PRD F10). */
 const DEBUG_ONLY_KINDS: ReadonlySet<LogEvent["kind"]> = new Set(["metrics", "notice"]);
 
+/**
+ * Decide whether an entry belongs on screen.
+ *
+ * @param event - The entry to judge.
+ * @param debug - Whether the debug toggle is on.
+ * @returns `true` when the entry should be rendered.
+ */
+function isVisible(event: LogEvent, debug: boolean): boolean {
+  if (debug || !DEBUG_ONLY_KINDS.has(event.kind)) {
+    return true;
+  }
+  // An alert notice is the exception to the debug filter: it is raised because the user has to do
+  // something about it, and hiding the explanation would leave the amber orb telling them to
+  // consult a log that says nothing (TR-175, PRD F2).
+  return event.kind === "notice" && event.alert;
+}
+
 /** Inputs to the event log panel. */
 export interface EventLogProps {
   /** The log, oldest first. */
@@ -308,16 +325,30 @@ function MetricsEntry({ event }: { readonly event: MetricsLogEvent }): JSX.Eleme
 }
 
 /**
- * A client-side remark, shown only with debug on.
+ * A client-side remark: a mono debug line, or a chip when it is an alert the user must see.
  *
  * @param props - The notice entry.
  * @returns The element.
  */
 function NoticeEntry({ event }: { readonly event: NoticeLogEvent }): JSX.Element {
+  if (!event.alert) {
+    return (
+      <li className={styles.rawRow} data-kind="notice">
+        <span className={styles.rawLabel}>client</span>
+        <span className={styles.rawText}>{event.text}</span>
+      </li>
+    );
+  }
   return (
-    <li className={styles.rawRow} data-kind="notice">
-      <span className={styles.rawLabel}>client</span>
-      <span className={styles.rawText}>{event.text}</span>
+    <li className={styles.row} data-kind="notice" data-alert="true">
+      <p className={styles.chipNotice}>
+        <span className={styles.chipIcon} aria-hidden="true">
+          !
+        </span>
+        <span className={styles.chipBody}>
+          <span className={styles.chipTitle}>{event.text}</span>
+        </span>
+      </p>
     </li>
   );
 }
@@ -341,7 +372,7 @@ export function EventLog({
 }: EventLogProps): JSX.Element {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const scrollRef = useRef<HTMLOListElement>(null);
-  const visible = events.filter((event) => debug || !DEBUG_ONLY_KINDS.has(event.kind));
+  const visible = events.filter((event) => isVisible(event, debug));
 
   useEffect(() => {
     const element = scrollRef.current;

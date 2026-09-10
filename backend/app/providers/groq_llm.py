@@ -17,6 +17,7 @@ Ollama provider will reuse.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
@@ -55,6 +56,7 @@ SSE_DONE_SENTINEL: Final = "[DONE]"
 
 SSE_CR: Final = "\r"
 SSE_LF: Final = "\n"
+SSE_CRLF: Final = SSE_CR + SSE_LF
 """The two characters SSE builds its three line terminators from: CR, LF, CRLF.
 
 Named because :meth:`str.splitlines` -- and therefore
@@ -109,6 +111,15 @@ ERROR_BODY_SNIPPET_CHARS: Final = 500
 
 RETRY_AFTER_SECONDS_SUFFIX: Final = "s"
 """Groq sometimes writes ``retry-after: 2s``; the RFC allows bare seconds."""
+
+ARRIVAL_KEY_PREFIX: Final = "#"
+"""Marks a tool-call key invented from arrival order.
+
+Keys are shared between the provider's own ``index`` and ``id`` values and the
+ones invented here, so the invented ones carry a prefix no provider id uses:
+without it, the second unidentified call in a stream could be handed the
+accumulator of an earlier call that happened to arrive with a matching index.
+"""
 
 
 @dataclass(slots=True)
@@ -426,6 +437,14 @@ def _wrap_transport_error(exc: httpx.HTTPError | httpx.InvalidURL) -> ProviderEr
 async def _iter_sse_payloads(response: httpx.Response) -> AsyncGenerator[str, None]:
     """Yield the payload of each Server-Sent Event, stopping at ``[DONE]``.
 
+    Lines are split here rather than by :meth:`httpx.Response.aiter_lines`,
+    which delegates to :meth:`str.splitlines` and so ends a line on six
+    characters SSE does not treat as terminators. A model that emits a raw
+    U+2028, U+2029, or U+0085 inside a token would otherwise have its frame torn
+    in two, and both halves dropped as unparsable JSON -- taking the token with
+    them. That is not a hypothetical class of output: the run recorded in
+    docs/EVALS.md emitted 221 characters of zero-width space unprompted.
+
     Multi-line ``data:`` fields are joined with newlines as the SSE spec
     requires, and comment lines (``: keep-alive``) are dropped. Providers vary
     in whether they terminate the last event with a blank line, so a pending
@@ -437,27 +456,116 @@ async def _iter_sse_payloads(response: httpx.Response) -> AsyncGenerator[str, No
     Yields:
         One payload string per event, with the ``data:`` prefixes removed.
     """
+    # Bound to a name because the drain below has to finish the body through
+    # this very iterator: httpx raises StreamConsumed rather than hand out a
+    # second one.
+    chunks = response.aiter_text()
     parts: list[str] = []
-    async for line in response.aiter_lines():
-        if not line:
-            if parts:
-                payload = "\n".join(parts)
-                parts = []
-                if payload == SSE_DONE_SENTINEL:
-                    return
-                yield payload
-            continue
-        if line.startswith(SSE_COMMENT_PREFIX):
-            continue
-        field_name, _, value = line.partition(":")
-        if field_name != SSE_DATA_FIELD:
-            continue
-        parts.append(value.removeprefix(" "))
-
-    if parts:
-        payload = "\n".join(parts)
-        if payload != SSE_DONE_SENTINEL:
+    remainder = ""
+    async for chunk in chunks:
+        lines, remainder = _split_sse_lines(remainder + chunk)
+        for line in lines:
+            payload = _feed_sse_line(line, parts)
+            if payload is None:
+                continue
+            if payload == SSE_DONE_SENTINEL:
+                await _drain(chunks)
+                return
             yield payload
+
+    # End of body. Whatever is left was terminated by the connection closing,
+    # and the trailing blank line stands in for the event separator a provider
+    # may not have sent, so its last event is still delivered.
+    tail, _ = _split_sse_lines(remainder, final=True)
+    for line in (*tail, ""):
+        payload = _feed_sse_line(line, parts)
+        if payload is not None and payload != SSE_DONE_SENTINEL:
+            yield payload
+
+
+def _split_sse_lines(buffer: str, *, final: bool = False) -> tuple[list[str], str]:
+    """Split buffered response text into complete SSE lines.
+
+    Args:
+        buffer: Text received so far, beginning at a line boundary.
+        final: Whether the body has ended, which makes a trailing CR a
+            terminator and the text after it a complete line. Mid-stream that
+            CR is held back instead, because the LF of a CRLF split across two
+            network reads would otherwise be read as a second, empty line --
+            and an empty line ends an SSE event.
+
+    Returns:
+        The complete lines, terminators removed, and the unterminated tail.
+    """
+    lines: list[str] = []
+    start = 0
+    index = 0
+    end = len(buffer)
+    while index < end:
+        if buffer[index] not in SSE_CRLF:
+            index += SINGLE_TERMINATOR_LENGTH
+            continue
+        if buffer[index] == SSE_CR and index + SINGLE_TERMINATOR_LENGTH == end and not final:
+            break
+        lines.append(buffer[start:index])
+        is_crlf = buffer[index : index + CRLF_LENGTH] == SSE_CRLF
+        index += CRLF_LENGTH if is_crlf else SINGLE_TERMINATOR_LENGTH
+        start = index
+    if final and start < end:
+        lines.append(buffer[start:])
+        return lines, ""
+    return lines, buffer[start:]
+
+
+def _feed_sse_line(line: str, parts: list[str]) -> str | None:
+    """Fold one SSE line into the event being assembled.
+
+    Args:
+        line: One line with its terminator removed.
+        parts: ``data`` values of the event so far; appended to in place, and
+            cleared when the event completes.
+
+    Returns:
+        The completed payload when ``line`` is the blank line that ends an
+        event and something was buffered, otherwise ``None``.
+    """
+    if not line:
+        if not parts:
+            return None
+        payload = "\n".join(parts)
+        parts.clear()
+        return payload
+    if line.startswith(SSE_COMMENT_PREFIX):
+        return None
+    field_name, _, value = line.partition(":")
+    if field_name != SSE_DATA_FIELD:
+        return None
+    parts.append(value.removeprefix(" "))
+    return None
+
+
+async def _drain(chunks: AsyncIterator[str]) -> None:
+    """Finish the response body so its connection can be reused.
+
+    httpcore only returns a connection to the keep-alive pool once its body has
+    been read to the end; abandoning the body at ``[DONE]`` closes the socket
+    instead, and every turn then pays a fresh TCP and TLS handshake -- twice,
+    since a turn that calls a tool makes a second request. After ``[DONE]`` the
+    only thing left to read is the terminating chunk the server has already
+    sent, so this costs nothing and buys back round trips on ``llm_ttft_ms``,
+    the tightest number in the latency budget (TRD §8.1).
+
+    Args:
+        chunks: The response's own text iterator, mid-stream.
+    """
+    try:
+        async with asyncio.timeout(DRAIN_TIMEOUT_S):
+            async for _ in chunks:
+                pass
+    except (TimeoutError, httpx.HTTPError) as exc:
+        # The answer is already complete, so a server that will not finish its
+        # body costs one extra handshake next turn, not a failed turn.
+        logger.debug("llm.drain_incomplete", error=type(exc).__name__)
 
 
 def _events_from_payload(payload: str, state: _StreamState) -> list[LLMEvent]:
@@ -570,8 +678,15 @@ def _accumulator_for(raw: Mapping[str, Any], state: _StreamState) -> _ToolCallAc
     """Find or create the accumulator a fragment belongs to.
 
     Providers that stream several calls at once always send ``index``; those
-    that send one call in a single delta sometimes send neither ``index`` nor a
-    repeated ``id``, so arrival order is the last resort.
+    that send one call at a time sometimes send neither ``index`` nor a repeated
+    ``id`` on the fragments that follow the first, so arrival order is the last
+    resort.
+
+    Arrival order means *the call still being assembled*, not "one more call".
+    Keying an unidentified fragment by how many calls have been seen would open
+    a new accumulator per fragment, splitting one call into several -- each
+    holding a slice of the argument JSON, so none of them ever parses and the
+    deck never moves.
 
     Args:
         raw: One entry of a ``tool_calls`` array.
@@ -588,13 +703,32 @@ def _accumulator_for(raw: Mapping[str, Any], state: _StreamState) -> _ToolCallAc
     elif isinstance(call_id, str) and call_id:
         key = call_id
     else:
-        key = len(state.calls)
+        key = _open_call_key(state)
 
     accumulator = state.calls.get(key)
     if accumulator is None:
         accumulator = _ToolCallAccumulator(key=key)
         state.calls[key] = accumulator
     return accumulator
+
+
+def _open_call_key(state: _StreamState) -> int | str:
+    """Return the key an unidentified tool-call fragment belongs to.
+
+    Args:
+        state: Accumulator store, in arrival order.
+
+    Returns:
+        The key of the call still being assembled, or a fresh arrival-order key
+        when there is none -- either because this is the first call of the
+        stream, or because the previous one has already been emitted and this
+        fragment therefore starts the next.
+    """
+    if state.calls:
+        latest = next(reversed(state.calls.values()))
+        if not latest.emitted:
+            return latest.key
+    return f"{ARRIVAL_KEY_PREFIX}{len(state.calls)}"
 
 
 def _absorb_fragment(raw: Mapping[str, Any], accumulator: _ToolCallAccumulator) -> None:

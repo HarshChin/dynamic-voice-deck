@@ -54,6 +54,25 @@ ABBREVIATIONS: frozenset[str] = frozenset(
 EARLY_SPLIT_MIN_CHARS: int = 60
 """Length above which a clause boundary is good enough to speak on (TR-042)."""
 
+EARLY_SPLIT_MIN_HEAD_CHARS: int = 24
+"""Shortest head the early split may produce (TR-042, TR-161).
+
+The rule fires once the buffer passes 60 characters, so without a floor a clause
+boundary near the start -- ``So,`` ``Well,`` ``Two layers:`` -- is released on
+its own while the other fifty-odd characters stay buffered. That loses on both
+counts the early split is meant to win. The fragment is synthesised as a whole
+utterance, so it lands with a falling, finished prosody in the middle of a
+sentence; and its playback is far shorter than the time Kokoro needs for what
+follows, so the listener hears two words and then a gap.
+
+Twenty-four characters is roughly a second and a half of speech. Because the
+rule fires at 61 characters, a head that long leaves at most thirty-seven
+characters behind it, and speaking the head covers synthesising them. A boundary
+earlier than this is skipped rather than the rule disabled: the next boundary,
+the sentence end (TR-041), or the hard limit (TR-043) releases the segment
+instead, so first audio is still as early as a *speakable* head allows.
+"""
+
 HARD_SPLIT_MAX_CHARS: int = 200
 """Length above which the buffer is broken at whitespace regardless (TR-043)."""
 
@@ -61,7 +80,53 @@ _LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 """Markdown link or image; only the visible label survives."""
 
 _MARKDOWN_SYMBOLS_RE = re.compile(r"[*_#`\[\]]")
-"""Markdown punctuation a synthesiser would either read out or mangle."""
+"""Markdown punctuation a synthesiser would either read out or mangle.
+
+Replaced with a space rather than deleted: deleting welds the words on either
+side together, so ``snake_case`` is spoken as one nonsense word and ``a*b*c``
+becomes ``abc``. A space costs nothing -- runs of whitespace are collapsed
+immediately afterwards -- and keeps the words apart.
+"""
+
+_INVISIBLE_RE = re.compile(r"[\u00ad\u200b-\u200f\u2060\u2066-\u2069\ufeff]")
+"""Characters with no width and no sound: zero-width spaces and joiners, the
+soft hyphen, directional marks, and the byte-order mark.
+
+They are not whitespace to :meth:`str.split`, so a segment made only of them
+survives the emptiness check and reaches the synthesiser as an utterance with
+nothing in it. That is not hypothetical: ``gpt-oss-120b`` answered one live turn
+with 221 characters of zero-width space (``docs/EVALS.md``). Removing them here
+turns that segment into the empty string, which :meth:`SentenceChunker.feed`
+already drops.
+"""
+
+_DASH_RE = re.compile(r"\s*[\u2012-\u2015]\s*")
+"""A figure, en, em, or horizontal dash together with the spaces around it.
+
+Spoken, these mark a pause, which is what a comma already does; the dash
+characters themselves are not something a synthesiser can pronounce. The spaces
+are swallowed with them so ``layers — the browser`` becomes ``layers, the
+browser`` rather than ``layers , the browser``.
+"""
+
+_SPEECH_SUBSTITUTIONS: dict[int, str] = {
+    0x2018: "'",  # left single quotation mark
+    0x2019: "'",  # right single quotation mark, and the apostrophe in "don't"
+    0x201A: "'",  # single low-9 quotation mark
+    0x201B: "'",  # single high-reversed-9 quotation mark
+    0x201C: '"',  # left double quotation mark
+    0x201D: '"',  # right double quotation mark
+    0x201E: '"',  # double low-9 quotation mark
+    0x201F: '"',  # double high-reversed-9 quotation mark
+    0x2026: "...",  # horizontal ellipsis
+}
+"""Typographic punctuation mapped to the ASCII a synthesiser was trained on.
+
+The curly apostrophe is the one that matters most: models write ``don\u2019t``
+far more often than ``don't``, and a grapheme-to-phoneme front end that does not
+recognise it either drops the contraction or spells the word out. A live run
+produced curly quotes and an em dash in the same answer.
+"""
 
 
 def _last_index(text: str, matches: Callable[[str], bool]) -> int:
@@ -83,9 +148,21 @@ def _last_index(text: str, matches: Callable[[str], bool]) -> int:
 def _clean_segment(raw: str) -> str:
     """Turn a raw slice of the buffer into text fit for a synthesiser.
 
-    Markdown is removed and whitespace collapsed, because the segment is spoken
-    rather than displayed: asterisks and backticks are either read aloud or
-    swallow the words around them, and a stray newline becomes an odd pause.
+    This is the last thing that touches an answer before it is spoken, so it
+    covers the ways written text fails out loud, not only the markdown the model
+    was told not to write. In order: a markdown link keeps its label and loses
+    its URL; invisible characters go, because they make a segment that looks
+    non-empty and sounds like nothing; curly quotes and ellipses become the
+    ASCII a grapheme-to-phoneme front end knows; a dash becomes the comma it
+    means out loud; and a markdown symbol becomes a space, which separates the
+    words it sat between instead of welding them into one.
+
+    Deliberately *not* done here: numerals, units, and symbols such as ``%``,
+    ``$`` and ``~`` are passed through untouched. Reading them aloud correctly
+    depends on context that this function cannot see -- ``1.5`` is "one point
+    five" but ``1.5 s`` is "a second and a half" -- so a wrong expansion would be
+    worse than none. The prompt asks the model to write numbers as spoken words
+    instead, and eval suite E4 measures whether it does.
 
     Args:
         raw: Buffer slice, possibly padded with whitespace or markdown.
@@ -93,7 +170,12 @@ def _clean_segment(raw: str) -> str:
     Returns:
         The speakable text, or an empty string when nothing speakable remains.
     """
-    return " ".join(_MARKDOWN_SYMBOLS_RE.sub("", _LINK_RE.sub(r"\1", raw)).split())
+    text = _LINK_RE.sub(r"\1", raw)
+    text = _INVISIBLE_RE.sub("", text)
+    text = text.translate(_SPEECH_SUBSTITUTIONS)
+    text = _DASH_RE.sub(", ", text)
+    text = _MARKDOWN_SYMBOLS_RE.sub(" ", text)
+    return " ".join(text.split())
 
 
 class SentenceChunker:
@@ -182,13 +264,17 @@ class SentenceChunker:
                 return self._cut(index, index + 1)
 
         length = index + 1
-        if length > EARLY_SPLIT_MIN_CHARS and self._last_boundary >= 0:
+        # The head runs up to and includes the boundary, so a boundary at index
+        # i yields a head of i + 1 characters; -1 (no boundary) yields 0.
+        head_length = self._last_boundary + 1
+        if length > EARLY_SPLIT_MIN_CHARS and head_length >= EARLY_SPLIT_MIN_HEAD_CHARS:
             # Breaking at the *last* boundary keeps the release as late as the
             # rule allows, which is still the earliest moment the limit is met.
             return self._cut(self._last_boundary + 1, self._last_boundary + 1)
         if length > HARD_SPLIT_MAX_CHARS and self._last_space >= 0:
-            # No boundary can be pending here: one would have fired the rule
-            # above at 61 characters. This is prose with no punctuation at all.
+            # A boundary may well be pending here -- one too close to the front
+            # to speak on its own leaves the early rule waiting indefinitely --
+            # so this is the release for prose with no *usable* punctuation.
             logger.debug("chunker.hard_split", length=length)
             return self._cut(self._last_space, self._last_space + 1)
         return None

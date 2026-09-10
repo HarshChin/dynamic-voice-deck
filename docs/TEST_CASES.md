@@ -1,10 +1,21 @@
 # Test Case Catalogue
 
-Living document. Every behavioural change adds or updates an entry here **in the same commit**. IDs are stable; never reuse a retired ID. Status values: `planned`, `implemented`, `passing`, `failing`, `retired`.
+Living document. Every behavioural change adds or updates an entry here **in the same commit**. IDs are stable; never reuse a retired ID. Status values: `planned`, `implemented`, `passing`, `partial`, `skipped`, `failing`, `retired`.
 
 Columns: **ID** · **Feature / TR** (PRD feature and TRD requirement it verifies) · **Layer** · **Given / When / Then** · **Test location** · **Status**.
 
-Naming: `TC-<layer>-<nnn>` where layer ∈ `BE` (backend unit/contract), `INT` (backend integration, needs key), `FE` (frontend unit), `PAR` (protocol parity), `E2E` (Playwright), `MAN` (manual checklist).
+Naming: `TC-<layer>-<nnn>` where layer ∈ `BE` (backend unit/contract), `INT` (backend integration, needs key), `FE` (frontend unit), `PAR` (protocol parity), `E2E` (Playwright), `MAN` (manual checklist). A lower-case letter suffix (`TC-BE-031a`) is a sub-case added inside an existing behaviour; it is an ID in its own right and obeys the same rules.
+
+Status beyond the obvious:
+
+- `partial` — the test exists and passes, but it covers only the half of the row that M1 can reach. The row names the milestone that completes it, and the test's own docstring says the same thing.
+- `skipped` — the test exists and is marked `@pytest.mark.skip`, because the behaviour has no enforcement point yet. The row and the skip reason both name the milestone.
+- `planned` — no test exists. The row names the milestone that will write it.
+- `retired` — superseded. Kept so the ID is never reused.
+
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop): 477 collected backend cases (475 passing, 2 skipped) across 18 files, and 73 frontend cases across 11 files. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+
+Every ID is claimed by exactly one test. Twenty collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block, `test_turn.py` to 232-237, and two single rows to 238-239. IDs are never reused.
 
 ---
 
@@ -14,156 +25,378 @@ Naming: `TC-<layer>-<nnn>` where layer ∈ `BE` (backend unit/contract), `INT` (
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-001 | F1 / TR-150 | Given the default deck JSON, when loaded, then it validates with 6 slides, contiguous indices, unique aliases | `tests/decks/test_repository.py` | planned |
-| TC-BE-002 | TR-150 | Given a deck with duplicate aliases across slides, when loaded, then `DeckError` names both slides | same | planned |
-| TC-BE-003 | TR-150 | Given a deck with 4 slides, when loaded, then validation fails (min 5) | same | planned |
-| TC-BE-004 | TR-070/071 | Given a deck whose notes contain `{braces}`, when the prompt is built, then no exception and braces are preserved | `tests/pipeline/test_prompt.py` | planned |
-| TC-BE-005 | TR-071 | Given notes of 1,000 chars, when the prompt is built, then the notes are truncated to 600 chars with an ellipsis | same | planned |
-| TC-BE-006 | TR-070 | Given current_slide=3, cursor=2, mode=present, when built, then all three appear in the system prompt | same | planned |
+| TC-BE-001 | F1 / TR-150 | Given the default deck JSON, when loaded, then it validates with 6 slides, contiguous indices, unique aliases | `tests/test_decks.py::test_the_shipped_deck_loads_with_six_slides_and_unique_aliases` | passing |
+| TC-BE-002 | TR-150 | Given a deck with duplicate aliases across slides, when loaded, then `DeckError` names both slides | `::test_a_duplicate_alias_across_slides_is_a_deck_error_naming_both_slides` | passing |
+| TC-BE-003 | TR-150 | Given a deck with 4 slides, when loaded, then validation fails (min 5) | `::test_a_deck_with_four_slides_is_rejected_by_the_minimum` | passing |
+| TC-BE-140 | F1 / TR-150 | Given the shipped deck, then every slide keeps speakable notes, glanceable bullets, and the aliases the PRD names | `::test_the_shipped_deck_meets_the_authoring_contract` | passing |
+| TC-BE-140a | F1 / TR-071 | Then no shipped slide's notes are truncated on the way into the prompt — the authored copy fits the budget | `::test_every_authored_note_reaches_the_prompt_whole` | passing |
+| TC-BE-141 | TR-150 | Given a deck, then `slide()` indexes from 1 and raises outside the deck, and `last_index` names the final slide | `::test_slide_lookup_is_one_based_and_last_index_names_the_final_slide` | passing |
+| TC-BE-142 | TR-071 | Given notes at or under the prompt budget, then they pass through unchanged; longer notes are elided once | `::test_prompt_notes_truncate_only_once_past_the_prompt_budget` | passing |
+| TC-BE-143 | TR-150 | Given an unreadable, unparsable, or schema-invalid deck file, then the `DeckError` names the file | `::test_a_malformed_deck_file_raises_a_deck_error_naming_the_file` | passing |
+| TC-BE-144 | TR-150 | Given a deck failing many validators, then the `DeckError` quotes the broken field path and elides a long tail | `::test_a_validation_failure_names_the_field_path_and_caps_the_problem_list` | passing |
+| TC-BE-145 | TR-150 | Given two files declaring the same deck id, when loaded, then it fails naming both files | `::test_two_files_declaring_the_same_deck_id_name_both_files` | passing |
+| TC-BE-146 | TR-151 | Given an id the repository does not hold, when `get` is called, then `DeckError` lists the ids that do exist | `::test_getting_an_unknown_deck_id_raises_and_lists_what_is_known` | passing |
+| TC-BE-147 | TR-151 | Then `list_decks` returns id/title/slide_count ordered by id, and `__len__` agrees with it | `::test_listing_summarises_each_deck_and_length_agrees` | passing |
+| TC-BE-148 | TR-151 | Given a deck built at runtime, when `register`ed, then it is served; registering the same id twice raises | `::test_registering_a_runtime_deck_adds_it_and_a_repeated_id_is_refused` | passing |
+| TC-BE-149 | TR-151 | Given the repository is constructed, when the source file is deleted, then later lookups are unaffected (read once) | `::test_decks_are_read_once_at_construction_and_never_re_read` | passing |
+| TC-BE-004 | TR-070/071 | Given a deck whose notes contain `{braces}`, when the prompt is built, then no exception and braces are preserved | `tests/test_prompt.py::test_braces_in_deck_copy_render_literally` | passing |
+| TC-BE-005 | TR-071 | Given notes authored up to the deck's own limit, when the prompt is built, then they reach it truncated. Written against the constants, not a literal: the budget moved when the prompt stopped carrying all six slides' notes | `::test_notes_longer_than_the_prompt_budget_are_truncated` | passing |
+| TC-BE-006 | TR-070 | Given current_slide=3, cursor=2, mode=present, when built, then all three appear in the system prompt and no placeholder is left unfilled (parametrised over the enum and its bare string) | `::test_the_snapshot_position_appears_in_the_prompt` | passing |
+| TC-BE-007 | TR-070 | Given the deck, when the prompt is built, then every slide's title and bullets reach the model as compact JSON | `::test_the_prompt_embeds_every_slides_title_and_bullets` | passing |
+| TC-BE-008 | TR-070 | Given a history, when `build` runs, then the system message leads and the history follows untouched | `::test_the_system_message_leads_and_history_follows_in_order` | passing |
+| TC-BE-009 | TR-070 | Given a foreign working directory, a missing template, and odd deck copy, then loading fails loudly only when the file is absent and rendering itself never raises | `::test_the_template_loads_from_the_package_and_renders_anything` | passing |
+| TC-BE-160 | TR-070 / TR-086 | Then aliases never reach the model — they are server-side scoring input worth ~300 input tokens a request | `::test_aliases_are_not_sent_to_the_model` | passing |
+| TC-BE-161 | TR-071 / TR-086 | Then only the current slide's notes are embedded, not all six (~1,570 tokens a request on the free tier) | `::test_only_the_current_slides_notes_are_embedded` | passing |
 
 ### SentenceChunker
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-010 | F6 / TR-040 | Given tokens forming "Hello there. How are you?", when fed token by token, then segments are ["Hello there.", "How are you?"] | `tests/pipeline/test_chunker.py` | planned |
-| TC-BE-011 | TR-041 | Given "We use e.g. Whisper. It works.", then "e.g." does not split | same | planned |
-| TC-BE-012 | TR-041 | Given "Latency is 3.5 seconds. Fine.", then the decimal does not split | same | planned |
-| TC-BE-013 | TR-042 | Given a 90-char buffer with a comma at position 70 and no terminator, then it splits at the comma | same | planned |
-| TC-BE-014 | TR-043 | Given 250 chars with no punctuation, then it splits at the last whitespace before 200 | same | planned |
-| TC-BE-015 | TR-044 | Given "**Bold** and `code`", then the emitted segment has no markdown symbols | same | planned |
-| TC-BE-016 | TR-040 | Given a partial trailing sentence, when `flush()` is called, then it is returned once and the buffer is empty | same | planned |
-| TC-BE-017 | TR-045 | Given three segments, then their ids are 0, 1, 2 | same | planned |
-| TC-BE-018 | TR-040 | Property (hypothesis): for any text, `"".join(segments)` equals the input with whitespace normalised and markdown stripped | same | planned |
+| TC-BE-010 | F6 / TR-040 | Given tokens forming "Hello there. How are you?", when fed token by token, then segments are ["Hello there.", "How are you?"] | `tests/test_chunker.py::test_tokens_are_reassembled_into_whole_sentences` | passing |
+| TC-BE-011 | TR-041 | Given "We use e.g. Whisper. It works.", then "e.g." does not split (six abbreviations parametrised); a trailing abbreviation waits for the next token | `::test_a_known_abbreviation_does_not_end_a_sentence`, `::test_an_abbreviation_at_the_end_of_the_buffer_waits_for_more_text` | passing |
+| TC-BE-012 | TR-041 | Given "Latency is 3.5 seconds. Fine.", then the decimal does not split, including when the token boundary falls inside "3.5" | `::test_a_decimal_point_does_not_end_a_sentence`, `::test_a_decimal_split_across_two_tokens_still_does_not_end_a_sentence` | passing |
+| TC-BE-013 | TR-042 | Given a buffer past the early-split minimum with a clause boundary, then it splits at the last boundary before the limit; below the limit a comma is a pause, not an end | `::test_a_long_buffer_splits_at_a_clause_boundary`, `::test_the_clause_split_uses_the_last_boundary_before_the_limit`, `::test_a_short_buffer_is_never_split_at_a_boundary` | passing |
+| TC-BE-013a | TR-042 | Given a boundary too near the front of the buffer ("So, …"), then no segment is released — two characters is not worth synthesising | `::test_a_leading_connective_is_not_spoken_on_its_own` | passing |
+| TC-BE-013b | TR-042 | Then the head floor is exact: one character short and the early split is skipped | `::test_the_early_split_needs_a_head_worth_speaking` | passing |
+| TC-BE-013c | TR-042 / TR-086 | Then the floor does not become a way of never splitting early — a boundary that clears it still fires, which is what buys `first_audio_ms` | `::test_a_usable_boundary_still_releases_the_first_clause_early` | passing |
+| TC-BE-014 | TR-043 | Given 250 chars with no punctuation, then it splits at the last whitespace before 200 | `::test_text_with_no_punctuation_splits_at_the_last_whitespace` | passing |
+| TC-BE-014a | TR-043 | Given a boundary the head floor skipped, then the hard limit is still free to fire — a skipped boundary never wedges the chunker | `::test_an_unspeakable_boundary_does_not_wedge_the_chunker` | passing |
+| TC-BE-015 | TR-044 | Given "**Bold** and `code`", then the emitted segment has no markdown symbols; link and image syntax are unwrapped too | `::test_markdown_is_stripped_before_a_segment_is_emitted` | passing |
+| TC-BE-016 | TR-040 | Given a partial trailing sentence, when `flush()` is called, then it is returned once and the buffer is empty; an untouched chunker flushes to nothing | `::test_flush_returns_the_partial_sentence_once_and_empties_the_buffer`, `::test_flush_on_an_untouched_chunker_returns_nothing` | passing |
+| TC-BE-017 | TR-045 | Given three segments, then their ids are 0, 1, 2 | `::test_segments_arrive_in_order_so_the_caller_can_number_them_from_zero` | passing |
+| TC-BE-018 | TR-040 | Property (hypothesis): concatenated segments equal the speech-normalised input, whitespace aside, and any fragmentation gives the same segments as feeding the text whole | `::test_segments_preserve_every_non_whitespace_character_in_order`, `::test_chunking_does_not_depend_on_how_the_stream_was_fragmented` | passing |
+| TC-BE-019 | TR-040 | Given empty, whitespace-only, pure-punctuation or pure-markdown input, then no empty or whitespace-only segment is ever emitted | `::test_an_empty_or_whitespace_only_segment_is_never_emitted` | passing |
+| TC-BE-020 | TR-044 | Given curly quotes, en/em dashes and an ellipsis from a live run, then they reach the synthesiser as ASCII | `::test_typographic_punctuation_is_normalised_for_speech` | passing|
+| TC-BE-020a | TR-044 | Given `snake_case`, then removing the symbol separates the words it sat between instead of welding them into one unpronounceable word | `::test_stripping_a_symbol_separates_the_words_it_sat_between` | passing |
+| TC-BE-020b | TR-044 | Given a segment of zero-width characters — `gpt-oss-120b` ended a live turn with 221 of them (`docs/EVALS.md`) — then it is dropped, not spoken | `::test_invisible_characters_never_reach_the_synthesiser` | passing |
 
 ### ConversationHistory
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-020 | F7 / TR-051 | Given an assistant turn with sentences [s0, s1, s2] in progress, when truncated at 1, then content is "s0 s1 [interrupted by user]" | `tests/pipeline/test_history.py` | planned |
-| TC-BE-021 | TR-051 | When truncated at `None`, then content is "[interrupted by user before speaking]" | same | planned |
-| TC-BE-022 | TR-051 | Given a turn with an applied `go_to_slide` tool call, when truncated, then the tool call and result messages are retained | same | planned |
-| TC-BE-023 | TR-052 | Given 25 user/assistant pairs, then `to_provider_messages()` contains the system message and the latest 20 pairs | same | planned |
-| TC-BE-024 | TR-052 | Given the oldest pair has tool messages, when capped, then its tool messages are dropped too (no orphan `tool` role) | same | planned |
-| TC-BE-025 | TR-053 | When `add_system_note("...")` is called, then a `system` message is appended after the last message | same | planned |
-| TC-BE-026 | TR-054 | Then serialised messages contain no `sentences` key | same | planned |
+| TC-BE-220 | F7 / TR-051 | Given an assistant turn with sentences [s0, s1, s2] in progress, when truncated at 1, then content is "s0 s1 [interrupted by user]" | `tests/test_history.py::test_truncating_mid_turn_keeps_only_the_sentences_that_were_heard` | passing|
+| TC-BE-021 | TR-051 | When truncated at `None`, then content is "[interrupted by user before speaking]" | `::test_truncating_before_playback_started_records_that_nothing_was_said` | passing |
+| TC-BE-022 | TR-051 | Given a turn with an applied `go_to_slide` tool call, when truncated, then the tool call and result messages are retained | `::test_truncation_retains_the_tool_call_and_result_of_the_cut_turn` | passing |
+| TC-BE-023 | TR-052 | Given 25 user/assistant pairs, then `to_provider_messages()` contains the system message and the latest 20 pairs | `::test_capping_keeps_the_system_message_and_the_most_recent_pairs` | passing |
+| TC-BE-024 | TR-052 | Given the oldest pair has tool messages, when capped, then its tool messages are dropped too (no orphan `tool` role) | `::test_capping_drops_the_tool_messages_of_a_dropped_pair` | passing |
+| TC-BE-025 | TR-053 | When `add_system_note("...")` is called, then a `system` message is appended after the last message | `::test_a_system_note_is_appended_as_a_system_message_at_the_end` | passing |
+| TC-BE-026 | TR-054 | Then serialised messages contain no `sentences` key (nor `turn_id`), while the bookkeeping survives internally | `::test_serialised_messages_never_carry_the_sentences_bookkeeping` | passing |
+| TC-BE-027 | TR-051 | Given three recorded sentences, then `record_sentence` returns ids 0, 1, 2 and truncating at id 1 cuts there | `::test_recorded_sentences_are_numbered_from_zero_and_feed_truncation` | passing |
+| TC-BE-028 | TR-024 / TR-051 | Given a truncate for a turn that is not current, then it returns False and changes nothing (a late interrupt is a race, not an error) | `::test_truncating_a_turn_that_is_not_current_changes_nothing` | passing |
+| TC-BE-029 | TR-052 | Given 25 pairs each carrying tool messages, when capped, then every retained `tool` message is still paired with its announced call | `::test_capping_leaves_every_retained_tool_message_paired` | passing |
+| TC-BE-200 | F7 / TR-051 | Given a turn the model has finished generating, when an interrupt lands before the next turn begins, then the finished answer is cut in place — the barge-in window outlives generation, and the completion cannot come back to undo the cut | `::test_a_finished_turn_can_still_be_truncated_until_the_next_one_begins` | passing |
+| TC-BE-201 | TR-051 | Given the next turn has begun, then the previous turn is no longer truncatable — starting a turn is the only thing that closes the window | `::test_the_finished_turn_stops_being_truncatable_once_the_next_one_begins` | passing |
+| TC-BE-202 | TR-025 / TR-051 | Given an end nobody asked for (watchdog or provider failure), then `last_recorded_sentence_id` is the cut — everything handed to TTS was heard, nothing after it was; with no turn in progress it is None | `::test_the_last_recorded_sentence_is_the_cut_for_an_end_nobody_asked_for`, `::test_no_turn_in_progress_has_no_last_recorded_sentence` | passing |
+
+Depth cases for the same class. ⚠ All eleven cite IDs that the deck-repository block
+(`tests/test_decks.py`, TC-BE-140–149) and the Groq-LLM block (`tests/test_groq_llm.py`,
+TC-BE-150) already hold. They are catalogued here under the ID each docstring claims; the
+renumbering belongs to whoever owns `tests/test_history.py`.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-221 | TR-050 | Given no assistant turn in progress, when `record_sentence` is called, then it raises `RuntimeError` rather than losing the sentence | `tests/test_history.py::test_recording_a_sentence_without_a_turn_is_a_programming_error` | passing|
+| TC-BE-222 | F7 / TR-051 | Given a truncated turn, when the turn task finishes a moment later and calls `add_assistant`, then the unheard sentences are not restored | `::test_a_late_completion_cannot_restore_the_sentences_nobody_heard` | passing|
+| TC-BE-223 | TR-023 / TR-051 | Given a VAD-triggered truncate at 0, when the client follows with a more precise id 1, then the same message is refined, not duplicated | `::test_a_second_more_precise_interrupt_refines_the_same_message` | passing|
+| TC-BE-224 | TR-054 / TR-082 | Then a recorded tool call serialises in the OpenAI wire shape, with arguments as a JSON **string** | `::test_tool_calls_are_serialised_in_the_openai_wire_shape` | passing|
+| TC-BE-225 | TR-051 | Given last_id past the end, at 0, with no sentences, or negative, then the content never ends in a dangling marker | `::test_truncation_boundaries_never_produce_a_dangling_marker` | passing|
+| TC-BE-226 | TR-052 | Then the cap defaults to `Settings.max_history_turns`, is overridable, and refuses 0 | `::test_the_cap_comes_from_settings_and_must_be_at_least_one` | passing|
+| TC-BE-227 | TR-054 | Then `to_provider_messages()` returns `Message` objects with the system prompt first | `::test_serialisation_returns_provider_messages_with_the_system_prompt_first` | passing|
+| TC-BE-228 | TR-054 | Given the `messages` snapshot, when a caller mutates it, then the real history is unchanged | `::test_the_messages_snapshot_cannot_be_used_to_corrupt_history` | passing|
+| TC-BE-229 | TR-050 | Given `add_assistant` with no explicit sentence list, then the turn falls back to the sentences it recorded and closes | `::test_a_completed_turn_falls_back_to_the_sentences_it_recorded` | passing|
+| TC-BE-230 | TR-052/053 | Given a cap of one pair, then the pinned system prompt survives but a system note ages out with its pair | `::test_the_pinned_prompt_survives_capping_but_a_note_ages_out_with_its_pair` | passing|
+| TC-BE-231 | TR-050 | Given a turn neither completed nor truncated, when the next turn begins, then the orphan is discarded | `::test_a_turn_left_unfinished_is_discarded_when_the_next_one_begins` | passing|
 
 ### SlideController
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-030 | F5 / TR-061 | Given `go_to_slide(4, "r")`, then action index 4 and current_slide becomes 4 | `tests/pipeline/test_slides.py` | planned |
-| TC-BE-031 | TR-061 | Given `go_to_slide(9, ...)` on a 6-slide deck, then no action, a tool error string is returned, current_slide unchanged | same | planned |
-| TC-BE-032 | TR-061 | Given `highlight_bullet(7)` on a slide with 4 bullets, then a tool error string | same | planned |
-| TC-BE-033 | TR-061 | Given an unknown tool name, then a tool error string and no exception | same | planned |
-| TC-BE-034 | TR-062 | Given answer text about "latency and milliseconds" while on slide 1, then fallback returns slide 2 with source fallback | same | planned |
-| TC-BE-035 | TR-062 | Given answer text that mentions two slides equally, then fallback returns None (tie rule) | same | planned |
-| TC-BE-036 | TR-062 | Given answer text about the current slide, then fallback returns None | same | planned |
-| TC-BE-037 | TR-063 | Given cursor=2, when `on_user_navigation(5)`, then current_slide=5, cursor still 2, note mentions slide 5 title | same | planned |
-| TC-BE-038 | TR-064 | Given mode=present and cursor=6 (last), when `advance_cursor()`, then cursor stays 6 and returns False | same | planned |
-| TC-BE-039 | TR-032 | Given two `go_to_slide` calls in one turn (3 then 5), then current_slide is 5 and two actions were emitted | same | planned |
+| TC-BE-030 | F5 / TR-061 | Given `go_to_slide(4, "r")`, then action index 4 and current_slide becomes 4 | `tests/test_slides.py::test_go_to_slide_moves_the_deck` | passing |
+| TC-BE-030a | TR-060/064 | Then `snapshot()` reports exactly current_slide, presentation_cursor, mode and slide_count | `::test_snapshot_reports_the_prompt_facts` | passing |
+| TC-BE-030b | TR-060 | Given a starting slide of 99 or 0, when constructed, then it clamps to 6 and 1 | `::test_construction_clamps_an_impossible_starting_slide` | passing |
+| TC-BE-030c | TR-060 | Given two controllers over one deck, then moving one leaves the other where it was | `::test_controllers_over_one_deck_are_independent` | passing |
+| TC-BE-031 | TR-061 | Given `go_to_slide(9, ...)` on a 6-slide deck, then no action, a tool error naming the real range, current_slide unchanged | `::test_go_to_slide_beyond_the_deck_is_refused` | passing |
+| TC-BE-031a | TR-061 | Given `go_to_slide(0)`, then it is refused and the deck does not move | `::test_go_to_slide_below_the_deck_is_refused` | passing |
+| TC-BE-031b | TR-061 | Given `go_to_slide(6)` on a 6-slide deck, then the last slide is accepted (off-by-one guard) | `::test_go_to_slide_accepts_the_last_slide` | passing |
+| TC-BE-031c | TR-061 | Given `slide_index: "3"`, then the numeric string is coerced and applied | `::test_go_to_slide_coerces_a_numeric_string` | passing |
+| TC-BE-031d | TR-061 | Given `slide_index` of None, True, 2.5, "third", "" or [3], then each is refused with a tool error | `::test_go_to_slide_refuses_a_non_integer_index` | passing |
+| TC-BE-031e | TR-061 | Given a call with no `reason`, then one is supplied rather than an empty chip | `::test_go_to_slide_without_a_reason_supplies_one` | passing |
+| TC-BE-031f | TR-061 | Given a 500-character `reason`, then it is truncated to `MAX_REASON_CHARS` | `::test_go_to_slide_truncates_a_rambling_reason` | passing |
+| TC-BE-032 | TR-061 | Given `highlight_bullet(7)` on a slide with 4 bullets, then a tool error naming the range 0 to 3 | `::test_highlight_bullet_beyond_the_slide_is_refused` | passing |
+| TC-BE-032a | TR-061 | Given `highlight_bullet(0)`, then the highlight is applied to the current slide and never navigates | `::test_highlight_bullet_within_the_slide_is_applied` | passing |
+| TC-BE-032b | TR-061 | Given the deck moved to a shorter slide, then a bullet index valid on the old slide is refused on the new one | `::test_highlight_bullet_is_validated_against_the_current_slide` | passing |
+| TC-BE-032c | TR-061 | Given `highlight_bullet(-1)`, then it is refused | `::test_highlight_bullet_refuses_a_negative_index` | passing |
+| TC-BE-032d | TR-061 | Given `bullet_index` of None, True, 1.5, "second" or {}, then each is refused | `::test_highlight_bullet_refuses_a_non_integer_index` | passing |
+| TC-BE-033 | TR-061 | Given an unknown tool name, then a tool error naming it and no exception | `::test_unknown_tool_is_refused_without_raising` | passing |
+| TC-BE-033a | TR-061 | Given a refused call followed by a valid one, then `last_error` is cleared | `::test_a_valid_call_clears_the_previous_error` | passing |
+| TC-BE-034 | TR-062 | Given answer text about "latency and milliseconds" while on slide 1, then fallback returns slide 2 with source fallback | `::test_fallback_routes_an_untooled_answer` | passing |
+| TC-BE-035 | TR-062 | Given answer text that mentions two slides equally, then fallback returns None (tie rule) | `::test_fallback_declines_a_tie` | passing |
+| TC-BE-035a | TR-062 | Given a one-point margin between the top two slides, then fallback declines | `::test_fallback_declines_a_one_point_margin` | passing |
+| TC-BE-035b | TR-062 | Given a two-point margin, then fallback moves the deck | `::test_fallback_accepts_a_two_point_margin` | passing |
+| TC-BE-035c | TR-062 | Given the current slide is the runner-up, then it still counts in the ranking, so a near miss does not jump | `::test_fallback_counts_the_current_slide_as_a_rival` | passing |
+| TC-BE-036 | TR-062 | Given answer text about the current slide, then fallback returns None | `::test_fallback_declines_the_current_slide` | passing |
+| TC-BE-036a | TR-062 | Given text that would win outright but names the slide already on screen, then fallback declines | `::test_fallback_declines_the_current_slide_even_when_it_wins_outright` | passing |
+| TC-BE-036b | TR-062 | Given a score exactly `MIN_FALLBACK_SCORE`, then the fallback fires (inclusive threshold) | `::test_fallback_meets_the_threshold_exactly` | passing |
+| TC-BE-036c | TR-062 | Given a score one point under the threshold and unopposed, then the fallback declines | `::test_fallback_declines_below_the_threshold` | passing |
+| TC-BE-036d | TR-062 | Given an alias whose words appear scrambled, then it does not match; in order it does (phrases, not bags of words) | `::test_fallback_matches_aliases_as_phrases_not_loose_words` | passing |
+| TC-BE-036e | TR-062 | Given an alias containing stopwords ("time to first token"), then the stopwords are kept inside the phrase | `::test_fallback_keeps_stopwords_inside_an_alias_phrase` | passing |
+| TC-BE-036f | TR-062 | Given an answer of pure stopwords, then nothing scores | `::test_fallback_ignores_an_answer_of_pure_stopwords` | passing |
+| TC-BE-036g | TR-062 | Given "", "   " or "!!! ... ???", then the fallback declines and the deck does not move | `::test_fallback_ignores_an_empty_answer` | passing |
+| TC-BE-036h | TR-062 | Then the action's reason names the alias that matched, so the EventLog chip is explainable | `::test_fallback_reason_names_the_matched_alias` | passing |
+| TC-BE-036i | TR-062 | Given a below-threshold phrase repeated six times, then repetition alone does not move the deck | `::test_repetition_alone_does_not_move_the_deck` | passing |
+| TC-BE-036j | TR-062 | Given one bullet word each for three slides, then the weakest signal never clears the threshold | `::test_bullet_words_alone_never_clear_the_threshold` | passing |
+| TC-BE-036k | TR-062 | Given words printed on the slide already on screen, then they are not evidence of another slide — scoring is asymmetric, so a slide can otherwise be dragged off itself | `::test_fallback_ignores_evidence_the_slide_on_screen_already_shows` | passing |
+| TC-BE-036l | TR-062 | Given the same answer read from any other slide, then it still routes — the shield is scoped to the slide the audience is looking at | `::test_the_slide_on_screen_only_shields_itself` | passing |
+| TC-BE-036m | F5 / TR-062 | Given the shipped deck and slide 2 described in slide 2's own words, then the deck stays on slide 2 | `::test_fallback_does_not_drag_the_shipped_deck_off_the_latency_slide` | passing |
+| TC-BE-036n | F5 / TR-062 | Given the shipped deck and an answer about barge-in, then the fallback still moves it to slide 4 — the recovery path for a missed tool call must keep working | `::test_fallback_still_routes_the_shipped_deck_when_the_answer_is_elsewhere` | passing |
+| TC-BE-037 | TR-063 | Given cursor=2, when `on_user_navigation(5)`, then current_slide=5, cursor still 2, note mentions slide 5 title | `::test_user_navigation_moves_the_slide_but_not_the_cursor` | passing |
+| TC-BE-037a | TR-063 | Given `on_user_navigation(99)`, then the index clamps to the last slide and the note says so | `::test_user_navigation_clamps_an_impossible_index` | passing |
+| TC-BE-038 | TR-064 | Given mode=present and cursor=6 (last), when `advance_cursor()`, then cursor stays 6 and returns False | `::test_advance_cursor_stops_at_the_end_of_the_deck` | passing |
+| TC-BE-038a | TR-064 | Given mode=qa, then `advance_cursor()` is inert and returns False | `::test_advance_cursor_is_inert_in_qa_mode` | passing |
+| TC-BE-038b | TR-064 | Given mode=present, when the cursor advances, then `current_slide` does not follow it | `::test_advance_cursor_leaves_the_current_slide_alone` | passing |
+| TC-BE-039 | TR-032 | Given two `go_to_slide` calls in one turn (3 then 5), then current_slide is 5 and two actions were emitted | `::test_two_navigations_in_one_turn_both_apply` | passing |
 
 ### Session state machine and turn pipeline (fake providers)
 
+`tests/test_session.py` drives the state machine over a real WebSocket with
+`fastapi.testclient`; `tests/test_turn.py` drives `run_turn` directly. The fakes stand in for the
+providers, so the wiring under test is real and only the network is not. Audio does not exist in
+M1, so rows naming STT or TTS are either driven through `text.input` where the behaviour is
+genuinely the same (`partial`) or skipped with the milestone that unblocks them.
+
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-040 | F2 / TR-020 | Given `session.start`, then `session.ready` and `state listening` are sent, in that order | `tests/test_session.py` | planned |
-| TC-BE-041 | F13 / TR-020 | Given `text.input`, then states go THINKING → SPEAKING and a `transcript.user` is emitted with the text | same | planned |
-| TC-BE-042 | F5 | Given FakeLLM scripted to call `go_to_slide(4)`, then `tool.call{source: llm}` and `slide.goto{index: 4}` are emitted before any audio frame | same | planned |
-| TC-BE-043 | F5 / TR-062 | Given FakeLLM returns text about latency and no tool call, then `tool.call{source: fallback}` and `slide.goto{2}` are emitted after the text | same | planned |
-| TC-BE-044 | F6 / TR-033 | Given FakeLLM streams two sentences, then `transcript.agent{0}` precedes audio frames with sentence_id 0, and same for 1 | same | planned |
-| TC-BE-045 | TR-141 | Then every server binary frame has an 8-byte header and payload ≤ 4,800 bytes | same | planned |
-| TC-BE-046 | F7 / TR-022/023 | Given a turn in SPEAKING, when `interrupt{last_completed: 0}` arrives, then the task is cancelled within 50 ms, `agent.cancelled{0}` is emitted, state is HEARING, history content ends with "[interrupted by user]" | same | planned |
-| TC-BE-047 | TR-024 | Given state LISTENING, when `interrupt` arrives, then nothing is emitted and state unchanged | same | planned |
-| TC-BE-048 | TR-024 | Given two `interrupt` messages 100 ms apart, then exactly one `agent.cancelled` | same | planned |
-| TC-BE-049 | TR-023 | Given state THINKING (no audio yet), when `speech.start` arrives, then the turn is cancelled and truncation uses `None` | same | planned |
-| TC-BE-050 | TR-021 | Given a cancelled turn n and a new turn n+1, then no message with `turn_id: n` is sent after `agent.cancelled` | same | planned |
-| TC-BE-051 | TR-025 | Given FakeLLM that never finishes, then after 20 s `error{turn_timeout}` and state LISTENING | same (uses fake clock) | planned |
-| TC-BE-052 | TR-170 | Given FakeSTT raising `ProviderError`, then `error{stt_failed, recoverable: true}` and state LISTENING | same | planned |
-| TC-BE-053 | TR-172 | Given FakeSTT returning "", then no `transcript.user`, no LLM call, state LISTENING | same | planned |
-| TC-BE-054 | F4 | Given FakeSTT returning "Thank you." (filler denylist), then the turn is dropped | same | planned |
-| TC-BE-055 | TR-140 | Given a binary frame not preceded by `speech.end`, then `error{unexpected_binary}` | same | planned |
-| TC-BE-056 | TR-182 | Given a 3 MB binary frame, then the socket closes with code 1009 | same | planned |
-| TC-BE-057 | F9 / TR-063 | Given `slide.changed{4, user}`, then history gets a system note and the next prompt reports current_slide 4 | same | planned |
-| TC-BE-058 | TR-026 | Given a turn in progress, when the socket disconnects, then the task is cancelled and the session removed from the manager | same | planned |
-| TC-BE-059 | F8 | Given `control{start_presentation}`, then mode=present, the agent turn starts with cursor 1 and a `go_to_slide(1)` from the fake script advances the cursor | same | planned |
-| TC-BE-060 | TR-173 | Given FakeTTS failing on sentence 1 of 3, then sentences 0 and 2 are sent and one ERROR log is recorded | same | planned |
+| TC-BE-040 | F2 / TR-020 | Given `session.start`, then `session.ready` and `state listening` are sent, in that order; anything before `session.start` is a `bad_message` and starts no turn | `tests/test_session.py::test_session_start_is_answered_with_ready_then_listening`, `::test_a_message_before_session_start_is_refused` | passing |
+| TC-BE-041 | F13 / TR-020 | Given `text.input`, then states go THINKING → SPEAKING and a `transcript.user` is emitted with the text | `::test_a_typed_question_runs_a_turn_and_returns_to_listening` | passing |
+| TC-BE-042 | F5 | Given FakeLLM scripted to call `go_to_slide(4)`, then `tool.call{source: llm}` and `slide.goto{index: 4}` are emitted before any audio frame | `::test_a_tool_call_moves_the_deck_before_the_answer_is_spoken` | passing |
+| TC-BE-043 | F5 / TR-062 | Given FakeLLM returns text about latency and no tool call, then `tool.call{source: fallback}` and `slide.goto{2}` are emitted after the text | `::test_the_keyword_fallback_moves_the_deck_when_no_tool_was_called` | passing |
+| TC-BE-044 | F6 / TR-033 | Given FakeLLM streams two sentences, then `transcript.agent{0}` precedes audio frames with sentence_id 0, and same for 1 | `::test_each_sentence_is_announced_in_order_with_its_own_id` | partial — the per-sentence transcripts and their ids are asserted; "precedes the audio frames" needs **M2** |
+| TC-BE-045 | TR-141 | Then every server binary frame has an 8-byte header and payload ≤ 4,800 bytes | `::test_no_binary_frame_is_sent_to_the_client_in_this_milestone` | partial — M1 proves the server emits no binary frame at all; the framing itself is pinned by TC-BE-082. Server-side framing arrives with **M2** |
+| TC-BE-046 | F7 / TR-022/023 | Given a turn in SPEAKING, when `interrupt{last_completed: 0}` arrives, then the task is cancelled within 50 ms, `agent.cancelled{0}` is emitted, state is HEARING, history ends with "[interrupted by user]" | `::test_an_interrupt_cancels_the_turn_and_truncates_history` | partial — asserted against a turn in THINKING, which the interrupt handler treats identically; SPEAKING needs **M2** |
+| TC-BE-047 | TR-024 | Given state LISTENING, when `interrupt` arrives, then nothing is emitted and state unchanged | `::test_an_interrupt_while_listening_does_nothing` | passing |
+| TC-BE-048 | TR-024 | Given two `interrupt` messages 100 ms apart, then exactly one `agent.cancelled` | `::test_two_interrupts_in_quick_succession_cancel_the_turn_once` | passing |
+| TC-BE-049 | TR-023 | Given state THINKING (no audio yet), when `speech.start` arrives, then the turn is cancelled and truncation uses `None`; outside a turn it is turn-taking, not barge-in | `::test_speech_onset_before_any_sentence_truncates_with_none`, `::test_speech_onset_while_listening_only_moves_to_hearing` | passing |
+| TC-BE-050 | TR-021 | Given a cancelled turn n and a new turn n+1, then no message with `turn_id: n` follows its `agent.cancelled` — `state` excepted, since the transition into HEARING reports the turn being left | `::test_a_cancelled_turn_sends_nothing_further_under_its_own_turn_id` | passing |
+| TC-BE-051 | TR-025 | Given FakeLLM that never finishes, then the watchdog fires with `error{turn_timeout}` and state LISTENING (timeout configured down to milliseconds rather than waiting 20 s) | `::test_a_turn_that_never_finishes_times_out_and_returns_to_listening` | passing |
+| TC-BE-052 | TR-170 | Given FakeSTT raising `ProviderError`, then `error{stt_failed, recoverable: true}` and state LISTENING | `::test_a_provider_failure_is_reported_as_recoverable` | partial — injected at the LLM, the only provider a turn uses in M1, through the same handler; the STT stage and `stt_failed` need **M3** |
+| TC-BE-053 | TR-172 | Given FakeSTT returning "", then no `transcript.user`, no LLM call, state LISTENING | `::test_an_empty_or_filler_question_is_dropped_without_an_answer` | partial — driven through `text.input`, which reaches the same denylist in `run_turn`; the STT source needs **M3** |
+| TC-BE-054 | F4 | Given FakeSTT returning "Thank you." (filler denylist), then the turn is dropped | same test, `denylist` parameter | partial — same reason as TC-BE-053; the denylist itself is pinned by TC-BE-170 |
+| TC-BE-055 | TR-140 | Given a binary frame not preceded by `speech.end`, then `error{unexpected_binary}` naming M3, and the session survives | `::test_a_binary_frame_is_refused_until_audio_lands` | passing |
+| TC-BE-056 | TR-182 | Given a 3 MB binary frame, then the socket closes with code 1009 | `::test_an_oversized_utterance_closes_the_socket` | skipped — `@pytest.mark.skip`: nothing may upload an utterance before **M3**, so `max_utterance_bytes` has no enforcement point and every binary frame is refused outright by TC-BE-055 |
+| TC-BE-057 | F9 / TR-063 | Given `slide.changed{4, user}`, then history gets a system note and the next prompt reports current_slide 4 | `::test_manual_navigation_is_told_to_the_model` | passing |
+| TC-BE-058 | TR-026 | Given a turn in progress, when the socket disconnects, then the task is cancelled and the session removed from the manager | `::test_disconnecting_mid_turn_cancels_the_task_and_releases_the_session` | passing |
+| TC-BE-059 | F8 | Given `control{start_presentation}`, then mode=present, the agent turn starts with cursor 1 and a `go_to_slide(1)` from the fake script advances the cursor | `::test_start_presentation_switches_mode_and_opens_a_turn` | partial — the mode switch and the opening turn are asserted; nothing calls `advance_cursor` until present mode's unattended walkthrough in **M4** |
+| TC-BE-060 | TR-173 | Given FakeTTS failing on sentence 1 of 3, then sentences 0 and 2 are sent and one ERROR log is recorded | `::test_a_failing_sentence_is_skipped_and_logged` | skipped — `@pytest.mark.skip`: no sentence is synthesised in M1, so there is no failure to inject. Implement with synthesis in **M2** |
+| TC-BE-061 | F8 | Given a turn in progress, when `control{pause}` arrives, then the turn stops and the session returns to LISTENING without an `agent.cancelled` | `::test_pause_cancels_the_turn_and_returns_to_listening` | passing |
+| TC-BE-062 | TR-021 | Given `playback.progress` for a turn that is not current, or for a session that is not speaking, then it is silently dropped | `::test_playback_progress_for_another_turn_is_ignored` | partial — the stale-turn guard is asserted; progress actually driving the return to LISTENING needs **M2** |
+| TC-BE-063 | TR-151 | Given `session.start` naming a deck that does not exist, then the error is unrecoverable and the session ends | `::test_an_unknown_deck_is_refused_as_unrecoverable` | passing |
+| TC-BE-064 | TR-024 | Given a VAD misfire, when `interrupt.cancel` arrives, then it is accepted and changes nothing | `::test_an_interrupt_cancel_after_a_misfire_does_nothing` | passing |
+| TC-BE-065 | TR-142 | Given a text frame past `max_json_message_bytes`, then it is rejected on size before anything tries to parse it | `::test_an_oversized_text_frame_is_refused_before_parsing` | passing |
+| TC-BE-066 | TR-026 | Then `SessionManager.remove` drops one session and `close_all` empties the registry | `::test_the_session_manager_releases_every_session` | passing |
+| TC-BE-203 | TR-024 | Given an interrupt inside the previous turn's debounce window but aimed at a new turn, then it is honoured — the debounce belongs to a turn, not to the wall clock | `::test_a_barge_in_on_a_new_turn_is_honoured_inside_the_previous_window` | passing |
+| TC-BE-204 | PRD §7 | Given an interrupt, then INTERRUPTED is announced as a state before HEARING, not skipped over | `::test_an_interrupt_announces_the_interrupted_state_before_hearing` | passing |
+| TC-BE-205 | TR-023 | Given `speech.start` then a precise `interrupt`, then the refined truncation point still lands on the turn it names | `::test_a_follow_up_interrupt_refines_the_cut_of_the_turn_it_names` | passing |
+| TC-BE-207 | TR-022 | Given a turn still running, when a new turn starts, then the old one is cancelled and awaited first | `::test_a_new_turn_cancels_the_one_still_running` | passing |
+| TC-BE-208 | TR-051 | Given the watchdog fires mid-answer, then the sentences the room already heard are kept — the timeout truncates the answer, it does not delete it | `::test_a_timed_out_turn_keeps_the_sentences_the_room_already_heard` | passing |
+| TC-BE-209 | TR-051 | Given a rate limit mid-answer, then what was already said is not unsaid | `::test_a_provider_failure_keeps_the_sentences_the_room_already_heard` | passing |
+| TC-BE-210 | TR-025 | Given a bug inside the turn task, then it is reported and the session recovers rather than wedging the client in THINKING | `::test_an_unexpected_failure_is_reported_and_the_session_recovers` | passing |
+| TC-BE-211 | TR-051 | Given `control{pause}` mid-answer, then the agent stops without unsaying what the room heard | `::test_pause_keeps_the_sentences_the_room_already_heard` | passing |
+| TC-BE-212 | TR-020 | Given `playback.progress` for the last sentence of the current turn, then the turn ends — playback completion is client truth | `::test_playback_progress_ends_a_turn_whose_last_sentence_finished` | passing |
+| TC-BE-213 | TR-131 | Given progress from an interrupted or unfinished turn, then nothing changes (parametrised over SPEAKING/THINKING/other states) | `::test_playback_progress_is_ignored_unless_the_current_turn_is_speaking` | passing |
+| TC-BE-214 | TR-020 | Given the turn task is still running, then a sentence the client finished is not the end of the answer | `::test_playback_progress_while_the_turn_is_still_running_is_ignored` | passing |
+| TC-BE-215 | TR-021/022 | Given a turn starting as another finishes, then the finishing turn is cancelled first and never outlives its own turn id | `::test_a_turn_starting_as_another_finishes_cancels_it_first` | passing |
+| TC-BE-216 | TR-023 | Given an interrupt landing before the answer reached history, then `agent.cancelled` claims no cut, whatever the client reported | `::test_an_interrupt_before_the_answer_reached_history_claims_no_cut` | passing |
+| TC-BE-217 | TR-024 | Given a stray interrupt naming a turn that was heard in full, then that turn is not rewritten — an interrupt names one turn, and only that turn | `::test_a_stray_interrupt_does_not_rewrite_a_turn_that_was_heard_in_full` | passing |
+| TC-BE-170 | F4 | Given empty text, whitespace, and each of Whisper's silence artefacts, then `is_filler` is True; text that merely resembles one is still answered; a filler turn asks the model nothing and remembers nothing | `tests/test_turn.py::test_filler_is_recognised_whatever_its_spacing_or_case`, `::test_a_real_question_is_never_filler`, `::test_a_filler_turn_is_dropped_before_the_model_is_asked` | passing |
+| TC-BE-171 | TR-050/051 | Given a turn mid-flight, then each sentence is already in history by the time it is sent, so truncating at any sentence is honest; a completed answer is recorded whole | `::test_each_sentence_is_in_history_by_the_time_it_is_sent`, `::test_a_completed_answer_is_recorded_whole` | passing |
+| TC-BE-172 | TR-061 | Given a hallucinated slide index or a tool that does not exist, then the refusal is reported back to the model as a tool result and nothing moves | `::test_an_invalid_tool_call_is_reported_to_the_model_and_moves_nothing`, `::test_an_unknown_tool_is_refused_without_raising` | passing |
+| TC-BE-173 | TR-032 | Given the model finishes with `tool_calls`, then a second request is made and still offers tools; a turn finishing with `stop` costs one request | `::test_a_tool_call_finish_triggers_a_second_request_that_still_offers_tools`, `::test_a_plain_answer_costs_a_single_request` | passing |
+| TC-BE-174 | TR-062 | Given an answer that called no tool, the fallback routes it; once a tool has fired the fallback is never consulted; a local or thin answer moves nothing | `::test_the_fallback_routes_an_answer_that_called_no_tool`, `::test_the_fallback_is_not_consulted_once_a_tool_has_fired`, `::test_the_fallback_leaves_the_deck_alone_when_the_answer_is_local` | passing |
+| TC-BE-175 | TR-032 | Given the model calls a tool again on the second request, then the turn still stops after two requests | `::test_the_turn_stops_after_two_requests_however_the_model_finishes` | passing |
+| TC-BE-176 | TR-170/171 | Given a `ProviderError` from each stage, then each reaches the client under its own error code; a retryable failure carrying retry-after is reported as `rate_limited` | `::test_a_provider_failure_maps_to_its_error_code`, `::test_a_throttled_provider_is_reported_as_rate_limited` | passing |
+| TC-BE-177 | TR-022 | Then `cancel_task` awaits the task it cancelled, so two turns never overlap; cancelling no task, or a finished one, is a no-op | `::test_cancelling_a_turn_waits_for_it_to_unwind`, `::test_cancelling_nothing_is_safe` | passing |
+| TC-BE-232 | TR-062 | Given a tool call the deck refused, then the fallback may still route the answer — a rejected call is not the model navigating | `::test_a_rejected_tool_call_still_lets_the_fallback_route_the_answer` | passing|
+| TC-BE-233 | PRD §8 / TR-062 | Given an off-topic question the agent declines, then the deck does not move; every phrasing of the redirect the prompt asks for is caught, and ordinary answers are not swallowed by the guard | `::test_an_off_topic_redirect_leaves_the_deck_where_it_is`, `::test_a_decline_is_recognised_however_it_is_phrased`, `::test_an_answer_that_engages_with_the_deck_is_not_a_redirect` | passing|
+| TC-BE-234 | TR-050 | Given a model that speaks and then navigates, then the second request replays what was already spoken so the answer is not repeated | `::test_the_second_request_replays_what_was_already_spoken` | passing|
+| TC-BE-235 | F5 | Given a turn that generates nothing, then something is still said — silence reads as a crash, and an empty turn poisons history | `::test_a_turn_that_generates_nothing_still_says_something` | passing|
+| TC-BE-236 | TR-021/031/034 | Then barge-in releases the HTTP stream at once, an ordinary turn leaves no stream suspended, and a cancel between the tool call and the `slide.goto` still moves the deck | `::test_cancelling_mid_answer_closes_the_model_stream_at_once`, `::test_an_ordinary_turn_leaves_no_stream_suspended`, `::test_a_cancel_between_the_tool_call_and_the_goto_still_moves_the_deck` | passing|
+| TC-BE-237 | TR-022 | Given a cancellation aimed at the waiter rather than the turn, then `cancel_task` lets it through instead of swallowing it | `::test_cancel_task_lets_a_cancellation_aimed_at_the_caller_through` | passing|
+
+### Turn metrics
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-180 | F12 / TR-163 | Given a fresh turn, then every duration is None; a half-finished stage reports None rather than zero; an end with no start is None too | `tests/test_metrics.py::test_a_fresh_turn_reports_no_duration_at_all`, `::test_a_duration_stays_none_until_both_of_its_ends_are_marked`, `::test_an_end_without_a_start_is_still_none` | passing|
+| TC-BE-181 | TR-035 | Then `mark_first_token`, `mark_first_audio` and `mark_tts_request` are idempotent, so a long stream does not inflate the TTFT it reports | `::test_the_first_marks_ignore_every_later_call`, `::test_time_to_first_token_measures_the_first_token_not_the_last` | passing|
+| TC-BE-182 | TR-163 | Then `to_message()` renders a valid `MetricsMsg`; a dropped or failed turn renders one full of Nones rather than raising | `::test_the_message_carries_every_timing_the_turn_recorded`, `::test_a_turn_that_produced_nothing_still_renders_a_message` | passing|
+| TC-BE-183 | TR-035 | Then durations are whole, non-negative milliseconds (a backwards pair reads 0), and readings come from `perf_counter` | `::test_durations_are_whole_non_negative_milliseconds`, `::test_the_clock_is_monotonic` | passing|
 
 ### Providers (contract, recorded fixtures)
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-070 | TR-082 | Given a recorded Groq SSE stream with a streamed tool call in argument fragments, when parsed, then one `ToolCallDelta` with parsed JSON args | `tests/providers/test_groq_llm.py` | planned |
-| TC-BE-071 | TR-082 | Given a recorded SSE stream with text then `[DONE]`, then TokenDeltas followed by `LLMDone{stop}` | same | planned |
-| TC-BE-072 | TR-082 / TR-085 | Given an HTTP 429 with `retry-after: 3`, then `ProviderError(retryable=True)` carrying 3 | same | planned |
-| TC-BE-073 | TR-031 | Given a stream in progress, when the consuming task is cancelled, then the httpx response is closed (mock asserts `aclose`) | same | planned |
-| TC-BE-074 | TR-081 | Given a 1 s 16 kHz PCM buffer, when wrapped, then a valid WAV header with sample rate 16,000, 1 channel, 16-bit | `tests/providers/test_groq_stt.py` | planned |
-| TC-BE-075 | TR-083 | Given KokoroTTS (integration-lite, model present), when synthesising "Ready.", then ≥ 1 chunk, each ≤ 4,800 bytes, total duration 0.3–1.5 s | `tests/providers/test_kokoro_tts.py` (skipped if weights absent) | planned |
-| TC-BE-076 | TR-080 | Given `STT_PROVIDER=bogus`, when building providers, then startup fails with a message listing valid values | `tests/providers/test_registry.py` | planned |
-| TC-BE-077 | TR-176 | Given `LLM_PROVIDER=groq` and no `GROQ_API_KEY`, then startup fails naming `.env.example` | same | planned |
+| TC-BE-070 | TR-082 | Given a recorded Groq SSE stream with a streamed tool call in argument fragments, when parsed, then one `ToolCallDelta` with parsed JSON args | `tests/test_groq_llm.py::test_fragmented_tool_call_arrives_as_one_parsed_delta` | passing |
+| TC-BE-071 | TR-082 | Given a recorded SSE stream with text then `[DONE]`, then TokenDeltas followed by `LLMDone{stop}`, surviving keep-alive comments and non-`data` fields | `::test_text_stream_yields_tokens_then_one_done` | passing |
+| TC-BE-072 | TR-082 / TR-085 | Given an HTTP 429 with `retry-after: 3`, then `ProviderError(retryable=True)` carrying 3; 5xx is retryable, 4xx is not, an unparsable retry-after gives None | `::test_error_status_becomes_a_provider_error` | passing |
+| TC-BE-073 | TR-031 / TR-034 | Given a stream in progress, when the consuming task is cancelled, then the httpx response is closed (mock asserts `aclose`) | `::test_cancelling_the_consumer_closes_the_response` | passing |
+| TC-BE-074 | TR-081 | Given a 1 s 16 kHz PCM buffer, when wrapped, then a valid WAV header with sample rate 16,000, 1 channel, 16-bit | `tests/test_groq_stt.py` (not written) | planned — **M3**, with the Groq Whisper provider |
+| TC-BE-075 | TR-083 | Given KokoroTTS (integration-lite, model present), when synthesising "Ready.", then ≥ 1 chunk, each ≤ 4,800 bytes, total duration 0.3–1.5 s | `tests/test_kokoro_tts.py` (not written; will skip if weights absent) | planned — **M2**, with the Kokoro provider |
+| TC-BE-076 | TR-080 | Given `STT_PROVIDER=bogus`, when building providers, then startup fails listing the valid values — checked at both gates, pydantic and the registry, for all three provider slots | `tests/test_registry.py::test_unknown_provider_name_fails_listing_the_valid_values` | passing |
+| TC-BE-077 | TR-176 | Given `LLM_PROVIDER=groq` and no `GROQ_API_KEY`, then startup fails naming `.env.example` and the variables that need the key | `::test_missing_groq_key_fails_naming_env_example` | passing |
+| TC-BE-150 | TR-082 | Then the request body carries the configured model, temperature and max_tokens, and offers the deck's tools | `tests/test_groq_llm.py::test_request_carries_the_configured_generation_settings` | passing |
+| TC-BE-151 | TR-082 | Given a tool call delivered whole in one delta, or with empty arguments, then it is still emitted exactly once | `::test_unfragmented_tool_calls_are_emitted_once` | passing |
+| TC-BE-152 | TR-032 / TR-082 | Given fragments of two tool calls interleaved, then they are separated by index and delivered in the order the model made them | `::test_two_interleaved_tool_calls_keep_their_order` | passing |
+| TC-BE-153 | TR-082 | Given an absent, unknown, or truncated finish reason — including a stream that ends without `[DONE]` — then exactly one `LLMDone` is produced with a mapped reason | `::test_finish_reason_is_mapped_onto_the_protocol_vocabulary` | passing |
+| TC-BE-154 | TR-085 | Given a connect error, read timeout, or protocol error from httpx, then it is wrapped in `ProviderError` with the right retryable flag and never leaks | `::test_transport_failures_are_wrapped_not_leaked` | passing |
+| TC-BE-155 | TR-176 | Given a blank key, construction fails with an actionable message; `aclose()` closes only a client the provider owns, never an injected one | `::test_construction_requires_a_key_and_aclose_respects_ownership` | passing |
+| TC-BE-156 | TR-085 | Given an error frame sent mid-stream after a 200 OK, then the turn fails with a `ProviderError` rather than a silently truncated answer | `::test_mid_stream_error_frame_becomes_a_provider_error` | passing |
+| TC-BE-157 | TR-080 | Then every selectable provider satisfies its runtime-checkable protocol, and the fakes the suite injects do too | `tests/test_registry.py::test_selectable_providers_satisfy_their_protocols_and_the_fakes_run` | passing |
+| TC-BE-158 | TR-080 | Given a provider that has not shipped yet (Groq/local STT, Kokoro TTS), then the failure names the implementation and the milestone it arrives in | `::test_providers_from_later_milestones_say_when_they_arrive` | passing |
+| TC-BE-159 | §3.5 | Given `fake`, then the registry never imports the Groq module; given production selections, it never imports the fakes (checked in a clean interpreter) | `::test_selecting_fake_never_imports_groq_and_production_never_imports_fakes` | passing |
+| TC-BE-162 | TR-082 | Given two successive requests, then the body is finished past `[DONE]` so httpcore can pool the connection and the second reuses it | `tests/test_groq_llm.py::test_successive_requests_share_one_tcp_connection` | passing |
+| TC-BE-163 | TR-082 | Given U+2028/U+2029 inside a frame, then it does not split the SSE line — only CR, LF and CRLF end one, though `str.splitlines` ends on six more | `::test_a_unicode_line_break_inside_a_frame_does_not_split_it` | passing |
+| TC-BE-164 | TR-082 | Given LF, CRLF or CR as the server's terminator, then each ends a line; a CR ending a network read is held back until its LF arrives | `::test_all_three_sse_line_terminators_are_understood`, `::test_a_crlf_split_across_two_reads_is_one_terminator` | passing |
+| TC-BE-165 | TR-082 | Given fragments carrying neither index nor id, then they continue the call already open — providers streaming one call at a time need not repeat its identity | `::test_a_tool_call_without_an_index_survives_being_fragmented` | passing |
+| TC-BE-166 | TR-082 | Given a call already emitted, then the next unidentified fragment starts a new one instead of being appended to the last | `::test_a_completed_call_does_not_swallow_the_next_unindexed_one` | passing |
+| TC-BE-167 | TR-031 | Given frames after `[DONE]`, then the drain reads and discards them; a body that never ends does not hold up the turn, because draining is best-effort | `::test_frames_arriving_after_done_are_read_and_discarded`, `::test_a_body_that_never_ends_does_not_hold_up_the_turn` | passing |
+| TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
+| TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
+| TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
 
 ### Protocol
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-080 | TR-142 | Given `{"type": "speech.end"}` without `duration_ms`, then validation fails and `error{bad_message}` | `tests/test_protocol.py` | planned |
-| TC-BE-081 | TR-142 | Given `text.input` with 501 chars, then `bad_message` | same | planned |
-| TC-BE-082 | §6.1 | Given sentence_id 7, seq 3, payload b"..", when framed, then bytes start with `07 00 00 00 03 00 00 00` | same | planned |
-| TC-PAR-001 | TR-143 | Then the set of `type` literals in `protocol.py` equals the set in `protocol.ts` | `tests/test_protocol_parity.py` | planned |
+| TC-BE-080 | TR-142 | Given `{"type": "speech.end"}` without `duration_ms`, then validation fails and `error{bad_message}` names the field; absent, mistyped and out-of-range fields are all refused, and a well-formed message still validates | `tests/test_protocol.py::test_a_speech_end_without_a_duration_is_rejected`, `::test_a_malformed_client_message_never_validates`, `::test_a_well_formed_message_still_validates` | passing |
+| TC-BE-081 | TR-142 | Given `text.input` with 501 chars, then `bad_message`; 500 and 1 are accepted, and the over-long frame starts no turn | `::test_a_question_at_the_cap_is_accepted_and_one_past_it_is_not`, `::test_an_overlong_question_reaches_the_client_as_bad_message` | passing |
+| TC-BE-082 | §6.1 | Given sentence_id 7, seq 3, payload b"..", when framed, then bytes start with `07 00 00 00 03 00 00 00` | `::test_the_audio_header_is_two_little_endian_uint32s` | passing |
+| TC-BE-185 | §6.1 | Property (hypothesis): `decode(encode(x))` is `x` for every id, sequence and payload | `::test_any_frame_survives_the_round_trip` | passing |
+| TC-BE-186 | §6.1 | Given a frame of 0–7 bytes, then decoding raises rather than returning garbage; exactly eight bytes is a valid, empty frame | `::test_a_frame_too_short_to_hold_a_header_is_refused`, `::test_a_header_with_no_payload_decodes_to_empty_audio` | passing |
+| TC-BE-187 | TR-143 | Then `CLIENT_MESSAGE_TYPES` and `SERVER_MESSAGE_TYPES` are derived from the model unions, so a new message cannot be added without appearing in them | `::test_the_exported_type_sets_match_the_message_unions` | passing |
+| TC-PAR-001 | TR-143 | Then the set of `type` literals in `protocol.py` equals the set in `protocol.ts`, and the TypeScript arrays are checked against the TypeScript unions by `satisfies` | `tests/test_protocol_parity.py::test_the_two_languages_declare_the_same_message_types`, `::test_typescript_checks_its_own_arrays_against_its_own_unions` | passing |
+| TC-PAR-002 | TR-143 | Then the shared constants agree across the two files: protocol version, audio header size, and the text-input cap | `::test_the_shared_constants_agree` | passing |
+| TC-PAR-003 | TR-143 | Then every closed value set agrees: session states, error codes, session modes, tool sources and control actions | `::test_every_closed_value_set_agrees` | passing |
+
+### HTTP routes
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-190 | F1 / TR-151 | Given the app is started, when `GET /api/decks`, then one summary per deck, ordered by id | `tests/test_routes.py::test_the_deck_listing_names_the_shipped_deck` | passing |
+| TC-BE-191 | F1 / TR-151 | When `GET /api/decks/{id}`, then the whole deck the agent presents is returned | `::test_a_deck_is_served_whole` | passing |
+| TC-BE-192 | TR-151 | Given an id no deck carries, then 404 naming the ids that do exist | `::test_an_unknown_deck_is_a_404_that_names_what_does_exist` | passing |
+| TC-BE-193 | TR-151 | Given the lifespan has not run, then both deck routes answer 503 — not `200 []` or 404 — while `/api/health` still answers | `::test_the_deck_routes_answer_503_before_startup_completes`, `::test_health_still_answers_before_startup` | passing |
+| TC-BE-194 | TR-026 | Given the lifespan has not run, when a client connects to `/ws/session`, then the socket closes with 1011 rather than accepting and hanging | `::test_the_session_socket_refuses_a_connection_before_startup_completes` | passing |
 
 ---
 
 ## Backend integration (require `GROQ_API_KEY`, `-m integration`)
 
+No `backend/tests/integration/` package exists yet; every row below is honestly `planned`.
+
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-INT-001 | F4 | Given `fixtures/audio/how_do_you_handle_interruptions.wav`, when transcribed, then the text contains "interrupt" | `tests/integration/test_groq_stt_live.py` | planned |
-| TC-INT-002 | F4 | Given `fixtures/audio/silence_2s.wav`, then transcript is empty or in the denylist | same | planned |
-| TC-INT-003 | F5 | Given the real LLM and "how do you handle interruptions?" on slide 1, then a `go_to_slide(4)` tool call is emitted | `tests/integration/test_routing_live.py` | planned |
-| TC-INT-004 | F5 | Given "what's the weather in London?", then no tool call and the answer is ≤ 2 sentences | same | planned |
-| TC-INT-005 | F6 | Given the real pipeline with text input, then `first_audio` (server-side proxy: first audio frame sent) ≤ 1.5 s | `tests/integration/test_pipeline_live.py` | planned |
+| TC-INT-001 | F4 | Given `fixtures/audio/how_do_you_handle_interruptions.wav`, when transcribed, then the text contains "interrupt" | `tests/integration/test_groq_stt_live.py` (not written) | planned — **M3** |
+| TC-INT-002 | F4 | Given `fixtures/audio/silence_2s.wav`, then transcript is empty or in the denylist | same | planned — **M3** |
+| TC-INT-003 | F5 | Given the real LLM and "how do you handle interruptions?" on slide 1, then a `go_to_slide(4)` tool call is emitted | `tests/integration/test_routing_live.py` (not written) | planned — **M4**; routing against the live model is exercised today by the eval suite (`docs/EVALS.md`), not by a test |
+| TC-INT-004 | F5 | Given "what's the weather in London?", then no tool call and the answer is ≤ 2 sentences | same | planned — **M4**, same note |
+| TC-INT-005 | F6 | Given the real pipeline with text input, then `first_audio` (server-side proxy: first audio frame sent) ≤ 1.5 s | `tests/integration/test_pipeline_live.py` (not written) | planned — **M2**, once audio exists to measure |
 
 ---
 
 ## Frontend unit (vitest)
 
+The audio rows (TC-FE-010–014, TC-FE-020–023, TC-FE-035) name files under `src/audio/` that do
+not exist yet: no browser audio ships before M2/M3. They are kept as written specifications for
+those milestones.
+
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-FE-001 | F1 | Given the deck, when rendering `SlideDeck` at index 3, then slide 3 title is visible and dot 3 is active | `src/components/SlideDeck.test.tsx` | planned |
-| TC-FE-002 | F1 / TR-133 | Given `slide.goto{index: 42}`, then the store clamps to 6 | `src/store.test.ts` | planned |
-| TC-FE-003 | F1 | When ArrowRight is pressed with a live session, then `slide.changed{source: user}` is sent | `src/session/useSession.test.tsx` | planned |
-| TC-FE-010 | F6 / TR-121 | Given frames arriving every 100 ms, when scheduled on `FakeAudioContext`, then each `start(when)` equals the previous end time (no gaps, no overlap) | `src/audio/playback.test.ts` | planned |
-| TC-FE-011 | TR-121 | Given a frame arriving 150 ms late, then it is scheduled at `currentTime + 0.02` and a silence gap is recorded, not an overlap | same | planned |
-| TC-FE-012 | F7 / TR-122 | Given 5 scheduled sources, when `flush()`, then every source's `stop` is called and the queue is empty | same | planned |
-| TC-FE-013 | TR-123 | Given sentence 0 frames then the first frame of sentence 1, then `onSentenceComplete(0)` fires exactly once | same | planned |
-| TC-FE-014 | TR-123 | Given the final sentence and then `metrics`, then `onSentenceComplete(last)` fires | same | planned |
-| TC-FE-020 | F3 / TR-112 | Given `isPlaying=true` and 2 consecutive positive VAD frames, then no onset; on the 3rd, onset | `src/audio/vad.test.ts` | planned |
-| TC-FE-021 | TR-113 | Given onset while playing, then `flush()` is called before `interrupt` is sent, and `interrupt.last_completed_sentence_id` equals the queue's last completed id | same | planned |
-| TC-FE-022 | TR-114 | Given a 150 ms utterance, then no `speech.end` is sent; if an interrupt was sent, `interrupt.cancel` follows | same | planned |
-| TC-FE-023 | TR-114 | Given onset then end, then the emitted utterance length equals pre-pad + speech within one frame | same | planned |
-| TC-FE-030 | §6.1 | Given a binary frame with header (7, 3), when decoded, then `{sentenceId: 7, seq: 3, pcm}` | `src/protocol.test.ts` | planned |
-| TC-FE-031 | TR-131 | Given store turnId 5 and an incoming `transcript.agent{turn_id: 4}`, then it is ignored | `src/store.test.ts` | planned |
-| TC-FE-032 | F10 / TR-132 | Given `agent.cancelled{truncated_at: 1}` after sentences 0–3 were logged, then entries 2 and 3 render struck-through | `src/components/EventLog.test.tsx` | planned |
-| TC-FE-033 | F12 | Given three metrics messages, then the HUD shows the last value and the median | `src/components/LatencyHUD.test.tsx` | planned |
-| TC-FE-034 | TR-175 | Given an abnormal close (1006), then exactly one reconnect attempt with a new `session.start` | `src/session/client.test.ts` | planned |
-| TC-FE-035 | TR-103 | Given five start/stop cycles with a fake `MediaStream`, then every track's `stop()` was called and all contexts closed | `src/audio/capture.test.ts` | planned |
+| TC-FE-001 | F1 | Given the deck, when rendering `SlideDeck` at index 3, then slide 3 title is visible and dot 3 is active | `src/components/SlideDeck.test.tsx::TC-FE-001` | passing |
+| TC-FE-002 | F1 / TR-133 | Given `slide.goto{index: 42}`, then the store clamps to 6 | `src/store.test.ts::TC-FE-002` | passing |
+| TC-FE-003 | F1 | When ArrowRight is pressed with a live session, then `slide.changed{source: user}` is sent | `src/session/useSession.test.tsx::TC-FE-003` | passing |
+| TC-FE-010 | F6 / TR-121 | Given frames arriving every 100 ms, when scheduled on `FakeAudioContext`, then each `start(when)` equals the previous end time (no gaps, no overlap) | `src/audio/playback.test.ts` (not written) | planned — **M2** |
+| TC-FE-011 | TR-121 | Given a frame arriving 150 ms late, then it is scheduled at `currentTime + 0.02` and a silence gap is recorded, not an overlap | same | planned — **M2** |
+| TC-FE-012 | F7 / TR-122 | Given 5 scheduled sources, when `flush()`, then every source's `stop` is called and the queue is empty | same | planned — **M2** |
+| TC-FE-013 | TR-123 | Given sentence 0 frames then the first frame of sentence 1, then `onSentenceComplete(0)` fires exactly once | same | planned — **M2** |
+| TC-FE-014 | TR-123 | Given the final sentence and then `metrics`, then `onSentenceComplete(last)` fires | same | planned — **M2** |
+| TC-FE-020 | F3 / TR-112 | Given `isPlaying=true` and 2 consecutive positive VAD frames, then no onset; on the 3rd, onset | `src/audio/vad.test.ts` (not written) | planned — **M3** |
+| TC-FE-021 | TR-113 | Given onset while playing, then `flush()` is called before `interrupt` is sent, and `interrupt.last_completed_sentence_id` equals the queue's last completed id | same | planned — **M3** |
+| TC-FE-022 | TR-114 | Given a 150 ms utterance, then no `speech.end` is sent; if an interrupt was sent, `interrupt.cancel` follows | same | planned — **M3** |
+| TC-FE-023 | TR-114 | Given onset then end, then the emitted utterance length equals pre-pad + speech within one frame | same | planned — **M3** |
+| TC-FE-030 | §6.1 | Given a binary frame with header (7, 3), when decoded, then `{sentenceId: 7, seq: 3, pcm}` | `src/protocol.test.ts::TC-FE-030` | passing |
+| TC-FE-031 | TR-131 | Given store turnId 5 and an incoming `transcript.agent{turn_id: 4}`, then it is ignored — while `state` still passes, being the message that reports the turn being left | `src/store.test.ts::TC-FE-031` | passing |
+| TC-FE-032 | F10 / TR-132 | Given `agent.cancelled{truncated_at: 1}` after sentences 0–3 were logged, then entries 2 and 3 are marked unheard | `::TC-FE-032` | passing |
+| TC-FE-033 | F12 | Given three metrics messages, then the HUD shows the last turn's value beside the session median | `src/components/LatencyHUD.test.tsx::TC-FE-033` | passing |
+| TC-FE-034 | TR-175 | Given an abnormal close (1006), then exactly one reconnect attempt with a new `session.start` | `src/session/client.test.ts::TC-FE-034` | passing |
+| TC-FE-035 | TR-103 | Given five start/stop cycles with a fake `MediaStream`, then every track's `stop()` was called and all contexts closed | `src/audio/capture.test.ts` (not written) | planned — **M3** |
+| TC-FE-100 | §6.1 | Given multi-byte header fields and full-range samples, then encode/decode round-trips them | `src/protocol.test.ts::TC-FE-100` | passing |
+| TC-FE-101 | §6.1 | Given a frame shorter than the header, or one whose last sample is truncated, then decoding rejects it | `::TC-FE-101` | passing |
+| TC-FE-102 | TR-143 | Given a well-formed server message, then `parseServerMessage` narrows it to its discriminated type | `::TC-FE-102` | passing |
+| TC-FE-103 | TR-143 | Given an unknown `type` or malformed JSON, then it returns null rather than throwing | `::TC-FE-103` | passing |
+| TC-FE-104 | TR-143 | Given JSON that is not an object with a string `type`, then it returns null | `::TC-FE-104` | passing |
+| TC-FE-105 | TR-143 | Then the exported type arrays list every message type exactly once — the half of the parity test that lives in TypeScript | `::TC-FE-105` | passing |
+| TC-FE-106 | F2 / TR-130 | Given `session.ready`, then the store holds the TR-130 shape (session id, deck, providers) and logs an entry | `src/store.test.ts::TC-FE-106` | passing |
+| TC-FE-107 | TR-130 | Given a `state` message, then the turn advances and the state it left is timed | `::TC-FE-107` | passing |
+| TC-FE-108 | F10 | Given user, agent, tool and error messages, then the log holds one entry each, in arrival order | `::TC-FE-108` | passing |
+| TC-FE-109 | TR-133 | Given an out-of-range `slide.goto`, then the clamp is recorded as a client event instead of failing | `::TC-FE-109` | passing |
+| TC-FE-110 | F12 / TR-162 | Given several `metrics` messages, then the store keeps the last sample, the rolling medians, and the client-measured timings | `::TC-FE-110` | passing |
+| TC-FE-111 | §7.2 | Then the debug export is the TRD §7.2 envelope: the raw messages plus `client_ts` | `::TC-FE-111` | passing |
+| TC-FE-140 | TR-131 | Given a `state` message from a superseded turn, then the store's turn counter never rewinds | `::TC-FE-140` | passing |
+| TC-FE-141 | F2 / TR-131 | Given `session.ready` for a reconnected session, then the turn counter restarts | `::TC-FE-141` | passing |
+| TC-FE-142 | F1 / TR-131 | Given `slide.goto` carrying a superseded `turn_id`, then the deck does not move | `::TC-FE-142` | passing |
+| TC-FE-143 | F2 | Given `clearSession`, then the session is dropped but the user's toggles survive | `::TC-FE-143` | passing |
+| TC-FE-144 | F10 | Given a client notice, then it is quiet by default and can be marked as an alert | `::TC-FE-144` | passing |
+| TC-FE-112 | TR-175 | Given the one automatic reconnect also fails, then the client gives up and reports it | `src/session/client.test.ts::TC-FE-112` | passing |
+| TC-FE-113 | TR-103 | Given `close()`, then every listener is removed, a pending retry is cancelled, and it never reconnects | `::TC-FE-113` | passing |
+| TC-FE-114 | TR-175 | Given an explicit close of an open socket, then that is normal and no retry is due | `::TC-FE-114` | passing |
+| TC-FE-115 | TR-143 | Then text frames are parsed, unknown ones dropped, and binary frames passed through untouched | `::TC-FE-115` | passing |
+| TC-FE-120 | F11 | Given each session state, then the orb has its own visual state and label | `src/components/Orb.test.tsx::TC-FE-120` | passing |
+| TC-FE-121 | F11 / TR-134 | Then the state is announced through a live region, not only through colour | `::TC-FE-121` | passing |
+| TC-FE-122 | F11 | Given the compact orb, then the hint line is dropped | `::TC-FE-122` | passing |
+| TC-FE-147 | F7 / F11 | Given an interrupted turn, then the orb portrays it; given a state it does not recognise, then it names it rather than rendering blank | `::TC-FE-147` | passing |
+| TC-FE-123 | F5 | Given a highlighted bullet, then it is emphasised and released again after four seconds | `src/components/Slide.test.tsx::TC-FE-123` | passing |
+| TC-FE-124 | F5 | Given a second highlight, then the emphasis moves and its clock restarts | `::TC-FE-124` | passing |
+| TC-FE-146 | F5 | Given the same bullet highlighted a second time, then it is emphasised again rather than staying dormant | `::TC-FE-146` | passing |
+| TC-FE-125 | F1 / F9 | Given arrow keys, then the deck moves, and stays silent at either end | `src/components/SlideDeck.test.tsx::TC-FE-125` | passing |
+| TC-FE-126 | F13 | Given focus in the question field, then arrow keys are left to the text input | `::TC-FE-126` | passing |
+| TC-FE-127 | F1 / F9 | Given a click on a dot or an arrow button, then the deck navigates | `::TC-FE-127` | passing |
+| TC-FE-128 | F10 | Given one event of each kind, then the log renders one entry per kind in arrival order | `src/components/EventLog.test.tsx::TC-FE-128` | passing |
+| TC-FE-129 | F5 / F10 | Given `tool.call{source: llm}` and `{source: fallback}`, then the log tells a model tool call apart from a keyword fallback | `::TC-FE-129` | passing |
+| TC-FE-130 | F10 / TR-132 | Given `agent.cancelled`, then the sentences the user never heard render struck through | `::TC-FE-130` | passing |
+| TC-FE-131 | F12 | Given metrics and client notices, then they stay behind the debug toggle | `::TC-FE-131` | passing |
+| TC-FE-132 | §7.2 | Given the copy button, then the replayable envelope reaches the clipboard and the UI says so | `::TC-FE-132` | passing |
+| TC-FE-145 | F10 | Given a notice marked as an alert, then it shows even with the debug toggle off | `::TC-FE-145` | passing |
+| TC-FE-133 | F13 | Given a typed question with surrounding whitespace, then the trimmed text is sent and the field emptied | `src/components/Controls.test.tsx::TC-FE-133` | passing |
+| TC-FE-134 | F13 | Given an empty question, or any question with no session, then nothing is sent | `::TC-FE-134` | passing |
+| TC-FE-135 | F2 | Given the controls, then Start and End drive the session, and a deck picker appears only when there is more than one deck | `::TC-FE-135` | passing |
+| TC-FE-151 | F13 | Given the agent is still answering, then the composer waits rather than cancelling the answer with a second question | `::TC-FE-151` | passing |
+| TC-FE-136 | F13 | Given a typed question, then it is sent as `text.input`, trimmed and capped at the protocol limit | `src/session/useSession.test.tsx::TC-FE-136` | passing |
+| TC-FE-137 | TR-103 | Given the hook unmounts, then its socket is closed and anything arriving after is ignored | `::TC-FE-137` | passing |
+| TC-FE-138 | F11 / TR-130 | Given server messages, then they are pushed into the store and the orb follows them | `::TC-FE-138` | passing |
+| TC-FE-148 | F2 | Given a session is started, then the user's toggles are kept | `::TC-FE-148` | passing |
+| TC-FE-149 | F2 / TR-175 | Given a connection the client has given up on, then it is explained where the user can see it | `::TC-FE-149` | passing |
+| TC-FE-150 | F13 | Given the agent is still answering, then a second question is refused | `::TC-FE-150` | passing |
 
 ---
 
 ## End-to-end (Playwright, fake-provider backend)
 
+No `frontend/e2e/` directory and no Playwright harness exist yet. TRD §15 puts the first
+walkthrough steps in M3 and the rest in M4.
+
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-E2E-001 | PRD §13 | The full walkthrough scenario, steps 1–8, using text input and synthetic VAD events; asserts slide indices, log chips, and that audio is flushed on interrupt | `frontend/e2e/walkthrough.spec.ts` | planned |
-| TC-E2E-002 | F2 | Given the backend is down, when Start is clicked, then the error toast with a retry button is shown; when the backend comes up and retry is clicked, the session connects | `frontend/e2e/connection.spec.ts` | planned |
-| TC-E2E-003 | F13 | Given mic permission denied (Playwright permission), then the text input still produces a voice answer and a slide change | `frontend/e2e/fallback.spec.ts` | planned |
-| TC-E2E-004 | F9 | Given manual navigation to slide 6 then text "explain this", then the agent answers without a `slide.goto` chip | `frontend/e2e/sync.spec.ts` | planned |
+| TC-E2E-001 | PRD §13 | The full walkthrough scenario, steps 1–8, using text input and synthetic VAD events; asserts slide indices, log chips, and that audio is flushed on interrupt | `e2e/walkthrough.spec.ts` (not written) | planned — steps 1–4 in **M3**, the rest in **M4** |
+| TC-E2E-002 | F2 | Given the backend is down, when Start is clicked, then the error toast with a retry button is shown; when the backend comes up and retry is clicked, the session connects | `e2e/connection.spec.ts` (not written) | planned — **M4** |
+| TC-E2E-003 | F13 | Given mic permission denied (Playwright permission), then the text input still produces a voice answer and a slide change | `e2e/fallback.spec.ts` (not written) | planned — **M4** |
+| TC-E2E-004 | F9 | Given manual navigation to slide 6 then text "explain this", then the agent answers without a `slide.goto` chip | `e2e/sync.spec.ts` (not written) | planned — **M4** |
 
 ---
 
 ## Phase 0 — scaffolding (implemented 2026-09-10)
 
 Settings, health probe, and harness cases added when the scaffold landed. Several of these are
-parametrised, so 18 test functions expand to 52 collected backend cases.
+parametrised, so 18 test functions expand to 53 collected backend cases.
 
 ### Configuration (`backend/tests/test_config.py`)
 
@@ -258,3 +491,67 @@ parametrised, so 18 test functions expand to 52 collected backend cases.
 | TC-MAN-006 | Start/End session five times: no console errors, no orphan audio, mic indicator off after End | — |
 | TC-MAN-007 | Fresh clone on a second machine: README quick start works in ≤ 5 commands | — |
 | TC-MAN-008 | Safari: session starts, audio plays, VAD detects speech (best-effort; document failures) | — |
+
+---
+
+## Open reconciliation items
+
+Two things in the tree stop this catalogue from being a clean index. Both are one-line edits in
+test files, and both belong to whoever owns those files — a catalogue must not renumber somebody
+else's tests, and it must not invent an ID the author has not written down.
+
+### 1. Duplicate IDs — eighteen IDs, each claimed by two unrelated tests
+
+Every pair below is catalogued twice above, both rows marked `⚠ dup`. The convention the rest of
+the suite follows is one block of numbers per test module, so the second column is the claimant
+that should move.
+
+| ID | First claimant (block owner) | Second claimant (should be renumbered) |
+|---|---|---|
+| `TC-BE-020` | `tests/test_history.py` — truncation keeps only what was heard | `tests/test_chunker.py` — typographic punctuation is normalised |
+| `TC-BE-140` | `tests/test_decks.py` — the shipped deck meets the authoring contract | `tests/test_history.py` — `record_sentence` with no turn is a `RuntimeError` |
+| `TC-BE-141` | `tests/test_decks.py` — one-based `slide()` lookup | `tests/test_history.py` — a late completion cannot restore unheard sentences |
+| `TC-BE-142` | `tests/test_decks.py` — notes truncate only past the budget | `tests/test_history.py` — a second, more precise interrupt refines the message |
+| `TC-BE-143` | `tests/test_decks.py` — a malformed deck file names itself | `tests/test_history.py` — tool calls serialise in the OpenAI wire shape |
+| `TC-BE-144` | `tests/test_decks.py` — a validation failure names the field path | `tests/test_history.py` — truncation boundaries leave no dangling marker |
+| `TC-BE-145` | `tests/test_decks.py` — two files claiming one deck id | `tests/test_history.py` — the cap comes from settings and must be ≥ 1 |
+| `TC-BE-146` | `tests/test_decks.py` — `get` on an unknown id | `tests/test_history.py` — serialisation puts the system prompt first |
+| `TC-BE-147` | `tests/test_decks.py` — `list_decks` and `__len__` | `tests/test_history.py` — the messages snapshot cannot corrupt history |
+| `TC-BE-148` | `tests/test_decks.py` — `register` and a repeated id | `tests/test_history.py` — a completed turn falls back to its sentences |
+| `TC-BE-149` | `tests/test_decks.py` — decks are read once | `tests/test_history.py` — the pinned prompt survives capping |
+| `TC-BE-150` | `tests/test_groq_llm.py` — the request carries the generation settings | `tests/test_history.py` — an unfinished turn is discarded |
+| `TC-BE-178` | `tests/test_registry.py` — `aclose` releases what a provider holds | `tests/test_turn.py` — a rejected tool call still lets the fallback route |
+| `TC-BE-179` | `tests/test_registry.py` — the lifespan closes the providers it built | `tests/test_turn.py` — an off-topic redirect leaves the deck alone |
+| `TC-BE-180` | `tests/test_metrics.py` — no duration before a stage runs | `tests/test_turn.py` — the second request replays what was spoken |
+| `TC-BE-181` | `tests/test_metrics.py` — the first marks are idempotent | `tests/test_turn.py` — a turn that generates nothing still says something |
+| `TC-BE-182` | `tests/test_metrics.py` — `to_message` renders a valid `MetricsMsg` | `tests/test_turn.py` — cancellation closes the model stream at once |
+| `TC-BE-183` | `tests/test_metrics.py` — durations are whole, non-negative ms | `tests/test_turn.py` — `cancel_task` lets the caller's cancellation through |
+
+Free backend numbers, if the renumbering wants a block: 067–069, 078–079, 083–089, 108–109,
+127–129, 138–139, 169, 184, 188–189, 195–199, and everything from 218 up.
+
+### 2. Twelve frontend tests carry no ID
+
+They exist and pass, so they are named here rather than left invisible, but they are given no ID:
+the author assigns it in the same commit as the test (CLAUDE.md §3.1a), and inventing one here
+would only add a nineteenth collision. The next free frontend number is **TC-FE-152**.
+
+| Location | What it asserts |
+|---|---|
+| `src/components/Controls.test.tsx::"shows the orb's state in words next to the composer"` | the composer states the orb's state in words |
+| `::"counts down the remaining characters as the limit approaches"` | the 500-character cap is counted down |
+| `src/components/EventLog.test.tsx::"reports a clipboard the browser refused rather than pretending it worked"` | a refused clipboard write is reported, not swallowed |
+| `::"invites the first question when nothing has happened yet"` | the empty log invites the first question |
+| `src/components/LatencyHUD.test.tsx::"grades each measurement against its budget and says when a stage never reported"` | each measurement is graded against its budget |
+| `::"says there is nothing to report before the first turn"` | the HUD is honest before the first turn |
+| `src/components/Slide.test.tsx::"renders the slide number and title as the slide's heading"` | the slide heading carries number and title |
+| `src/components/SlideDeck.test.tsx::"passes the highlight through to the slide it belongs to"` | the highlight reaches the right slide |
+| `::"says so rather than crashing when the index has no slide behind it"` | an index with no slide behind it degrades gracefully |
+| `src/session/useSession.test.tsx::"shows the deck and navigates it before any session is open (PRD F1)"` | the deck works before a session exists |
+| `::"refuses to send a question with no session, and says so in the log"` | a question with no session is refused and logged |
+| `::"survives a backend that is not running"` | the hook survives an absent backend |
+
+### 3. Nothing retired
+
+No row was retired in this reconciliation. Every row without an implementation is a specification
+for a named later milestone (M2, M3 or M4), not a dead one, so no ID has been withdrawn or reused.

@@ -130,6 +130,7 @@ export function App(): JSX.Element {
           orbState={session.orbState}
           isActive={session.isActive}
           canSend={session.canSend}
+          isAnswering={session.isAnswering}
           decks={session.decks}
           deckId={session.deckId}
           onSelectDeck={session.selectDeck}

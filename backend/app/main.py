@@ -216,6 +216,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await app.state.app_state.sessions.close_all()
+        # Sessions first, providers second: a session still streaming a turn is
+        # holding a connection from the pool this closes.
+        await providers.aclose()
         logger.info("app.shutdown", version=__version__)
 
 

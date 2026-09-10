@@ -55,6 +55,7 @@ class ErrorCode(StrEnum):
     LLM_FAILED = "llm_failed"
     TTS_FAILED = "tts_failed"
     TURN_TIMEOUT = "turn_timeout"
+    INTERNAL_ERROR = "internal_error"
     DECK_NOT_FOUND = "deck_not_found"
     RATE_LIMITED = "rate_limited"
 

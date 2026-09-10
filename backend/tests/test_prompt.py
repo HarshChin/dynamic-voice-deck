@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from app.decks.models import PROMPT_NOTES_CHARS, Deck, Slide
+from app.decks.models import MAX_NOTES_CHARS, PROMPT_NOTES_CHARS, Deck, Slide
 from app.errors import ConfigError
 from app.pipeline.prompt import (
     DEFAULT_TEMPLATE_PATH,
@@ -97,12 +97,19 @@ def test_braces_in_deck_copy_render_literally() -> None:
     assert "Braces {} on their own" in content
 
 
-def test_long_notes_are_truncated_to_six_hundred_characters() -> None:
-    """TC-BE-005: notes of 1,000 characters reach the prompt truncated."""
+def test_notes_longer_than_the_prompt_budget_are_truncated() -> None:
+    """TC-BE-005: notes authored up to the deck limit reach the prompt truncated.
+
+    Written against the constants rather than a literal, because the budget has
+    moved: it was 600 when all six slides' notes were embedded, and is now sized
+    to carry one slide's notes whole (TC-BE-140a). Only a deck written up to
+    :data:`MAX_NOTES_CHARS` still meets this path.
+    """
+    assert PROMPT_NOTES_CHARS < MAX_NOTES_CHARS
     head = "S" * (PROMPT_NOTES_CHARS - 1)
     tail_marker = "TAILMARKER"
-    notes = head + tail_marker + "E" * (1_000 - len(head) - len(tail_marker))
-    assert len(notes) == 1_000
+    notes = head + tail_marker + "E" * (MAX_NOTES_CHARS - len(head) - len(tail_marker))
+    assert len(notes) == MAX_NOTES_CHARS
     deck = make_deck(first=make_slide(1, notes=notes, aliases=["long", "notes"]))
 
     content = system_prompt(deck)

@@ -22,8 +22,22 @@ MAX_SLIDES = 8
 MAX_NOTES_CHARS = 1_200
 """Longest speaker notes accepted per slide (TR-150)."""
 
-PROMPT_NOTES_CHARS = 600
-"""Notes are truncated to this length when embedded in the prompt (TR-071)."""
+PROMPT_NOTES_CHARS = 1_100
+"""Notes are truncated to this length when embedded in the prompt (TR-071).
+
+Only the slide currently on screen contributes its notes to the prompt
+(:func:`app.pipeline.prompt.render_deck_json`), so this cap now guards one slide
+rather than six. That changes what it is worth: at 600 it saved roughly ninety
+input tokens a turn and cost the second half of every authored slide, which is
+where the notes stop restating the bullets and start explaining them. The
+shipped deck runs 818 to 1,017 characters a slide, so 1,100 carries every
+authored note whole and still leaves room to edit one.
+
+It stays below :data:`MAX_NOTES_CHARS` on purpose. The deck validator's limit is
+an authoring rule; this is a prompt budget, and a deck written right up to the
+authoring limit must still be truncated rather than pushed into the prompt
+whole.
+"""
 
 MIN_ALIASES = 2
 """Fewest routing aliases a slide must declare, so fallback routing has signal."""
@@ -91,6 +105,10 @@ class Slide(BaseModel):
     @property
     def prompt_notes(self) -> str:
         """Return the notes truncated for prompt embedding (TR-071).
+
+        Authored notes are expected to pass through untouched; truncation is the
+        guard against a deck written up to :data:`MAX_NOTES_CHARS`, not the
+        normal path.
 
         Returns:
             The notes, shortened to :data:`PROMPT_NOTES_CHARS` with an ellipsis

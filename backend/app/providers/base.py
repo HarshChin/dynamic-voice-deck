@@ -240,3 +240,17 @@ class Providers(BaseModel):
             A mapping of stage to implementation name.
         """
         return {"stt": self.stt.name, "llm": self.llm.name, "tts": self.tts.name}
+
+    async def aclose(self) -> None:
+        """Release every provider that holds a resource of its own.
+
+        Called once from the application lifespan's shutdown, which is the only
+        place that owns these instances. Closing is duck-typed rather than part
+        of the protocols above because most implementations -- every fake, and
+        anything wrapping an in-process model -- hold nothing to release, and a
+        mandatory empty ``aclose`` on each would be ceremony, not safety.
+        """
+        for provider in (self.stt, self.llm, self.tts):
+            aclose = getattr(provider, "aclose", None)
+            if aclose is not None:
+                await aclose()

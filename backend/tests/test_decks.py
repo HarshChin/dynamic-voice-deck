@@ -65,6 +65,17 @@ MAX_BULLET_CHARS = 60
 """Longest on-screen bullet. Bullets are read at a glance; the substance lives
 in the notes."""
 
+UNSPEAKABLE_MARKUP = ("~", "*", "`", "#", "http")
+"""Fragments no shipped slide may print.
+
+The deck is the strongest example the model has of how to write, because it is
+the only prose in the prompt that is not an instruction. ``prompts/presenter.md``
+tells it to say "about three hundred milliseconds" rather than "~300ms" and to
+avoid markdown and URLs entirely -- and a bullet reading "~30 ms" teaches the
+opposite on every single turn. The chunker strips markdown before synthesis
+(TR-044), but that is a net under the model, not a licence to write markup here.
+"""
+
 
 def _slide(index: int, **overrides: Any) -> dict[str, Any]:
     """Return a minimal valid slide payload, with any field overridden."""
@@ -131,16 +142,39 @@ def test_the_shipped_deck_meets_the_authoring_contract(shipped_deck: Deck) -> No
         # sentences, ending in a full stop.
         assert slide.notes.endswith("."), slide.title
         assert slide.notes.count(". ") >= 2, slide.title
-        # Whatever their length, they must survive truncation into the prompt.
-        assert len(slide.prompt_notes) <= PROMPT_NOTES_CHARS, slide.title
 
         assert 1 <= len(slide.bullets) <= 6, slide.title
         for bullet in slide.bullets:
             assert len(bullet) <= MAX_BULLET_CHARS, bullet
 
+        for text in (slide.notes, *slide.bullets):
+            for fragment in UNSPEAKABLE_MARKUP:
+                assert fragment not in text.lower(), f"slide {slide.index}: {text}"
+
         assert len(slide.aliases) >= MIN_ALIASES, slide.title
         missing = set(REQUIRED_ALIASES[slide.index]) - set(slide.aliases)
         assert not missing, f"slide {slide.index} dropped PRD aliases {missing}"
+
+
+def test_every_authored_note_reaches_the_prompt_whole(shipped_deck: Deck) -> None:
+    """TC-BE-140a: no shipped slide's notes are truncated on the way into the prompt.
+
+    The prompt now carries the notes of one slide rather than all six
+    (:func:`app.pipeline.prompt.render_deck_json`), so a tight budget saves
+    almost nothing and costs a great deal. At 600 characters every slide in this
+    deck lost its second half -- which is where the notes stop restating the
+    bullets and start explaining them, the part the agent is worth listening to
+    for. The truncation guard stays for a deck authored up to the limit; the
+    shipped deck must simply never reach it.
+    """
+    for slide in shipped_deck.slides:
+        assert slide.prompt_notes == slide.notes, (
+            f"slide {slide.index} loses {len(slide.notes) - PROMPT_NOTES_CHARS} characters "
+            f"of notes on the way into the prompt"
+        )
+    assert PROMPT_NOTES_CHARS < MAX_NOTES_CHARS, (
+        "the prompt budget must stay under the authoring limit, or truncation is dead code"
+    )
 
 
 def test_slide_lookup_is_one_based_and_last_index_names_the_final_slide(

@@ -84,6 +84,11 @@ class HistoryMessage(BaseModel):
 class _PendingTurn:
     """The assistant turn currently being generated and spoken.
 
+    It outlives generation on purpose. The model finishes streaming long before
+    the room finishes hearing the answer, and a barge-in landing in that window
+    still has to cut history to what was actually heard, so the turn stays
+    addressable until the *next* one begins (TR-051).
+
     Attributes:
         turn_id: Identifier of the turn, matching ``Session.turn_id``.
         sentences: Segments handed to TTS so far, in order.
@@ -160,10 +165,25 @@ class ConversationHistory:
     def current_turn_id(self) -> int | None:
         """Turn id of the answer most recently begun, or ``None`` when none was.
 
-        Survives :meth:`truncate_current` so that a second, more precise
-        interrupt for the same turn is still recognised as current.
+        Survives both :meth:`add_assistant` and :meth:`truncate_current`, so a
+        late or refined interrupt for that turn is still recognised as current.
+        Only :meth:`begin_assistant_turn` moves it on.
         """
         return self._pending.turn_id if self._pending is not None else None
+
+    @property
+    def last_recorded_sentence_id(self) -> int | None:
+        """Id of the last segment recorded for the turn in progress.
+
+        The truncation point for an end the user did not ask for -- a watchdog
+        expiry, a provider failure, a pause -- where everything already sent is
+        by definition everything that was heard. ``None`` when the turn has not
+        spoken yet, which is exactly what :meth:`truncate_current` wants in that
+        case.
+        """
+        if self._pending is None or not self._pending.sentences:
+            return None
+        return len(self._pending.sentences) - 1
 
     @property
     def messages(self) -> tuple[HistoryMessage, ...]:
@@ -212,10 +232,17 @@ class ConversationHistory:
     def add_assistant(self, text: str, sentences: Sequence[str] | None = None) -> None:
         """Append the assistant's completed answer.
 
-        A turn that was already truncated is left alone: the user interrupted it,
-        and re-adding the full text would restore exactly the sentences nobody
-        heard. This is the race between an in-flight interrupt and a turn that
-        finishes a few milliseconds later.
+        A turn that already holds an entry is left alone. In practice that means
+        it was truncated: the user interrupted it, and re-adding the full text
+        would restore exactly the sentences nobody heard. This is the race
+        between an in-flight interrupt and a turn that finishes a few
+        milliseconds later.
+
+        The turn stays pending afterwards. Generation finishing is not the same
+        event as the room finishing listening -- with audio the gap is seconds --
+        and an interrupt arriving in between must still be able to cut this
+        entry down to what was heard, which :meth:`truncate_current` does by
+        rewriting the message stored here.
 
         Args:
             text: The full answer as generated.
@@ -223,8 +250,12 @@ class ConversationHistory:
                 :meth:`record_sentence` for the turn in progress.
         """
         pending = self._pending
-        if pending is not None and pending.truncated:
-            logger.warning("history.assistant_after_truncation", turn_id=pending.turn_id)
+        if pending is not None and pending.message is not None:
+            logger.warning(
+                "history.assistant_after_truncation",
+                turn_id=pending.turn_id,
+                truncated=pending.truncated,
+            )
             return
         spoken = list(sentences) if sentences is not None else self._pending_sentences()
         message = HistoryMessage(
@@ -234,7 +265,8 @@ class ConversationHistory:
             turn_id=pending.turn_id if pending is not None else None,
         )
         self._body.append(message)
-        self._pending = None
+        if pending is not None:
+            pending.message = message
 
     def add_tool_call(self, call_id: str, name: str, arguments: dict[str, Any]) -> None:
         """Append the assistant entry recording one tool call.
@@ -310,7 +342,9 @@ class ConversationHistory:
         if stale is not None and stale.message is None and stale.sentences:
             # Neither completed nor truncated: the turn died some other way, and
             # what it spoke is about to be lost. Loud, because it means the
-            # caller skipped truncate_current on an error path.
+            # caller skipped truncate_current on an error path. This is the only
+            # place a pending turn is dropped, which is what keeps a finished
+            # turn truncatable for as long as the room might still be hearing it.
             logger.warning(
                 "history.pending_turn_discarded",
                 turn_id=stale.turn_id,
@@ -351,6 +385,11 @@ class ConversationHistory:
             turn_id: The turn the interrupt refers to.
             last_completed_sentence_id: Id of the last segment heard in full, or
                 ``None`` when playback had not started.
+
+        A turn that has already finished generating is still the turn in
+        progress until the next one begins, so this keeps working in the window
+        between the last token and the last sample of playback -- with audio,
+        the window in which most barge-ins actually land.
 
         Returns:
             ``True`` if the turn was rewritten. ``False`` when ``turn_id`` is not

@@ -25,25 +25,41 @@ export interface SlideProps {
  *
  * The highlight is owned here rather than in the store because it is a piece of presentation
  * timing, not session state: the server says *which* bullet matters, and this component decides
- * how long that stays true (PRD F1 — four seconds, or until the next highlight arrives).
+ * how long that stays true (PRD F1 — four seconds, or until the next highlight arrives). Every
+ * highlight gets its own four seconds, including a repeat of a bullet that was emphasised earlier
+ * in the life of the slide.
+ *
+ * A highlight that arrives while the identical one is already on screen is invisible here — the
+ * props are unchanged, so React does not re-render — which is the one case the clock does not
+ * restart for. Nothing on screen changes either, so the emphasis simply runs out its original four
+ * seconds.
  *
  * @param props - The slide and the bullet to emphasise.
  * @returns The slide element.
  */
 export function Slide({ slide, highlight }: SlideProps): JSX.Element {
-  // One highlight is identified by the slide it lives on and the bullet it points at. Deriving the
-  // emphasis from that key rather than mirroring the prop into state means a new highlight
-  // replaces the previous one during the same render, with no intermediate frame showing both.
+  // One highlight is identified by the slide it lives on and the bullet it points at, but that key
+  // repeats: the agent may come back to a bullet it has emphasised before. So the expiry is a flag
+  // about *this* highlight, discarded the moment a different one is asked for — remembering which
+  // key expired would make any repeat of that key permanently un-emphasisable.
   const key = `${String(slide.index)}:${highlight === null ? "none" : String(highlight)}`;
-  const [expiredKey, setExpiredKey] = useState<string | null>(null);
-  const active = highlight !== null && expiredKey !== key ? highlight : null;
+  const [emphasised, setEmphasised] = useState(key);
+  const [expired, setExpired] = useState(false);
+  if (emphasised !== key) {
+    // React's "adjust state when a prop changes" pattern: setting state during render re-runs this
+    // component before anything is committed, so the new highlight is emphasised in the same frame
+    // it arrives. An effect would paint one frame of the old, expired state first.
+    setEmphasised(key);
+    setExpired(false);
+  }
+  const active = highlight !== null && !expired ? highlight : null;
 
   useEffect(() => {
     if (highlight === null) {
       return undefined;
     }
     const timer = setTimeout(() => {
-      setExpiredKey(key);
+      setExpired(true);
     }, HIGHLIGHT_DURATION_MS);
     // Clearing on cleanup is what makes "or until the next highlight" true: the outgoing timer
     // cannot fire after its highlight has been replaced.

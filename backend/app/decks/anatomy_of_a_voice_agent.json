@@ -11,9 +11,9 @@
         "Just talk: ask anything, in any order",
         "Interrupt me mid-sentence and I stop",
         "Say \"walk me through it\" for the full tour",
-        "Open weights end to end, running on a laptop"
+        "Open weights end to end, none of it proprietary"
       ],
-      "notes": "Welcome. This is Dynamic Voice Deck, and the deck is about the system you are talking to right now. There is no speech-to-speech model here: your audio goes to Whisper for transcription, the text to an open-weight language model that answers and calls a navigation tool, and my reply to Kokoro for speech. Every millisecond of that chain belongs to this codebase, which is the point of the demo. So speak to me the way you would to a person. Ask a question and I will jump to the slide that answers it, then explain it in a few sentences. Three things are worth trying. Ask something out of order, like how interruption works, and watch the slide change before I speak. Talk over me and I will stop within about a tenth of a second and listen. Or say walk me through it and I will present the whole deck end to end.",
+      "notes": "Welcome. This is Dynamic Voice Deck, and the deck is about the system you are talking to right now. There is no speech-to-speech model here: your audio goes to Whisper for transcription, the text to an open-weight language model that answers and calls a navigation tool, and my reply to Kokoro for speech. Every millisecond of that chain belongs to this codebase, which is the point of the demo. So speak to me the way you would to a person. Ask a question and I will jump to the slide that answers it, then explain it in a few sentences. Three things are worth trying. Ask something out of order, like how interruption works, and watch the slide change before I speak. Talk over me and I will stop inside a hundred and fifty milliseconds and listen. Or say walk me through it and I will present the whole deck end to end.",
       "aliases": [
         "intro",
         "start",
@@ -31,11 +31,12 @@
       "bullets": [
         "Endpointing: 600 ms of silence ends your turn",
         "Speech to text: about 300 ms",
-        "First token from the model: about 250 ms",
+        "First token from the model: 250 ms budgeted",
         "First audio chunk from Kokoro: about 250 ms",
-        "Roughly 1.5 s to first sound, 2.5 s at p95"
+        "Budget: 1.5 s to first sound, 2.5 s at p95",
+        "Measured now: first token 700 ms to 2.3 s"
       ],
-      "notes": "Here is where the milliseconds go, measured from the end of your speech to the first sound of mine. Endpointing costs six hundred, because that is how long I wait in silence before deciding you have finished. Transcription takes about three hundred. The model returns its first token roughly two hundred and fifty later, and I start speaking as soon as the first sentence is complete, so synthesis adds another two hundred and fifty. Network and scheduling take forty. That totals about one and a half seconds to first audio, with a ceiling of two and a half at the ninety-fifth percentile. The interesting part is that endpointing is the largest single line item, and it is a product decision rather than a model limit. Shorten it and I cut you off; lengthen it and I feel slow. Everything else is bought with engineering: streaming tokens, synthesising the first sentence before the last one is written, and one request per turn instead of a permanent stream.",
+      "notes": "Here is where the milliseconds go, measured from the end of your speech to the first sound of mine. Endpointing costs six hundred, because that is how long I wait in silence before deciding you have finished. Transcription takes about three hundred. The budget gives the model two hundred and fifty to its first token, and synthesis another two hundred and fifty once the first sentence is complete. Network and scheduling take forty. That totals about one and a half seconds, with a ceiling of two and a half at the ninety-fifth percentile. One line of that is missing its number today. Measured against the real service, the model's first token takes anywhere from seven hundred milliseconds to over two seconds, so first sound is nearer three seconds than one and a half. The rest of the budget holds. The interesting part is that endpointing is the largest item I actually control, and it is a product decision rather than a model limit. Shorten it and I cut you off; lengthen it and I feel slow.",
       "aliases": [
         "latency",
         "speed",
@@ -54,7 +55,7 @@
       "index": 3,
       "title": "Hearing: VAD and Turn-Taking",
       "bullets": [
-        "Silero VAD scores ~30 ms frames in the browser",
+        "Silero VAD scores 32 ms frames in the browser",
         "600 ms of silence means you are finished",
         "Under 250 ms is a misfire and is discarded",
         "300 ms of pre-roll saves your first syllable",
@@ -102,13 +103,14 @@
       "index": 5,
       "title": "Thinking: Tool Calling and Intent Routing",
       "bullets": [
-        "The whole deck sits in the system prompt",
+        "All titles and bullets; notes for the slide on screen",
         "go_to_slide(index, reason) moves the deck",
         "highlight_bullet emphasises one line",
-        "Alias scoring catches a missed tool call",
+        "Navigating costs two model round trips per turn",
+        "Alias scoring on the server catches a missed call",
         "Your manual clicks are told to the model too"
       ],
-      "notes": "Thinking is one streaming call to an open-weight model with the whole deck in the system prompt: every slide index, title, bullet, alias and speaker note. Those notes are my ground truth, so if you ask something the deck does not cover I say so rather than invent an answer. Two tools are exposed. Go to slide takes an index and a short reason, the text you see in the event log, and I call it before I speak so the slide arrives ahead of the words. Highlight bullet emphasises one line. If I answer about another slide but forget the tool call, a keyword fallback scores your words against each slide's aliases and navigates anyway. Both paths are logged distinctly, so the demo can show you which one fired. Navigating by hand works too: the move is appended to my history as a note, so I always know where you took us.",
+      "notes": "Thinking is a streaming call to an open-weight model, and the prompt it sees is deliberately smaller than the deck. Every slide's index, title and bullets go in, but speaker notes only for the slide you are looking at, because sending all six cost about sixteen hundred tokens a turn against a ceiling of eight thousand a minute. To talk about another slide in detail I have to move there first, and its notes arrive with the next request. That is why navigating costs two round trips: the first call moves the deck and says nothing, the tool result goes back with the new notes, and the second call is the one you hear. Two tools exist. Go to slide takes an index and a short reason, the text you see in the event log. Highlight bullet emphasises one line. Ask for a slide that does not exist and the server refuses and tells me why. Answer about another slide but forget the tool call, and the server scores my own answer against each slide's aliases and moves the deck anyway. Those aliases never leave the server.",
       "aliases": [
         "tools",
         "tool calling",

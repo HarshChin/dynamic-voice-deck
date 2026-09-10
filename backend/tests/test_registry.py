@@ -23,6 +23,7 @@ import sys
 from typing import Final
 
 import pytest
+from app import main
 from app.config import BACKEND_ROOT, Settings
 from app.errors import ConfigError
 from app.pipeline.tools import build_tools
@@ -38,6 +39,7 @@ from app.providers.base import (
 from app.providers.groq_llm import PROVIDER_NAME, GroqLLM
 from app.providers.registry import (
     ENV_EXAMPLE,
+    GROQ,
     LLM_VALUES,
     STT_VALUES,
     TTS_VALUES,
@@ -289,3 +291,69 @@ def test_selecting_fake_never_imports_groq_and_production_never_imports_fakes() 
     assert probe["after_import"] == {"groq": False, "fakes": False}
     assert probe["after_build"] == {"groq": False, "fakes": True}
     assert probe["llm"] == "fake_llm"
+
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Provider lifetime belongs here rather than with the startup tests: the
+# registry is what constructs these instances, and `Providers.aclose` is the
+# only seam through which anything gives them back.
+
+
+async def test_closing_the_providers_releases_the_ones_that_hold_something() -> None:
+    """TC-BE-178: aclose closes a provider that has one and steps over those that do not.
+
+    Only the Groq provider owns anything -- an httpx connection pool -- and the
+    fakes deliberately expose no ``aclose`` at all, because most providers hold
+    nothing to release and a mandatory empty method on each would be ceremony
+    rather than safety. Both halves have to work: a leaked pool warns on garbage
+    collection and keeps sockets open across a reload, and a teardown that
+    insisted on the method would crash shutting down the fake stack every
+    end-to-end test runs against.
+    """
+    llm = GroqLLM(
+        api_key=API_KEY.get_secret_value(),
+        model="openai/gpt-oss-120b",
+        base_url="https://api.groq.test/openai/v1",
+        temperature=0.4,
+        max_tokens=350,
+    )
+    providers = Providers(stt=FakeSTT(), llm=llm, tts=FakeTTS())
+    assert not hasattr(providers.stt, "aclose")
+
+    await providers.aclose()
+
+    assert llm._client.is_closed is True
+    # Idempotent: shutting down twice must not raise on the way out.
+    await providers.aclose()
+
+
+async def test_the_lifespan_closes_the_providers_it_built(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+) -> None:
+    """TC-BE-179: application shutdown gives back the LLM's connection pool.
+
+    ``GroqLLM.aclose`` existed from the first commit and nothing called it, so
+    the pool outlived the process's own shutdown. The lifespan is the only owner
+    of the providers, which makes it the only place that can.
+
+    Logging is stubbed out because ``configure_logging`` rewrites process-wide
+    handlers and structlog's configuration; this test is about provider
+    teardown, and the startup suite owns the logging assertions along with the
+    fixture that undoes them.
+    """
+    monkeypatch.setattr(main, "configure_logging", lambda _settings: None)
+    monkeypatch.setenv("STT_PROVIDER", FAKE)
+    monkeypatch.setenv("LLM_PROVIDER", GROQ)
+    monkeypatch.setenv("TTS_PROVIDER", FAKE)
+    monkeypatch.setenv("GROQ_API_KEY", API_KEY.get_secret_value())
+    assert settings.groq_api_key is None  # The fixture scrubbed the developer's own key.
+
+    app = main.create_app()
+    async with main.lifespan(app):
+        providers = app.state.app_state.providers
+        assert isinstance(providers.llm, GroqLLM)
+        assert providers.llm._client.is_closed is False
+
+    assert providers.llm._client.is_closed is True

@@ -68,7 +68,7 @@ def assert_tool_messages_are_paired(messages: list[Message]) -> None:
 
 
 def test_truncating_mid_turn_keeps_only_the_sentences_that_were_heard() -> None:
-    """TC-BE-020."""
+    """TC-BE-220."""
     history = make_history()
     history.add_user("what is barge-in?")
     speak(history, 1, ["s0", "s1", "s2"])
@@ -207,8 +207,11 @@ def test_truncating_a_turn_that_is_not_current_changes_nothing() -> None:
     assert history.truncate_current(1, 0) is False
     assert history.to_provider_messages() == before
 
+    # Still ignored once that turn has finished generating: it is the turn *id*
+    # that has to match. What finishing no longer does is make turn 2 itself
+    # untouchable -- see the barge-in-after-generation case below.
     history.add_assistant("a. b.", ["a.", "b."])
-    assert history.truncate_current(2, 0) is False
+    assert history.truncate_current(1, 0) is False
     assert history.to_provider_messages()[-1].content == "a. b."
 
 
@@ -230,7 +233,7 @@ def test_capping_leaves_every_retained_tool_message_paired() -> None:
 
 
 def test_recording_a_sentence_without_a_turn_is_a_programming_error() -> None:
-    """TC-BE-140."""
+    """TC-BE-221."""
     history = make_history()
 
     with pytest.raises(RuntimeError, match="no assistant turn in progress"):
@@ -238,7 +241,7 @@ def test_recording_a_sentence_without_a_turn_is_a_programming_error() -> None:
 
 
 def test_a_late_completion_cannot_restore_the_sentences_nobody_heard() -> None:
-    """TC-BE-141."""
+    """TC-BE-222."""
     history = make_history()
     history.add_user("q")
     speak(history, 1, ["heard.", "unheard."])
@@ -253,7 +256,7 @@ def test_a_late_completion_cannot_restore_the_sentences_nobody_heard() -> None:
 
 
 def test_a_second_more_precise_interrupt_refines_the_same_message() -> None:
-    """TC-BE-142."""
+    """TC-BE-223."""
     history = make_history()
     history.add_user("q")
     speak(history, 1, ["a.", "b.", "c."])
@@ -269,7 +272,7 @@ def test_a_second_more_precise_interrupt_refines_the_same_message() -> None:
 
 
 def test_tool_calls_are_serialised_in_the_openai_wire_shape() -> None:
-    """TC-BE-143."""
+    """TC-BE-224."""
     history = make_history()
     history.add_user("q")
     history.begin_assistant_turn(1)
@@ -299,7 +302,7 @@ def test_truncation_boundaries_never_produce_a_dangling_marker(
     last_id: int,
     expected: str,
 ) -> None:
-    """TC-BE-144."""
+    """TC-BE-225."""
     history = make_history()
     history.add_user("q")
     speak(history, 1, sentences)
@@ -310,7 +313,7 @@ def test_truncation_boundaries_never_produce_a_dangling_marker(
 
 
 def test_the_cap_comes_from_settings_and_must_be_at_least_one() -> None:
-    """TC-BE-145."""
+    """TC-BE-226."""
     assert ConversationHistory().max_turns == Settings().max_history_turns
     assert ConversationHistory(max_turns=3).max_turns == 3
 
@@ -319,7 +322,7 @@ def test_the_cap_comes_from_settings_and_must_be_at_least_one() -> None:
 
 
 def test_serialisation_returns_provider_messages_with_the_system_prompt_first() -> None:
-    """TC-BE-146."""
+    """TC-BE-227."""
     history = make_history()
     add_pairs(history, 2)
 
@@ -331,7 +334,7 @@ def test_serialisation_returns_provider_messages_with_the_system_prompt_first() 
 
 
 def test_the_messages_snapshot_cannot_be_used_to_corrupt_history() -> None:
-    """TC-BE-147."""
+    """TC-BE-228."""
     history = make_history()
     history.add_user("q")
     speak(history, 1, ["a."])
@@ -346,7 +349,7 @@ def test_the_messages_snapshot_cannot_be_used_to_corrupt_history() -> None:
 
 
 def test_a_completed_turn_falls_back_to_the_sentences_it_recorded() -> None:
-    """TC-BE-148."""
+    """TC-BE-229."""
     history = make_history()
     history.add_user("q")
     speak(history, 1, ["a.", "b."])
@@ -355,11 +358,13 @@ def test_a_completed_turn_falls_back_to_the_sentences_it_recorded() -> None:
 
     assert history.messages[-1].sentences == ["a.", "b."]
     assert history.messages[-1].turn_id == 1
-    assert history.current_turn_id is None
+    # Still the turn in progress: it has stopped generating, not stopped being
+    # spoken, and a barge-in landing now must still find something to cut.
+    assert history.current_turn_id == 1
 
 
 def test_the_pinned_prompt_survives_capping_but_a_note_ages_out_with_its_pair() -> None:
-    """TC-BE-149."""
+    """TC-BE-230."""
     history = make_history(max_turns=1)
     history.add_user("first")
     history.add_system_note("[User manually moved to slide 4: Barge-in]")
@@ -373,7 +378,7 @@ def test_the_pinned_prompt_survives_capping_but_a_note_ages_out_with_its_pair() 
 
 
 def test_a_turn_left_unfinished_is_discarded_when_the_next_one_begins() -> None:
-    """TC-BE-150."""
+    """TC-BE-231."""
     history = make_history()
     history.add_user("q")
     speak(history, 1, ["a.", "b."])
@@ -383,3 +388,84 @@ def test_a_turn_left_unfinished_is_discarded_when_the_next_one_begins() -> None:
 
     assert history.current_turn_id == 2
     assert [m.role for m in history.to_provider_messages()] == ["system", "user"]
+
+
+def test_a_finished_turn_can_still_be_truncated_until_the_next_one_begins() -> None:
+    """TC-BE-200: TR-051 -- the barge-in window outlives generation.
+
+    The model stops generating long before the room stops listening. With audio
+    the gap is the whole playback of the answer; in this milestone it is the
+    window between the SPEAKING and LISTENING transitions. Completing the turn
+    used to clear it, so an interrupt landing there found nothing to cut and
+    every sentence nobody heard stayed in history -- the exact failure this
+    module exists to prevent.
+    """
+    history = make_history()
+    history.add_user("q")
+    speak(history, 1, ["One.", "Two.", "Three.", "Four."])
+    history.add_assistant("One. Two. Three. Four.")
+
+    assert history.truncate_current(1, 0) is True
+
+    # Rewritten in place: the finished answer is cut down, not duplicated.
+    assert [m.role for m in history.to_provider_messages()] == ["system", "user", "assistant"]
+    assert history.to_provider_messages()[-1].content == f"One. {INTERRUPTED_MARKER}"
+    assert history.messages[-1].sentences == ["One."]
+
+    # And the completion cannot come back afterwards to undo the cut.
+    history.add_assistant("One. Two. Three. Four.")
+    assert history.to_provider_messages()[-1].content == f"One. {INTERRUPTED_MARKER}"
+
+
+def test_the_finished_turn_stops_being_truncatable_once_the_next_one_begins() -> None:
+    """TC-BE-201: TR-051 -- the next turn is the only thing that closes the window."""
+    history = make_history()
+    history.add_user("q")
+    speak(history, 1, ["a.", "b."])
+    history.add_assistant("a. b.")
+
+    history.add_user("q2")
+    history.begin_assistant_turn(2)
+
+    assert history.current_turn_id == 2
+    assert history.truncate_current(1, 0) is False
+    assert [m.content for m in history.to_provider_messages()] == [
+        SYSTEM_PROMPT,
+        "q",
+        "a. b.",
+        "q2",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("sentences", "expected"),
+    [([], None), (["a."], 0), (["a.", "b.", "c."], 2)],
+    ids=["nothing-spoken", "one-sentence", "three-sentences"],
+)
+def test_the_last_recorded_sentence_is_the_cut_for_an_end_nobody_asked_for(
+    sentences: list[str],
+    expected: int | None,
+) -> None:
+    """TC-BE-202: TR-051 -- a watchdog or provider failure cuts at what was sent.
+
+    Nobody interrupted, so there is no client-supplied truncation point; every
+    sentence already handed to TTS is one the room heard, and there is nothing
+    after it.
+    """
+    history = make_history()
+    history.add_user("q")
+    speak(history, 1, sentences)
+
+    assert history.last_recorded_sentence_id == expected
+
+    history.truncate_current(1, history.last_recorded_sentence_id)
+    content = history.to_provider_messages()[-1].content
+    if expected is None:
+        assert content == INTERRUPTED_BEFORE_SPEAKING
+    else:
+        assert content == f"{' '.join(sentences)} {INTERRUPTED_MARKER}"
+
+
+def test_no_turn_in_progress_has_no_last_recorded_sentence() -> None:
+    """TC-BE-202: a session that has not answered anything yet reports None."""
+    assert make_history().last_recorded_sentence_id is None
