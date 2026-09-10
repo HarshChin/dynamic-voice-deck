@@ -1,0 +1,27 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# node
+node_modules/
+dist/
+*.local
+
+# model weights (downloaded on first run)
+backend/models/
+*.onnx
+*.bin
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
