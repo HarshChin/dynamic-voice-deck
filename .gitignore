@@ -20,8 +20,6 @@ coverage/
 
 # node
 node_modules/
-# Voice-detector model and wasm, copied from node_modules by `npm run postinstall`.
-frontend/public/vad/
 dist/
 *.local
 # `tsc -b` incremental build state

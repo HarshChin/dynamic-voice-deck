@@ -11,5 +11,3 @@ src/assets
 *.min.js
 *.min.css
 
-# Vendored voice-detector assets, copied by `npm run postinstall`.
-public/vad/

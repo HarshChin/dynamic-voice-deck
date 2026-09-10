@@ -25,6 +25,47 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Silero replaced by an energy detector, after four verified failures · uncommitted
+**Scope:** `frontend/src/audio/microphone.ts`, `frontend/public/worklets/capture.js`,
+`frontend/package.json`, `frontend/vite.config.ts`, `app/decks/anatomy_of_a_voice_agent.json`,
+`docs/TRD.md` (TR-110, §2.2, §3.2)
+**Change:** Speech detection no longer uses Silero VAD through `@ricky0123/vad-web`. It is an audio
+worklet in this repository measuring per-frame loudness, with hysteresis and the same timings the
+design specified.
+
+**Why, in the order the failures arrived, each reproduced in a real browser:**
+1. Copying the ONNX runtime's WebAssembly loader into `public/` and pointing the runtime at it:
+   Vite refuses to let source import a module from `public/`, by design and by name in the error.
+2. Removing it and letting the runtime resolve its own loader: Vite's dependency pre-bundler rewrites
+   that dynamic import into `.vite/deps/`, where the loader was never copied. "Failed to fetch
+   dynamically imported module."
+3. Excluding the runtime from pre-bundling: fixes that and breaks the detector instead, because
+   `@ricky0123/vad-web` is CommonJS and *depends* on pre-bundling to be importable by name. Blank
+   page, "does not provide an export named 'MicVAD'".
+4. Setting `wasmPaths` on the runtime: silently ineffective, because the detector imports
+   `onnxruntime-web/wasm` while I was configuring `onnxruntime-web` -- two entry points, two module
+   instances, two `env` objects. Reading the bundled source then showed that naming the loader path
+   is precisely what forces the fetch, so the correct move was to say nothing about it. Removing it
+   returned to failure 2.
+
+**The turning point was tooling, not insight.** Three of those attempts were shipped to the owner and
+failed in front of them, because a terminal cannot execute a browser's module graph. Installing
+Playwright and loading the page headlessly turned a guess-and-ask loop into a five-minute one, and
+found failure 4 immediately. That should have happened after the first screenshot.
+
+**What replaced it.** An `AudioWorkletProcessor` downmixes, resamples to 16 kHz, and reports the RMS
+of each 32 ms frame; the main thread applies hysteresis, pre-roll, and a minimum speech duration.
+Verified headlessly with a fake capture device: the session moved `listening -> hearing` on the
+device's tone, with no page errors.
+
+**The trade-off, stated plainly and put on the slide.** A neural detector distinguishes speech from
+other sounds far better, especially in a noisy room. An energy threshold is adequate for the question
+this product asks -- has the person started, have they stopped -- particularly with echo cancellation
+suppressing the agent's own voice. It also removes a WebAssembly runtime, a model download, 100 MB of
+vendored assets and a CDN dependency, which for a demo that has to work on a strange network is worth
+something by itself. Slide 3's notes and TR-110 now say all of this; the deck describes its own
+architecture, so leaving it claiming Silero would have been a lie the agent tells out loud.
+
 ### 2026-09-11 · Phase 3: the microphone, and interruption that is actually felt · uncommitted
 **Scope:** `app/providers/groq_stt.py`, `app/providers/registry.py`, `app/session.py`, `app/main.py`,
 `app/pipeline/{turn,metrics}.py`, `frontend/src/audio/microphone.ts`,

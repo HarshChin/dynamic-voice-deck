@@ -43,7 +43,7 @@ flowchart LR
 
 | Container | Tech | Responsibilities |
 |---|---|---|
-| **Frontend** | React 19, TypeScript 6, Vite 8, `@ricky0123/vad-web` (Silero VAD, ONNX/WASM), Web Audio API (AudioWorklet), zustand | Capture and resample mic audio; detect speech on-device; render slides; play streamed audio gaplessly; execute client tier of barge-in; display state, transcript, metrics. |
+| **Frontend** | React 19, TypeScript 6, Vite 8, Web Audio API (AudioWorklet capture and playback), zustand. No ML dependency in the browser (see TR-110). | Capture and resample mic audio; detect speech on-device; render slides; play streamed audio gaplessly; execute client tier of barge-in; display state, transcript, metrics. |
 | **Backend** | Python 3.12, FastAPI, uvicorn, asyncio, httpx, pydantic v2, pydantic-settings, `groq` SDK, `kokoro-onnx`, numpy | Own session state machine and conversation history; run the STT→LLM→TTS pipeline as a cancellable task; validate and apply slide tool calls; stream audio; emit metrics. |
 | **Providers (external)** | Groq REST API | Whisper large-v3-turbo transcription; `openai/gpt-oss-120b` chat completions with tools and streaming. |
 
@@ -196,7 +196,7 @@ sequenceDiagram
 |---|---|
 | `react`, `react-dom` (19.x) | UI |
 | `zustand` | Store |
-| `@ricky0123/vad-web`, `onnxruntime-web` | Silero VAD in the browser |
+| *(none)* | Speech detection is an audio worklet in this repository; see TR-110 |
 | dev: `vite` 8, `typescript` 6, `eslint` 10 + `typescript-eslint` 8 (type-checked rules), `prettier`, `vitest` 4, `@testing-library/react`, `playwright` | Build and test. The Vite template's default linter (`oxlint`) is removed in favour of typescript-eslint because type-aware rules (`no-floating-promises`, `no-misused-promises`, `await-thenable`) directly guard the async audio and WebSocket code. |
 
 ---
@@ -442,7 +442,7 @@ frontend/src/
 
 | ID | Requirement |
 |---|---|
-| TR-110 | Silero VAD via `@ricky0123/vad-web` `MicVAD` **or** the frame-level API fed by our worklet (preferred, to share one mic stream). Model and WASM assets are served from `frontend/public/vad/` (copied at install; no CDN at runtime). |
+| TR-110 | Detection runs in the browser on an `AudioWorkletProcessor` that downmixes, resamples to 16 kHz, and reports per-frame RMS, with hysteresis and the timings below on the main thread. **Changed 2026-09-11:** the design specified Silero VAD via `@ricky0123/vad-web`; it could not be made to load under Vite (see the engineering log for the four distinct failures) and was replaced by an energy threshold. Adequate for onset and endpointing with echo cancellation on, worse in a noisy room, and swappable in one file. |
 | TR-111 | Parameters per PRD §F3 in `config.ts`: positive 0.6, negative 0.35, redemption 600 ms, min speech 250 ms, pre-pad 300 ms. |
 | TR-112 | While `PlaybackQueue.isPlaying`, onset requires **3 consecutive** positive frames (≈ 96 ms) to reduce echo-triggered self-interruption; otherwise 1 frame. |
 | TR-113 | On onset: emit `speech.start`; if playing, call `PlaybackQueue.flush()` first and emit `interrupt {last_completed_sentence_id}` (client tier of barge-in). Record `onsetTs = performance.now()`. |
