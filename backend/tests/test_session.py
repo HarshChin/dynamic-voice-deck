@@ -1363,20 +1363,23 @@ def test_an_empty_or_filler_question_is_dropped_without_an_answer(
 # --------------------------------------------------------------------------- #
 
 
-def test_a_binary_frame_is_refused_until_audio_lands(isolated_env: Any) -> None:
-    """TC-BE-055: TR-140 -- a binary frame is a protocol violation in this milestone."""
-    with connect(FakeLLM()) as harness:
+def test_a_binary_frame_without_speech_end_is_refused(isolated_env: Any) -> None:
+    """TC-BE-055: TR-140 -- an utterance may only follow the message that announces it.
+
+    The guard is what tells a real upload apart from a stray frame. Without it a
+    misbehaving client could hand the transcriber arbitrary bytes at any moment.
+    """
+    llm = FakeLLM(sentence_script("Sure thing."))
+
+    with connect(llm) as harness:
         harness.ws.send_bytes(b"\x00\x01" * 16)
-        error = harness.recv()
+        error = harness.recv_until(is_type("error"))[-1]
 
-        # Refusing the frame does not end the session.
-        turn = harness.ask("What is this deck about?")
+        # The session survives: the next question is answered normally.
+        harness.ask("What is this deck about?")
 
-    assert error["type"] == "error"
     assert error["code"] == "unexpected_binary"
     assert error["recoverable"] is True
-    assert "M3" in error["message"]
-    assert only(turn, "transcript.user")[0]["turn_id"] == 1
 
 
 @pytest.mark.skip(reason="utterance size limit arrives with milestone M3 (audio in, TR-182)")

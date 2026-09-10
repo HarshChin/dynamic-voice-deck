@@ -25,6 +25,40 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Phase 3: the microphone, and interruption that is actually felt · uncommitted
+**Scope:** `app/providers/groq_stt.py`, `app/providers/registry.py`, `app/session.py`, `app/main.py`,
+`app/pipeline/{turn,metrics}.py`, `frontend/src/audio/microphone.ts`,
+`frontend/src/session/useSession.ts`, `frontend/scripts/copy-vad-assets.mjs`, and their tests
+**Change:** Speech now goes in as well as out. Whisper on Groq transcribes one finished utterance per
+turn, Silero voice detection runs on-device in the browser, and speech onset while the agent is
+talking silences it before the server hears about it.
+
+**Measured against the real services**, question spoken by Kokoro, downsampled to 16 kHz exactly as
+the browser will send it: transcription **265 ms** and word-perfect, model first token 483 ms,
+synthesis first byte 284 ms, and **1,048 ms from utterance to first sound**.
+
+**The ordering is the design.** On speech onset the browser flushes playback first and tells the
+server second. A round trip in that order would be audible; in this order the sound is gone before
+the interrupt message has left. The server's job is the slower half: cancelling the turn and cutting
+its memory back to the sentences that were actually heard.
+
+**Assets are served from `public/vad/`, not a CDN.** The detector fetches its model and worklet at
+run time and defaults to a third-party host. A microphone feature that silently depends on someone
+else's uptime is a demo waiting to fail on a conference network, so `npm run postinstall` copies them
+locally, where they are pinned by the lockfile and git-ignored.
+
+**A bug fixed by giving up on persuasion.** The second request of a navigating turn kept reopening
+with the sentence the first had already spoken -- "Two layers, actually. Two layers, actually."
+Merging the spoken text into the tool-call message reduced it; instructing the model not to repeat
+reduced it further; neither removed it. It is now enforced in code: a sentence already spoken this
+turn is not spoken again. Dropping a genuine repeat costs a listener nothing, and hearing the same
+line twice is the kind of flaw that makes a demo feel broken. Third time this phase that a
+deterministic guarantee beat an instruction to the model.
+
+**Transcription is refused below 100 ms of audio.** Whisper answers a click with a confident
+hallucination rather than with silence, so the shortest uploads are rejected before they cost
+anything.
+
 ### 2026-09-11 · Slide context moved inside the question, after two weaker attempts failed · uncommitted
 **Scope:** `app/pipeline/prompt.py`, `app/prompts/presenter.md`, `tests/test_turn.py`
 **Change:** Asked "what's this slide about" the agent kept answering about whichever slide it last

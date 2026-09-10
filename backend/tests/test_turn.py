@@ -965,3 +965,54 @@ async def test_cancel_task_lets_a_cancellation_aimed_at_the_caller_through() -> 
         await waiter
     assert waiter.cancelled()
     assert inner.done()
+
+
+async def test_a_sentence_already_spoken_this_turn_is_not_said_again(deck: Deck) -> None:
+    """TC-BE-242: the second request reopening with the first one's words is dropped.
+
+    A navigating turn costs two model requests, and the second regularly repeats
+    the sentence the first already spoke. Merging the spoken text into the
+    tool-call message and instructing the model not to repeat both reduced it
+    without removing it, so the guarantee is made in code.
+    """
+    opener = "Two layers, actually."
+    llm = ScriptedLLM(
+        [
+            TokenDelta(text=f"{opener} "),
+            ToolCallDelta(
+                call_id="call_1",
+                name=GO_TO_SLIDE,
+                arguments={"slide_index": 4, "reason": "interruption"},
+            ),
+            LLMDone(finish_reason="tool_calls"),
+        ],
+        # The model reopens with the same sentence, differently punctuated.
+        [
+            TokenDelta(text="two layers actually! The browser stops first."),
+            LLMDone(finish_reason="stop"),
+        ],
+    )
+
+    turn = await drive(llm, "How do you handle interruptions?", deck=deck)
+
+    spoken = [message.text for message in turn.sent(TranscriptAgentMsg)]
+    assert spoken.count(opener) == 1
+    assert any("browser stops first" in text for text in spoken)
+
+
+async def test_a_repeat_in_a_later_turn_is_still_allowed(deck: Deck) -> None:
+    """TC-BE-243: the drop is scoped to one turn, not to the conversation.
+
+    Asked the same question twice a listener should hear the answer twice; it is
+    only within a single answer that a repeat is a defect.
+    """
+    line = "Two layers, actually."
+    history = ConversationHistory(MAX_HISTORY_TURNS)
+    controller = SlideController(deck)
+
+    for _ in range(2):
+        llm = ScriptedLLM([TokenDelta(text=line), LLMDone(finish_reason="stop")])
+        turn = await drive(
+            llm, "How do you handle interruptions?", deck=deck, slides=controller, history=history
+        )
+        assert [message.text for message in turn.sent(TranscriptAgentMsg)] == [line]

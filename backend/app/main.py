@@ -32,7 +32,6 @@ from .decks.repository import DeckRepository, DeckSummary
 from .errors import AppError, ConfigError, DeckError
 from .logging_setup import configure_logging, get_logger
 from .pipeline.prompt import PromptBuilder
-from .protocol import ErrorCode
 from .providers.base import Providers
 from .providers.registry import build_providers
 from .session import Session, SessionManager
@@ -321,12 +320,7 @@ async def session_endpoint(websocket: WebSocket) -> None:
                 continue
             payload = message.get("bytes")
             if payload is not None:
-                # Audio arrives in milestone M3; until then a binary frame is a
-                # protocol violation rather than something to silently drop.
-                await session.send_error(
-                    ErrorCode.UNEXPECTED_BINARY,
-                    "binary frames are not accepted until milestone M3",
-                )
+                await session.handle_utterance(payload)
     except WebSocketDisconnect:
         pass
     finally:

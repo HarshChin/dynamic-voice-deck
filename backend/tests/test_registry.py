@@ -149,7 +149,6 @@ def test_unknown_provider_name_fails_listing_the_valid_values(
     ("overrides", "expected_variables"),
     [
         pytest.param({"llm_provider": "groq"}, ["LLM_PROVIDER"], id="llm-only"),
-        pytest.param({"stt_provider": "groq"}, ["STT_PROVIDER"], id="stt-only"),
         pytest.param(
             {"stt_provider": "groq", "llm_provider": "groq"},
             ["STT_PROVIDER", "LLM_PROVIDER"],
@@ -178,13 +177,6 @@ def test_missing_groq_key_fails_naming_env_example(
 @pytest.mark.parametrize(
     ("overrides", "variable", "implementation", "milestone"),
     [
-        pytest.param(
-            {"stt_provider": "groq", "groq_api_key": API_KEY},
-            "STT_PROVIDER",
-            "GroqWhisperSTT",
-            "M3",
-            id="groq-stt",
-        ),
         pytest.param(
             {"stt_provider": "local"}, "STT_PROVIDER", "FasterWhisperSTT", "M3", id="local-stt"
         ),

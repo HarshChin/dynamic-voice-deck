@@ -560,6 +560,21 @@ it get ahead of what the listener could plausibly still hear.
 """
 
 
+def _speech_key(sentence: str) -> str:
+    """Normalise a sentence for comparing it against what has already been said.
+
+    Case and surrounding punctuation are ignored, because the second request
+    often reopens with the same words differently punctuated.
+
+    Args:
+        sentence: The segment about to be spoken.
+
+    Returns:
+        A comparison key, empty when the segment holds no words.
+    """
+    return re.sub(r"[^a-z0-9 ]+", "", sentence.lower()).strip()
+
+
 class SpeechSender:
     """Turns finished sentences into transcript messages and audio frames.
 
@@ -608,14 +623,24 @@ class SpeechSender:
         # Set before the task exists: `create_task` can schedule `_run` before
         # the rest of this constructor finishes, and `_run` reads this flag.
         self._stopped = False
+        self._said: set[str] = set()
         self._task: asyncio.Task[None] = asyncio.create_task(self._run(), name=f"speech-{turn_id}")
         self._task.add_done_callback(self._log_result)
 
     async def submit(self, sentence: str) -> None:
-        """Queue one sentence to be spoken.
+        """Queue one sentence to be spoken, unless it has already been said.
 
         Blocks while the queue is full, which is the backpressure that keeps the
         model from running ahead of the voice.
+
+        A turn that navigates costs two model requests, and the second one
+        regularly reopens the answer with the sentence the first one already
+        spoke -- "Two layers, actually. Two layers, actually." Merging the
+        spoken text into the tool-call message and instructing the model not to
+        repeat itself both reduced it without removing it, so the guarantee is
+        made here instead. Dropping a genuine repeat costs a listener nothing;
+        hearing the same sentence twice is the kind of flaw that makes a demo
+        feel broken.
 
         Args:
             sentence: The segment to speak.
@@ -627,6 +652,11 @@ class SpeechSender:
                 loudly instead of blocking.
         """
         await self._raise_if_finished()
+        key = _speech_key(sentence)
+        if key and key in self._said:
+            logger.info("speech.duplicate_dropped", turn_id=self._turn_id, sentence=sentence)
+            return
+        self._said.add(key)
         await self._queue.put(sentence)
 
     async def drain(self) -> None:

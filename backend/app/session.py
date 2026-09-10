@@ -53,6 +53,7 @@ from .protocol import (
     SessionStartMsg,
     SessionState,
     SlideChangedMsg,
+    SpeechEndMsg,
     SpeechStartMsg,
     StateMsg,
     TextInputMsg,
@@ -202,6 +203,11 @@ class Session:
             await self.start_turn(message.text)
         elif isinstance(message, SpeechStartMsg):
             await self._on_speech_start()
+        elif isinstance(message, SpeechEndMsg):
+            # The utterance itself follows as one binary frame (TR-140). Arming
+            # here is what lets a stray binary frame be told apart from a real
+            # upload.
+            self._expecting_binary = True
         elif isinstance(message, InterruptMsg):
             await self._on_interrupt(message.last_completed_sentence_id)
         elif isinstance(message, SlideChangedMsg):
@@ -386,13 +392,54 @@ class Session:
             await cancel_task(self._task)
             await self._end_turn_abnormally()
 
+    async def handle_utterance(self, pcm16: bytes) -> None:
+        """Transcribe an uploaded utterance and answer it (TR-030, TR-140).
+
+        Args:
+            pcm16: Little-endian 16-bit mono samples at 16 kHz, as captured by
+                the browser.
+        """
+        if not self._expecting_binary:
+            await self.send_error(
+                ErrorCode.UNEXPECTED_BINARY,
+                "a binary frame must follow speech.end",
+            )
+            return
+        self._expecting_binary = False
+
+        if len(pcm16) > self._settings.max_utterance_bytes:
+            # TR-182. Closing rather than answering: a frame this size is either
+            # a bug or an attack, and neither deserves a transcription bill.
+            logger.warning("session.utterance_too_large", session_id=self.id, bytes=len(pcm16))
+            await self._ws.close(code=1009, reason="utterance too large")
+            return
+
+        await self.set_state(SessionState.THINKING)
+        try:
+            transcript = await self._providers.stt.transcribe(pcm16)
+        except ProviderError as exc:
+            await self.send(provider_error_message(exc))
+            await self.set_state(SessionState.LISTENING)
+            return
+
+        if not transcript.text.strip():
+            # Silence, a cough, a keyboard. Not an error: just go back to
+            # listening without troubling the model or the user (TR-172).
+            logger.info("session.empty_transcript", session_id=self.id)
+            await self.set_state(SessionState.LISTENING)
+            return
+
+        await self.start_turn(transcript.text, stt_ms=transcript.latency_ms)
+
     # ------------------------------------------------------------------ turn
 
-    async def start_turn(self, text: str) -> None:
+    async def start_turn(self, text: str, *, stt_ms: int | None = None) -> None:
         """Begin a turn, cancelling any turn already running (TR-022).
 
         Args:
             text: The user's words.
+            stt_ms: Milliseconds transcription took, when the words were spoken
+                rather than typed, so the latency panel can show the whole chain.
         """
         if self.slides is None or self.deck is None:
             return
@@ -404,17 +451,22 @@ class Session:
         self.slides.begin_turn()
         self.turn_id += 1
         await self.set_state(SessionState.THINKING)
-        self._task = asyncio.create_task(self._run_turn(text), name=f"turn-{self.turn_id}")
+        self._task = asyncio.create_task(
+            self._run_turn(text, stt_ms=stt_ms), name=f"turn-{self.turn_id}"
+        )
 
-    async def _run_turn(self, text: str) -> None:
+    async def _run_turn(self, text: str, *, stt_ms: int | None = None) -> None:
         """Execute a turn under the watchdog and report its outcome.
 
         Args:
             text: The user's words.
+            stt_ms: Transcription cost to report, when there was one.
         """
         assert self.slides is not None  # noqa: S101 - guarded by start_turn
         turn_id = self.turn_id
         metrics = TurnMetrics(turn_id=turn_id)
+        if stt_ms is not None:
+            metrics.set_stt_ms(stt_ms)
         try:
             async with asyncio.timeout(self._settings.turn_timeout_s):
                 result = await run_turn(

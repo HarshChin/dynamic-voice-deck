@@ -70,6 +70,21 @@ class TurnMetrics:
         """
         return time.perf_counter()
 
+    def set_stt_ms(self, milliseconds: int) -> None:
+        """Record a transcription cost measured before the turn began.
+
+        The session transcribes an utterance *before* it knows there is a turn
+        to run, because an empty transcript means there is no turn at all. The
+        cost is real and belongs in the latency panel, so it is carried in
+        rather than timed here.
+
+        Args:
+            milliseconds: How long transcription took.
+        """
+        now = self.now()
+        self.stt_started = now - milliseconds / 1000
+        self.stt_finished = now
+
     def mark_stt_start(self) -> None:
         """Record that transcription was requested."""
         self.stt_started = self.now()

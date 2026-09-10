@@ -97,7 +97,16 @@ def _build_stt(settings: Settings) -> STTProvider:
 
         return FakeSTT()
     if name == GROQ:
-        raise ConfigError(_not_implemented("STT_PROVIDER", name, "GroqWhisperSTT (TR-081)", "M3"))
+        from .groq_stt import GroqWhisperSTT  # noqa: PLC0415 - deferred like the others
+
+        key = settings.groq_api_key
+        # `_check_groq_credentials` has already run, so a key is present.
+        assert key is not None  # noqa: S101
+        return GroqWhisperSTT(
+            api_key=key.get_secret_value(),
+            base_url=settings.groq_base_url,
+            model=settings.groq_stt_model,
+        )
     if name == "local":
         raise ConfigError(_not_implemented("STT_PROVIDER", name, "FasterWhisperSTT (TR-084)", "M3"))
     raise ConfigError(_unknown("STT_PROVIDER", name, STT_VALUES))

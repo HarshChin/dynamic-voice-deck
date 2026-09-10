@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Microphone } from "../audio/microphone";
 import { PlaybackQueue } from "../audio/playback";
 
 import { API_BASE_PATH } from "../config";
@@ -206,6 +207,9 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
 
   const clientRef = useRef<SessionClient | null>(null);
   const playbackRef = useRef<PlaybackQueue | null>(null);
+  const micRef = useRef<Microphone | null>(null);
+  // Set when speech onset silenced the agent, so a misfire can take it back.
+  const interruptedRef = useRef(false);
   // When the current turn's question left the client, so first-audio can be measured the way a
   // listener experiences it: from asking to hearing (TR-125).
   const askedAtRef = useRef<number | null>(null);
@@ -306,6 +310,53 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     });
     playbackRef.current = playback;
 
+    const microphone = new Microphone({
+      onSpeechStart: () => {
+        const socket = clientRef.current;
+        if (socket === null) {
+          return;
+        }
+        if (playback.isPlaying) {
+          // Tier one of barge-in, and the only tier the listener feels. Silence first, tell the
+          // server second: a round trip here would be audible (PRD F7, TR-113).
+          const stoppedInMs = playback.flush();
+          interruptedRef.current = true;
+          const store = useSessionStore.getState();
+          store.recordClientTimings(store.turnId, { interruptStopMs: Math.round(stoppedInMs) });
+          socket.send({
+            type: "interrupt",
+            last_completed_sentence_id: playback.lastCompletedSentenceId,
+          });
+          return;
+        }
+        socket.send({ type: "speech.start" });
+      },
+      onUtterance: (pcm16, durationMs) => {
+        interruptedRef.current = false;
+        const socket = clientRef.current;
+        if (socket === null) {
+          return;
+        }
+        askedAtRef.current = performance.now();
+        socket.send({ type: "speech.end", duration_ms: durationMs });
+        // The utterance follows as one binary frame, which is what the server is now expecting.
+        socket.sendAudio(pcm16.buffer as ArrayBuffer);
+      },
+      onMisfire: () => {
+        // A cough, a chair, a keystroke. If it silenced the agent, say so: the server can then
+        // stop treating the cut as a question it is waiting for.
+        if (interruptedRef.current) {
+          interruptedRef.current = false;
+          clientRef.current?.send({ type: "interrupt.cancel" });
+        }
+      },
+      onError: (message) => {
+        useSessionStore.getState().logNotice(message, { alert: true });
+      },
+    });
+    micRef.current = microphone;
+    void microphone.start();
+
     const client = new SessionClient({
       deckId,
       mode,
@@ -368,7 +419,12 @@ export function useSession(options: UseSessionOptions = {}): SessionController {
     clientRef.current = null;
     const playback = playbackRef.current;
     playbackRef.current = null;
+    const microphone = micRef.current;
+    micRef.current = null;
+    interruptedRef.current = false;
     setOutputLevel(0);
+    // Releasing the microphone is what turns off the browser's recording indicator.
+    void microphone?.stop();
     // Releasing the device is asynchronous but nothing waits on it; a failure here would only mean
     // an audio context lingering until the page unloads.
     void playback?.close();
