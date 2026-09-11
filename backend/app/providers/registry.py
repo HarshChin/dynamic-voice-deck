@@ -136,9 +136,11 @@ def _build_llm(settings: Settings) -> LLMProvider:
             max_tokens=settings.llm_max_tokens,
         )
     if name == FAKE:
-        from tests.fakes import FakeLLM  # noqa: PLC0415
+        from tests.fakes import FakeLLM, deck_router  # noqa: PLC0415
 
-        return FakeLLM()
+        # Routed rather than fixed: `LLM_PROVIDER=fake` exists so the end-to-end suite can drive a
+        # real browser against a real server and still assert exact slides and exact words.
+        return FakeLLM(router=deck_router)
     if name == "ollama":
         raise ConfigError(_not_implemented("LLM_PROVIDER", name, "OllamaLLM (TR-084)", "M4"))
     raise ConfigError(_unknown("LLM_PROVIDER", name, LLM_VALUES))

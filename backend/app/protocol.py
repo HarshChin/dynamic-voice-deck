@@ -289,6 +289,12 @@ class ErrorMsg(BaseModel):
     code: ErrorCode
     message: str
     recoverable: bool = True
+    retry_after_s: float | None = Field(default=None, ge=0)
+    """Seconds the upstream asked us to wait, when it said (TR-171).
+
+    A number rather than a sentence, because the client counts it down. Only a
+    rate limit sets it; every other failure leaves it ``None``.
+    """
 
 
 ServerMessage = Annotated[

@@ -1,0 +1,45 @@
+/*
+ * The rate-limit chip.
+ *
+ * Amber rather than red: the session is fine and the wait is expected on a free tier, so this is a
+ * status, not a failure. It sits in the control bar beside the orb because that is where a user
+ * looks when the agent has gone quiet.
+ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--dvd-line-strong);
+  border-radius: 999px;
+  background: var(--dvd-surface-2);
+  color: var(--dvd-text-dim);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--dvd-amber);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* The dot is the only moving thing on the page while the agent waits; honour the setting. */
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

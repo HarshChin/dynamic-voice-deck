@@ -209,7 +209,15 @@ export function Controls({
               type="button"
               data-active={pushToTalk ? "true" : undefined}
               aria-pressed={pushToTalk}
-              onClick={() => {
+              onClick={(event) => {
+                // A button keeps focus after a click, and a focused button is operated by the
+                // space bar -- the very key this mode is about to claim. Releasing focus is what
+                // makes "hold space to talk" work for someone who turned it on with the mouse.
+                // `detail` is 0 when the click came from the keyboard, and that user needs focus
+                // kept: the same key has to be able to turn the mode off again.
+                if (event.detail > 0) {
+                  event.currentTarget.blur();
+                }
                 onTogglePushToTalk(!pushToTalk);
               }}
               title="Hold the space bar to talk instead of letting the microphone decide. Useful in a noisy room."

@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 
-import { isTypingTarget } from "../keyboard";
+import { activatesOnSpace, isTypingTarget } from "../keyboard";
 
 /** The key that holds a turn open. */
 export const PUSH_TO_TALK_KEY = " ";
@@ -58,7 +58,12 @@ export function usePushToTalk({ enabled, onPress, onRelease }: PushToTalkOptions
       if (event.key !== PUSH_TO_TALK_KEY || event.repeat || down) {
         return;
       }
-      if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) {
+      if (event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      // Stand aside for anything the space bar already operates: a focused button, a checkbox, or
+      // a field being typed into. Stealing the key there would break the page to enable talking.
+      if (isTypingTarget(event.target) || activatesOnSpace(event.target)) {
         return;
       }
       // Without this the page scrolls, and a focused button would be pressed again on release.

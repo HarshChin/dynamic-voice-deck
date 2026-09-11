@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 import structlog
-from app import __version__
+from app import __version__, main
 from app.config import Settings, get_settings
 from app.errors import AppError, ConfigError, ProviderError
 from app.logging_setup import BRIDGED_LOGGERS, HANDLER_NAME
@@ -340,3 +340,47 @@ def test_an_app_error_becomes_a_500_json_body_naming_the_error(isolated_env: Pat
         "error": "ProviderError",
         "message": "groq_llm: upstream refused",
     }
+
+
+def test_the_built_frontend_is_served_at_the_root_when_it_exists(
+    isolated_env: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """TC-BE-285: TR-212 -- a built frontend turns the backend into the whole app.
+
+    The single-process option exists for someone who cloned the repository to
+    try it, not for development: `make frontend` is still the way to work on
+    the UI. What matters here is that mounting it does not shadow the API.
+    """
+    dist = tmp_path / "frontend" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>built</title>", encoding="utf-8")
+    (dist / "assets").mkdir()
+    (dist / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
+    monkeypatch.setattr(main, "REPO_ROOT", tmp_path)
+
+    app = main.create_app()
+    assert main.mount_frontend(app) is True
+    client = TestClient(app)
+
+    assert client.get("/").text == "<!doctype html><title>built</title>"
+    assert client.get("/assets/app.js").status_code == 200
+    # No client-side router, so an unknown path is honestly a 404 rather than
+    # the shell pretending the route exists.
+    assert client.get("/some/route").status_code == 404
+    # The API is matched first, and an unknown path under it is still JSON.
+    assert client.get("/api/health").json()["status"] == "ok"
+    assert client.get("/api/nope").headers["content-type"].startswith("application/json")
+
+
+def test_without_a_build_the_root_is_simply_not_served(
+    isolated_env: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """TC-BE-286: TR-212 -- no build, no mount, and no confusing half-served page."""
+    monkeypatch.setattr(main, "REPO_ROOT", tmp_path)
+
+    app = main.create_app()
+    assert main.mount_frontend(app) is False
+    client = TestClient(app)
+
+    assert client.get("/").status_code == 404
+    assert client.get("/api/health").status_code == 200

@@ -262,6 +262,13 @@ export interface SessionData {
   readonly eventSeq: number;
   /** When the last `state` message arrived, so the next one can report its dwell time. */
   readonly lastStateAt: number | null;
+  /**
+   * Epoch milliseconds until which the provider has asked us to wait (TR-171).
+   *
+   * An absolute instant rather than a duration, so the countdown stays correct if the tab is
+   * backgrounded and the timer that draws it stops firing. `null` when nothing is rate limited.
+   */
+  readonly rateLimitedUntil: number | null;
 }
 
 /** The JSON envelope produced by "Copy log" (TRD §7.2). */
@@ -334,6 +341,7 @@ function createInitialData(): SessionData {
     settings: { ptt: false, debug: false, muted: false },
     eventSeq: 0,
     lastStateAt: null,
+    rateLimitedUntil: null,
   };
 }
 
@@ -688,8 +696,8 @@ function reduceServerMessage(
       };
     }
 
-    case "error":
-      return appendEvents(state.events, state.eventSeq, now, [
+    case "error": {
+      const logged = appendEvents(state.events, state.eventSeq, now, [
         {
           kind: "error",
           message,
@@ -698,6 +706,17 @@ function reduceServerMessage(
           recoverable: message.recoverable,
         },
       ]);
+      if (message.code !== "rate_limited") {
+        return logged;
+      }
+      // Stored as an instant, and only ever pushed later: two rate limits in a row should leave
+      // the longer wait standing rather than the more recent one (TR-171).
+      const until = now + Math.round((message.retry_after_s ?? 0) * 1000);
+      return {
+        ...logged,
+        rateLimitedUntil: Math.max(until, state.rateLimitedUntil ?? 0) || null,
+      };
+    }
 
     default:
       logUnhandledMessage(message);

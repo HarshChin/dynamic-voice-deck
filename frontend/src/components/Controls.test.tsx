@@ -211,3 +211,26 @@ describe("push to talk (TR-115)", () => {
     expect(screen.queryByText(/hold space/)).not.toBeInTheDocument();
   });
 });
+
+describe("push-to-talk focus (TR-115)", () => {
+  it("TC-FE-197: a mouse click releases the button, so the space bar is free to talk", () => {
+    renderControls();
+    const toggle = screen.getByRole("button", { name: "Push to talk" });
+    toggle.focus();
+
+    fireEvent.click(toggle, { detail: 1 });
+
+    expect(toggle).not.toHaveFocus();
+  });
+
+  it("TC-FE-198: a keyboard activation keeps focus, so the same key can turn it off again", () => {
+    renderControls();
+    const toggle = screen.getByRole("button", { name: "Push to talk" });
+    toggle.focus();
+
+    // A click event with `detail: 0` is what a browser dispatches for Space or Enter on a button.
+    fireEvent.click(toggle, { detail: 0 });
+
+    expect(toggle).toHaveFocus();
+  });
+});

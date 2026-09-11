@@ -1,13 +1,8 @@
-# Build output and dependencies
-dist
-coverage
-node_modules
+dist/
+coverage/
+node_modules/
 
-# Generated / vendored files that must not be reformatted
-package-lock.json
-public/favicon.svg
-public/icons.svg
-src/assets
-*.min.js
-*.min.css
-
+# Playwright output: generated, and rewritten on every run.
+test-results/
+playwright-report/
+blob-report/

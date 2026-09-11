@@ -1007,6 +1007,14 @@ def provider_error_message(exc: ProviderError) -> ErrorMsg:
     }.get(exc.provider, ErrorCode.LLM_FAILED)
     if exc.retryable and exc.retry_after is not None:
         code = ErrorCode.RATE_LIMITED
+        # The wait travels as a number so the client can count it down rather than parse a
+        # sentence out of an upstream error string that changes shape between providers (TR-171).
+        return ErrorMsg(
+            code=code,
+            message=exc.message,
+            recoverable=True,
+            retry_after_s=exc.retry_after,
+        )
     return ErrorMsg(code=code, message=exc.message, recoverable=True)
 
 

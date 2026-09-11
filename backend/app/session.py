@@ -74,6 +74,20 @@ PRESENTATION_REQUEST = re.compile(
     r"|run through the deck|take me through)\b",
     re.IGNORECASE,
 )
+PRESENTATION_RESUME = re.compile(
+    r"\b(carry on|continue where (we|you) left off|pick up where (we|you) left off"
+    r"|where were (we|you)|resume the (tour|walkthrough|presentation))\b",
+    re.IGNORECASE,
+)
+"""Spoken phrases that resume an interrupted walkthrough from its cursor (F8).
+
+Separate from :data:`PRESENTATION_REQUEST` because "walk me through it" and
+"carry on" want opposite things from the cursor: one starts at slide one, the
+other continues from wherever the interruption happened. Matched only while a
+walkthrough is what was interrupted -- said in an ordinary conversation, "carry
+on" is a request for more of the answer, and belongs to the model.
+"""
+
 """Spoken phrases that start a walkthrough rather than asking a question.
 
 Matched here rather than left to the model, for three reasons. Slide 1 tells the
@@ -547,6 +561,12 @@ class Session:
             # they were spoken or typed.
             await self.send(TranscriptUserMsg(turn_id=self.turn_id, text=text))
             await self.start_presentation()
+            return
+
+        presenting = self.slides is not None and self.slides.mode is SessionMode.PRESENT
+        if presenting and PRESENTATION_RESUME.search(text):
+            await self.send(TranscriptUserMsg(turn_id=self.turn_id, text=text))
+            await self.start_presentation(from_start=False)
             return
 
         await cancel_task(self._task)

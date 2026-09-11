@@ -22,11 +22,12 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 from pydantic_settings import SettingsError
 
 from . import __version__
-from .config import Settings, get_settings
+from .config import REPO_ROOT, Settings, get_settings
 from .decks.models import Deck
 from .decks.repository import DeckRepository, DeckSummary
 from .errors import AppError, ConfigError, DeckError
@@ -357,5 +358,40 @@ def create_app() -> FastAPI:
     return app
 
 
+def mount_frontend(app: FastAPI) -> bool:
+    """Serve the built frontend at ``/`` when it exists (TR-212).
+
+    A convenience, not the development path: ``make frontend`` runs Vite with
+    hot reload and proxies the API, which is how the app is worked on. This is
+    for someone who has cloned the repository to try it -- one ``vite build``
+    and one process, no second terminal, no port to remember.
+
+    Deliberately not part of :func:`create_app`. A mount at ``/`` matches every
+    path, and Starlette matches routes in registration order, so anything added
+    to the application afterwards would be shadowed by it. Keeping it out of the
+    factory means a test can build an application and add a route to it; the
+    process that actually serves the app calls this last, below.
+
+    Args:
+        app: The application to mount onto.
+
+    Returns:
+        Whether a build was found and mounted.
+    """
+    dist = REPO_ROOT / "frontend" / "dist"
+    if not (dist / "index.html").is_file():
+        # The ordinary case in development, and not worth a warning: the Vite
+        # dev server is serving the app on its own port.
+        return False
+    # `html=True` serves `index.html` for `/` itself. It is not a catch-all: an
+    # unknown path still returns 404, which is right here, because the app has
+    # no client-side router and therefore no deep links to fall back for.
+    app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
+    logger.info("frontend.mounted", directory=str(dist))
+    return True
+
+
 app = create_app()
+# Last, so every API and WebSocket route is matched before the catch-all mount.
+mount_frontend(app)
 """Module-level application instance for ``uvicorn app.main:app``."""

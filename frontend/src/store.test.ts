@@ -445,3 +445,68 @@ describe("exportEvents", () => {
     expect(exported.events.every((event) => typeof event.client_ts === "number")).toBe(true);
   });
 });
+
+describe("rate limiting (TR-171)", () => {
+  it("TC-FE-186: records when the provider said it would be ready", () => {
+    const store = useSessionStore.getState();
+    store.applyServerMessage({
+      type: "error",
+      code: "rate_limited",
+      message: "rate limit reached; try again in 13.9s",
+      recoverable: true,
+      retry_after_s: 13.9,
+    });
+
+    const until = useSessionStore.getState().rateLimitedUntil;
+    expect(until).not.toBeNull();
+    // An instant, not a duration: about fourteen seconds from now.
+    expect((until ?? 0) - Date.now()).toBeGreaterThan(12_000);
+    expect((until ?? 0) - Date.now()).toBeLessThanOrEqual(14_000);
+  });
+
+  it("TC-FE-187: a failure that is not a rate limit sets no countdown", () => {
+    useSessionStore.getState().applyServerMessage({
+      type: "error",
+      code: "llm_failed",
+      message: "upstream refused",
+      recoverable: true,
+    });
+
+    expect(useSessionStore.getState().rateLimitedUntil).toBeNull();
+  });
+
+  it("TC-FE-188: a second, shorter wait does not shorten the first", () => {
+    const store = useSessionStore.getState();
+    store.applyServerMessage({
+      type: "error",
+      code: "rate_limited",
+      message: "long",
+      recoverable: true,
+      retry_after_s: 60,
+    });
+    const first = useSessionStore.getState().rateLimitedUntil;
+
+    store.applyServerMessage({
+      type: "error",
+      code: "rate_limited",
+      message: "short",
+      recoverable: true,
+      retry_after_s: 2,
+    });
+
+    expect(useSessionStore.getState().rateLimitedUntil).toBe(first);
+  });
+
+  it("TC-FE-189: the error is still logged like any other", () => {
+    useSessionStore.getState().applyServerMessage({
+      type: "error",
+      code: "rate_limited",
+      message: "rate limit reached",
+      recoverable: true,
+      retry_after_s: 5,
+    });
+
+    const errors = useSessionStore.getState().events.filter((entry) => entry.kind === "error");
+    expect(errors).toHaveLength(1);
+  });
+});

@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from collections.abc import AsyncIterator, Mapping, Sequence
+import re
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -30,6 +31,7 @@ from app.providers.base import (
     LLMEvent,
     Message,
     TokenDelta,
+    ToolCallDelta,
     ToolSpec,
     Transcript,
 )
@@ -67,6 +69,76 @@ def default_llm_script() -> list[LLMEvent]:
         One token followed by a normal completion.
     """
     return [TokenDelta(text=DEFAULT_ANSWER), LLMDone(finish_reason="stop")]
+
+
+def deck_router(messages: list[Message]) -> list[LLMEvent]:
+    """Answer a question about the demo deck without a model (TR-200, TC-E2E-*).
+
+    The end-to-end suite drives the real browser against the real server, and it
+    has to assert exact slides and exact words. A real model cannot promise
+    either, and a fixed script cannot answer two different questions, so the
+    ``fake`` provider routes on keywords instead: enough to be a believable
+    agent for a browser test, and completely deterministic.
+
+    Args:
+        messages: The conversation, whose last user turn is the question.
+
+    Returns:
+        The events a model would have streamed for that question.
+    """
+    question = next(
+        (message.content or "" for message in reversed(messages) if message.role == "user"), ""
+    ).lower()
+    # The prompt stamps the question with the slide the room is looking at, and those titles carry
+    # the very words this routes on: asked "explain this" on the latency slide, a naive match would
+    # read the stamp and route to the latency slide, which is the opposite of what was asked.
+    question = re.sub(r"^\s*\[[^\]]*\]\s*", "", question)
+
+    def answer(*sentences: str) -> list[LLMEvent]:
+        return [TokenDelta(text=" ".join(sentences)), LLMDone(finish_reason="stop")]
+
+    def navigate(index: int, reason: str, *sentences: str) -> list[LLMEvent]:
+        return [
+            ToolCallDelta(
+                call_id=f"call_{index}",
+                name="go_to_slide",
+                arguments={"slide_index": index, "reason": reason},
+            ),
+            TokenDelta(text=" ".join(sentences)),
+            LLMDone(finish_reason="stop"),
+        ]
+
+    if "interrupt" in question or "barge" in question:
+        return navigate(
+            4,
+            "asked about interruption",
+            "Two layers, actually.",
+            "The browser stops the sound the moment it hears you, and the server cancels the turn.",
+        )
+    if "latency" in question or "how fast" in question or "budget" in question:
+        return navigate(
+            2,
+            "asked about latency",
+            "About a second and a half to first sound.",
+            "Endpointing is six hundred milliseconds of that, and the model is most of the rest.",
+        )
+    if "tool" in question or "routing" in question:
+        return navigate(
+            5,
+            "asked about tool calling",
+            "I call a function to move the deck.",
+            "The server scores my answer against the slides as a safety net.",
+        )
+    if "weather" in question or "capital" in question:
+        return answer("That is outside this deck, but I can tell you how the pipeline works.")
+    # "Explain this", "what is this slide about": answer where the room already is, and move
+    # nothing. TC-E2E-004 depends on this branch emitting no tool call at all, which means the
+    # words must not name another slide either: the server scores an answer against the deck and
+    # would move it on the strength of a topic merely mentioned (TR-062).
+    return answer(
+        "This one is about how the pieces fit together.",
+        "It is the shape of the whole thing rather than any single stage.",
+    )
 
 
 @dataclass(slots=True)
@@ -181,6 +253,9 @@ class FakeLLM:
         delay_s: Delay before each event. The provider awaits even when this is
             zero, so the stream always has a cancellation point between events
             and a barge-in test can land reliably mid-flight.
+        router: Chooses the script from the conversation instead of replaying a
+            fixed one, so a browser-driven run answers what it was actually
+            asked. Used by the ``fake`` provider the end-to-end suite selects.
 
     Attributes:
         name: Provider name reported to the health probe.
@@ -194,10 +269,12 @@ class FakeLLM:
         script: Sequence[LLMEvent] | None = None,
         *,
         delay_s: float = 0.0,
+        router: Callable[[list[Message]], Sequence[LLMEvent]] | None = None,
     ) -> None:
         self.name = FAKE_LLM_NAME
         self._script: list[LLMEvent] = list(script) if script is not None else default_llm_script()
         self._delay_s = delay_s
+        self._router = router
         self.calls: list[LLMCall] = []
         self.cancelled = 0
 
@@ -223,8 +300,9 @@ class FakeLLM:
         self.calls.append(
             LLMCall(messages=list(messages), tools=list(tools), tool_choice=tool_choice)
         )
+        script = self._router(list(messages)) if self._router is not None else self._script
         try:
-            for event in self._script:
+            for event in script:
                 await asyncio.sleep(self._delay_s)
                 yield event
         except asyncio.CancelledError:

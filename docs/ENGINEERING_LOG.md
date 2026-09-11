@@ -25,6 +25,69 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Phase 4 closes: a wait you can see, one process, and a browser that proves it · uncommitted
+**Scope:** `app/protocol.py`, `app/pipeline/turn.py`, `app/main.py`, `app/session.py`,
+`frontend/src/{protocol.ts,store.ts,keyboard.ts,time.ts}`,
+`frontend/src/components/RateLimitChip.{tsx,module.css}`, `frontend/e2e/`, `Makefile`
+
+**Change:** The last three items of M4: the rate-limit countdown (TR-171), the single-process build
+(TR-212), and the Playwright suite (TC-E2E-001 to 004). Two real defects surfaced while writing the
+browser tests, and both were in the product rather than the tests.
+
+**The wait travels as a number, not as a sentence.** Groq answers a 429 with a `retry-after`, and
+until now that reached the client only inside an error string. Parsing a duration back out of an
+upstream message is exactly the kind of thing that breaks when the provider rewords it, so
+`ErrorMsg` gained `retry_after_s` and the chip counts it down. This matters more than it sounds:
+four questions in two minutes is enough to hit the free tier's ceiling, and without the chip the
+agent simply goes quiet, which reads as broken rather than as busy.
+
+**One process, for someone who just cloned the repository.** `mount_frontend` serves
+`frontend/dist` at `/` when it exists, so `make serve` builds the app and runs the whole thing on
+one port. It is deliberately **not** part of `create_app`: a mount at `/` matches every path, and
+Starlette matches in registration order, so anything a test added to the application afterwards
+would be shadowed by it. Keeping it out of the factory is what lets `tests/test_startup.py` keep
+adding routes. The mount is not a catch-all either, because the app has no client-side router and
+pretending an unknown path exists would be a lie.
+
+**The end-to-end suite runs the real thing against fake providers.** Not a fixed script: the fake
+model routes on keywords, so it can answer two different questions differently and a test can
+assert an exact slide and exact words, which no real model can promise. Four things had to be got
+right before it passed, and each was informative:
+
+- Chromium's fake microphone emits a continuous beep, which the energy detector correctly hears as
+  someone talking. The agent interrupted itself the moment it opened its mouth. The device now
+  plays the silence fixture; the one test that needs speech drives it by key.
+- The fake router matched keywords in the slide-context stamp the prompt prepends, so "explain
+  this" asked on the latency slide routed *to* the latency slide. It strips the stamp now.
+- The fake's first answer offered "latency, interruption, or tool calling", and the server's
+  keyword fallback dutifully moved the deck to a slide the answer had merely mentioned. That is the
+  fallback working; the fixture was at fault.
+- The fake called `go_to_slide` with an `index` argument rather than `slide_index`, so the call was
+  rejected and the fallback moved the deck instead. Worth recording because the log made it
+  obvious: the chip said *keyword*, not *model*.
+
+**Two defects the browser found.** Ticking the "debug" checkbox disabled the arrow keys, because
+the guard that keeps shortcuts from firing while someone types treated every `<input>` as a text
+field. Arrow keys do nothing in a checkbox, so the guard now asks what the focused element would
+actually do with the key: `isTypingTarget` for text navigation, `activatesOnSpace` for the space
+bar. Separately, clicking "Push to talk" left the button focused, and a focused button is operated
+by the space bar, so the first attempt to hold space re-toggled the mode off. The toggle now
+releases focus when the click came from a pointer and keeps it when it came from the keyboard,
+where the same key has to be able to turn the mode off again.
+
+**"Carry on" resumes the tour.** PRD §13 step 6 asks for it and nothing implemented it: every
+trigger phrase started the walkthrough from slide one. Resuming and restarting want opposite things
+from the cursor, so they are separate phrases, and the resume only applies while a walkthrough is
+what was interrupted. Said in ordinary conversation, "carry on" is a request for more of the
+answer, and that belongs to the model.
+
+**Verification:** backend 513 passing, frontend 153 passing across 17 files, five Playwright cases
+green in 10 seconds, `make lint` clean. The single-process option was confirmed by hand:
+`make serve` answers the app at `/`, its assets under `/assets`, and the API under `/api`.
+
+**Follow-ups:** none for M4. The evals are next, and they are what decides whether the default
+model stays Qwen.
+
 ### 2026-09-11 · Closing Phase 3: three quiet disagreements between the microphone and its spec · uncommitted
 **Scope:** `frontend/src/audio/microphone.ts`, `frontend/src/session/{useSession.ts,usePushToTalk.ts}`,
 `frontend/src/keyboard.ts`, `frontend/src/components/{Controls.tsx,Controls.module.css,SlideDeck.tsx}`,

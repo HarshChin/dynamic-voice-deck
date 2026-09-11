@@ -184,3 +184,38 @@ describe("usePushToTalk", () => {
     expect(presses).toBe(1);
   });
 });
+
+describe("keys the focused element already owns", () => {
+  it("TC-FE-195: holding space on a focused button presses it rather than starting a turn", () => {
+    render(<Harness enabled />);
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+
+    const event = new KeyboardEvent("keydown", { key: " ", cancelable: true, bubbles: true });
+    act(() => {
+      button.dispatchEvent(event);
+    });
+
+    expect(presses).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+    button.remove();
+  });
+
+  it("TC-FE-196: holding space on a checkbox ticks it rather than starting a turn", () => {
+    render(<Harness enabled />);
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.append(box);
+    box.focus();
+
+    act(() => {
+      box.dispatchEvent(
+        new KeyboardEvent("keydown", { key: " ", cancelable: true, bubbles: true }),
+      );
+    });
+
+    expect(presses).toBe(0);
+    box.remove();
+  });
+});

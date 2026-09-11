@@ -269,6 +269,14 @@ export interface ErrorMessage {
   readonly code: ErrorCode;
   readonly message: string;
   readonly recoverable: boolean;
+  /**
+   * Seconds the upstream asked us to wait, when it said (TR-171).
+   *
+   * Only a rate limit carries one. It is a number rather than part of `message` because the UI
+   * counts it down, and parsing a wait out of an upstream error string is exactly the kind of
+   * thing that breaks when the provider rewords it.
+   */
+  readonly retry_after_s?: number | null;
 }
 
 /** Any message the server may send. */

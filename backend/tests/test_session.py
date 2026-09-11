@@ -2101,3 +2101,77 @@ def test_a_transcriber_failure_is_reported_and_the_session_survives(isolated_env
     assert error["code"] == "stt_failed"
     assert error["recoverable"] is True
     assert llm.calls, "the session refused to work after a transcription failure"
+
+
+def test_a_rate_limit_reports_how_long_to_wait(isolated_env: Any) -> None:
+    """TC-BE-283: TR-171 -- the wait travels as a number the client can count down.
+
+    As prose it would have to be parsed back out of an upstream error string
+    that reads differently for every provider. The free tier's ceiling is
+    reachable in ordinary use, so this is a status the user sees, not an edge
+    case: the difference between "it broke" and "it is ready in twelve seconds".
+    """
+    llm = FailingLLM(
+        ProviderError(
+            "groq_llm",
+            "rate limit reached; try again in 13.9s",
+            retryable=True,
+            retry_after=13.9,
+        )
+    )
+
+    with connect(llm) as harness:
+        turn = harness.ask("What is this deck about?")
+
+    error = only(turn, "error")[0]
+    assert error["code"] == "rate_limited"
+    assert error["retry_after_s"] == pytest.approx(13.9)
+    assert error["recoverable"] is True
+
+
+def test_an_ordinary_failure_carries_no_wait(isolated_env: Any) -> None:
+    """TC-BE-284: TR-171 -- only a rate limit sets the countdown.
+
+    A chip that appears for every failure would be telling the user to wait for
+    something that is not going to fix itself.
+    """
+    llm = FailingLLM(ProviderError("groq_llm", "upstream refused", retryable=False))
+
+    with connect(llm) as harness:
+        turn = harness.ask("What is this deck about?")
+
+    error = only(turn, "error")[0]
+    assert error["code"] == "llm_failed"
+    assert error["retry_after_s"] is None
+
+
+def test_carry_on_resumes_the_walkthrough_where_it_was_cut(isolated_env: Any) -> None:
+    """TC-BE-287: F8 -- "carry on" continues the tour from the slide it was interrupted on.
+
+    Starting over would be the wrong answer to those words, and it is what
+    ``walk me through it`` already does. The cursor is what separates them.
+    """
+    with connect(FakeLLM()) as harness:
+        harness.send(type="control", action="start_presentation")
+        harness.recv_until(lambda m: m["type"] == "slide.goto" and m["index"] == 3)
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+        harness.recv_until(is_type("agent.cancelled"))
+
+        harness.send(type="text.input", text="Carry on.")
+        resumed = harness.recv_until(lambda m: m["type"] == "slide.goto")
+
+    # The tour picks up on the slide it was speaking, not back at slide one.
+    assert only(resumed, "slide.goto")[0]["index"] == 3
+    assert only(resumed, "transcript.user")[0]["text"] == "Carry on."
+
+
+def test_carry_on_outside_a_walkthrough_is_an_ordinary_question(isolated_env: Any) -> None:
+    """TC-BE-288: F8 -- in conversation those words mean "say more", which is the model's job."""
+    llm = FakeLLM(sentence_script("There is more to it."))
+
+    with connect(llm) as harness:
+        turn = harness.ask("Carry on.")
+
+    assert only(turn, "slide.goto") == []
+    assert llm.calls, "the model was never asked"
+    assert [m["text"] for m in only(turn, "transcript.agent")] == ["There is more to it."]

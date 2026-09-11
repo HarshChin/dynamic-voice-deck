@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 507 backend cases across 20 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 133 frontend cases across 15 files, all passing. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 513 backend cases across 20 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 153 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -266,6 +266,39 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
 
+### Rate limiting, the single-process build, and resuming a tour (added 2026-09-11)
+
+The free tier's ceiling is reachable in ordinary use, so what the app does about it is a feature
+rather than an edge case. The other two rows here close the last of milestone M4.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-283 | TR-171 | Given a provider failure carrying a `retry-after`, then the error is `rate_limited` and `retry_after_s` carries the wait as a number | `tests/test_session.py::test_a_rate_limit_reports_how_long_to_wait` | passing |
+| TC-BE-284 | TR-171 | Given any other provider failure, then `retry_after_s` is null, so no countdown is offered for something that will not fix itself | `::test_an_ordinary_failure_carries_no_wait` | passing |
+| TC-BE-285 | TR-212 | Given `frontend/dist` exists, then `/` serves the app and `/api` still answers JSON | `tests/test_startup.py::test_the_built_frontend_is_served_at_the_root_when_it_exists` | passing |
+| TC-BE-286 | TR-212 | Given no build, then nothing is mounted and the API is unaffected | `::test_without_a_build_the_root_is_simply_not_served` | passing |
+| TC-BE-287 | F8 | Given an interrupted walkthrough, when the user says "carry on", then it resumes from the slide it was cut on | `tests/test_session.py::test_carry_on_resumes_the_walkthrough_where_it_was_cut` | passing |
+| TC-BE-288 | F8 | Given no walkthrough, then the same words are an ordinary question for the model | `::test_carry_on_outside_a_walkthrough_is_an_ordinary_question` | passing |
+| TC-FE-180 | TR-171 | Given a wait of 12 s, then the chip says how long the free tier asked us to wait | `src/components/RateLimitChip.test.tsx::TC-FE-180` | passing |
+| TC-FE-181 | TR-171 | Then it counts down as the wait passes | `::TC-FE-181` | passing |
+| TC-FE-182 | TR-171 | Then it disappears when the wait is over, leaving no timer running | `::TC-FE-182` | passing |
+| TC-FE-183 | TR-171 | Given no wait, then nothing is shown and no timer starts | `::TC-FE-183` | passing |
+| TC-FE-184 | TR-171 | Given a wait that already elapsed, then nothing is shown | `::TC-FE-184` | passing |
+| TC-FE-185 | TR-171 | Given a second, longer wait, then the chip shows the longer one | `::TC-FE-185` | passing |
+| TC-FE-186 | TR-171 | Given `error{rate_limited, retry_after_s}`, then the store records the instant it will be ready | `src/store.test.ts::TC-FE-186` | passing |
+| TC-FE-187 | TR-171 | Given any other error, then no countdown is recorded | `::TC-FE-187` | passing |
+| TC-FE-188 | TR-171 | Given a shorter wait after a longer one, then the longer one stands | `::TC-FE-188` | passing |
+| TC-FE-189 | TR-171 | Then the rate limit is still logged like any other error | `::TC-FE-189` | passing |
+| TC-FE-190 | TR-115 | Then text fields, textareas, selects and content-editable elements are typing targets | `src/keyboard.test.ts::TC-FE-190` | passing |
+| TC-FE-191 | TR-115 | Then a checkbox is **not** a typing target, so ticking "debug" does not disable the arrow keys | `::TC-FE-191` | passing |
+| TC-FE-192 | TR-115 | Then ordinary elements and non-elements are not typing targets | `::TC-FE-192` | passing |
+| TC-FE-193 | TR-115 | Then buttons, checkboxes, radios and `role="button"` are space-activated | `::TC-FE-193` | passing |
+| TC-FE-194 | TR-115 | Then a text field is not space-activated | `::TC-FE-194` | passing |
+| TC-FE-195 | TR-115 | Given a focused button, when space is held, then the button is pressed and no turn starts | `src/session/usePushToTalk.test.tsx::TC-FE-195` | passing |
+| TC-FE-196 | TR-115 | Given a focused checkbox, when space is held, then it ticks and no turn starts | `::TC-FE-196` | passing |
+| TC-FE-197 | TR-115 | Given the push-to-talk toggle clicked with a mouse, then it releases focus so the space bar is free | `src/components/Controls.test.tsx::TC-FE-197` | passing |
+| TC-FE-198 | TR-115 | Given it activated from the keyboard, then focus is kept so the same key turns it off | `::TC-FE-198` | passing |
+
 ### The audio path (added 2026-09-11)
 
 `handle_utterance` is the one part of the session a typed question never reaches: the size guard,
@@ -468,10 +501,10 @@ walkthrough steps in M3 and the rest in M4.
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-E2E-001 | PRD §13 | The full walkthrough scenario, steps 1–8, using text input and synthetic VAD events; asserts slide indices, log chips, and that audio is flushed on interrupt | `e2e/walkthrough.spec.ts` (not written) | planned — steps 1–4 in **M3**, the rest in **M4** |
-| TC-E2E-002 | F2 | Given the backend is down, when Start is clicked, then the error toast with a retry button is shown; when the backend comes up and retry is clicked, the session connects | `e2e/connection.spec.ts` (not written) | planned — **M4** |
-| TC-E2E-003 | F13 | Given mic permission denied (Playwright permission), then the text input still produces a voice answer and a slide change | `e2e/fallback.spec.ts` (not written) | planned — **M4** |
-| TC-E2E-004 | F9 | Given manual navigation to slide 6 then text "explain this", then the agent answers without a `slide.goto` chip | `e2e/sync.spec.ts` (not written) | planned — **M4** |
+| TC-E2E-001 | PRD §13 | The full walkthrough scenario, steps 1–8, using text input and synthetic VAD events; asserts slide indices, log chips, and that audio is flushed on interrupt | `e2e/walkthrough.spec.ts` | passing — two tests: the scenario end to end, and that \"carry on\" resumes the tour rather than restarting it |
+| TC-E2E-002 | F2 | Given the backend is down, when Start is clicked, then the error toast with a retry button is shown; when the backend comes up and retry is clicked, the session connects | `e2e/connection.spec.ts` | passing |
+| TC-E2E-003 | F13 | Given mic permission denied (Playwright permission), then the text input still produces a voice answer and a slide change | `e2e/fallback.spec.ts` | passing |
+| TC-E2E-004 | F9 | Given manual navigation to slide 6 then text "explain this", then the agent answers without a `slide.goto` chip | `e2e/sync.spec.ts` | passing |
 
 ---
 

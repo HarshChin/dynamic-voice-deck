@@ -87,24 +87,22 @@ test-integration: ## Backend integration tests against real providers (needs GRO
 
 check: lint test ## Run lint then test — the same gates CI enforces
 
-## ---------------------------------------------------------------------------
-## Not implemented yet — see docs/TRD.md §15 (release plan)
-## ---------------------------------------------------------------------------
+build: ## Build the frontend into frontend/dist, which the backend then serves at / (TR-212)
+	cd frontend && npm run build
 
-# Playwright lands with milestone M3 (audio in + barge-in, TC-E2E-001).
-# Then this becomes: cd frontend && npm run test:e2e
-test-e2e: ## Playwright end-to-end suite — arrives in milestone M3
-	@echo "make test-e2e: not implemented until milestone M3 (docs/TRD.md §15)."
-	@echo "               Planned command: cd frontend && npm run test:e2e"
-	@echo "               Skipping without failure so aggregate runs stay green."
+serve: build ## Build, then run one process serving both the API and the app on :8000
+	cd backend && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 
-# Agent evals land with milestone M4 (docs/TRD.md §13). They call real models
-# and consume free-tier quota (TR-204), so they stay opt-in and out of CI.
-# Then this becomes: cd backend && uv run python -m evals.run_evals
-evals: ## Agent eval suites E1-E6 — arrives in milestone M4
-	@echo "make evals: not implemented until milestone M4 (docs/TRD.md §15)."
-	@echo "            Planned command: cd backend && uv run python -m evals.run_evals"
-	@echo "            Evals call real models and consume quota; never run in CI."
+# Starts its own backend with fake providers, so nothing here reaches a real
+# model and the assertions can name exact slides and exact words. Stop
+# `make backend` first: the suite refuses to adopt a server it did not start.
+test-e2e: ## Playwright end-to-end suite against fake providers (TC-E2E-001..004)
+	cd frontend && npm run test:e2e
+
+# Agent evals call real models and consume free-tier quota (TR-204), so they
+# stay opt-in and out of CI.
+evals: ## Agent eval suites E1-E6 against a real model (needs GROQ_API_KEY)
+	cd backend && uv run python -m evals.run_evals $(if $(SUITE),--suite $(SUITE),) $(if $(MODEL),--model $(MODEL),)
 
 ## ---------------------------------------------------------------------------
 ## Housekeeping
