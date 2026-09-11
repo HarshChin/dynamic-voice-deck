@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 541 backend cases across 21 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 153 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 542 backend cases across 21 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 155 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -304,6 +304,7 @@ rather than an edge case. The other two rows here close the last of milestone M4
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
 | TC-BE-283 | TR-171 | Given a provider failure carrying a `retry-after`, then the error is `rate_limited` and `retry_after_s` carries the wait as a number | `tests/test_session.py::test_a_rate_limit_reports_how_long_to_wait` | passing |
+| TC-BE-289 | TR-171 | Given a wait of 877 seconds, then the message says "about 15 min" rather than a four-figure count of seconds | `tests/test_session.py::test_a_long_wait_is_stated_in_minutes` | passing |
 | TC-BE-284 | TR-171 | Given any other provider failure, then `retry_after_s` is null, so no countdown is offered for something that will not fix itself | `::test_an_ordinary_failure_carries_no_wait` | passing |
 | TC-BE-285 | TR-212 | Given `frontend/dist` exists, then `/` serves the app and `/api` still answers JSON | `tests/test_startup.py::test_the_built_frontend_is_served_at_the_root_when_it_exists` | passing |
 | TC-BE-286 | TR-212 | Given no build, then nothing is mounted and the API is unaffected | `::test_without_a_build_the_root_is_simply_not_served` | passing |
@@ -327,6 +328,7 @@ rather than an edge case. The other two rows here close the last of milestone M4
 | TC-FE-195 | TR-115 | Given a focused button, when space is held, then the button is pressed and no turn starts | `src/session/usePushToTalk.test.tsx::TC-FE-195` | passing |
 | TC-FE-196 | TR-115 | Given a focused checkbox, when space is held, then it ticks and no turn starts | `::TC-FE-196` | passing |
 | TC-FE-197 | TR-115 | Given the push-to-talk toggle clicked with a mouse, then it releases focus so the space bar is free | `src/components/Controls.test.tsx::TC-FE-197` | passing |
+| TC-FE-199 | TR-171 | Then a wait past 90 seconds is shown in minutes, on both the helper and the chip | `src/components/RateLimitChip.test.tsx::TC-FE-199` | passing |
 | TC-FE-198 | TR-115 | Given it activated from the keyboard, then focus is kept so the same key turns it off | `::TC-FE-198` | passing |
 
 ### The audio path (added 2026-09-11)

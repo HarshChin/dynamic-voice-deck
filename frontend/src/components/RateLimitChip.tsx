@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from "react";
 
-import { secondsLeft } from "../time";
+import { describeWait } from "../time";
 
 import styles from "./RateLimitChip.module.css";
 
@@ -51,11 +51,10 @@ export function RateLimitChip({ until, now = Date.now }: RateLimitChipProps): JS
     return null;
   }
 
-  const seconds = secondsLeft(remaining);
   return (
     <p className={styles.chip} role="status" aria-live="polite">
       <span className={styles.dot} aria-hidden="true" />
-      rate limited — free tier, ready in {seconds}s
+      rate limited — free tier, ready in {describeWait(remaining)}
     </p>
   );
 }

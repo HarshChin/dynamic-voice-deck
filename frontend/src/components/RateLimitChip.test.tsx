@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { secondsLeft } from "../time";
+import { describeWait, secondsLeft } from "../time";
 
 import { RateLimitChip } from "./RateLimitChip";
 
@@ -83,5 +83,18 @@ describe("RateLimitChip", () => {
     expect(secondsLeft(1_400)).toBe(2);
     expect(secondsLeft(0)).toBe(0);
     expect(secondsLeft(-500)).toBe(0);
+  });
+
+  it("TC-FE-199: a long wait is stated in minutes, because 877s is not a readable number", () => {
+    expect(describeWait(12_000)).toBe("12s");
+    expect(describeWait(89_000)).toBe("89s");
+    expect(describeWait(90_000)).toBe("2 min");
+    expect(describeWait(877_000)).toBe("15 min");
+  });
+
+  it("TC-FE-199: and the chip shows it that way", () => {
+    render(<RateLimitChip until={clock + 877_000} now={now} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("ready in 15 min");
   });
 });

@@ -2132,7 +2132,27 @@ def test_a_rate_limit_reports_how_long_to_wait(isolated_env: Any) -> None:
     assert error["message"] == (
         "the free tier is out of capacity for a moment; ready again in about 14s"
     )
+    assert "http" not in error["message"]
     assert "organization" not in error["message"]
+
+
+def test_a_long_wait_is_stated_in_minutes(isolated_env: Any) -> None:
+    """TC-BE-289: TR-171 -- "ready in 877s" is a number; "ready in 15 min" is an answer.
+
+    The question a rate-limited user is actually asking is whether to wait or to
+    go and do something else, and a four-figure count of seconds does not answer
+    it.
+    """
+    llm = FailingLLM(
+        ProviderError("groq_llm", "rate limit reached", retryable=True, retry_after=877.0)
+    )
+
+    with connect(llm) as harness:
+        turn = harness.ask("What is this deck about?")
+
+    error = only(turn, "error")[0]
+    assert error["message"].endswith("about 15 min")
+    assert error["retry_after_s"] == pytest.approx(877.0)
 
 
 def test_an_ordinary_failure_carries_no_wait(isolated_env: Any) -> None:

@@ -984,6 +984,25 @@ async def _send_goto(turn_id: int, action: SlideAction, emit: Emit) -> None:
     )
 
 
+MINUTES_FROM_S: Final[int] = 90
+"""Above this, a wait stated in seconds stops being a number anybody reads."""
+
+
+def describe_wait(seconds: float) -> str:
+    """Describe a wait the way a person would say it.
+
+    Args:
+        seconds: How long to wait.
+
+    Returns:
+        A short phrase such as ``"12s"`` or ``"15 min"``.
+    """
+    whole = max(0, round(seconds))
+    if whole < MINUTES_FROM_S:
+        return f"{whole}s"
+    return f"{-(-whole // 60)} min"
+
+
 def provider_error_message(exc: ProviderError) -> ErrorMsg:
     """Translate a provider failure into the client-facing error message.
 
@@ -1013,11 +1032,11 @@ def provider_error_message(exc: ProviderError) -> ErrorMsg:
         # the organisation id, the billing page and the exact token counts; it belongs in the
         # server log, where it already is, and not in a panel the user reads or in an event log
         # they may export and share.
-        seconds = round(exc.retry_after)
         return ErrorMsg(
             code=ErrorCode.RATE_LIMITED,
             message=(
-                f"the free tier is out of capacity for a moment; ready again in about {seconds}s"
+                "the free tier is out of capacity for a moment; ready again in about "
+                f"{describe_wait(exc.retry_after)}"
             ),
             recoverable=True,
             retry_after_s=exc.retry_after,
