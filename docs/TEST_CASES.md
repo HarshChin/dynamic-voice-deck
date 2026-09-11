@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 588 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 187 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 590 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 187 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -279,6 +279,8 @@ the real providers. Two product defects, both fixed.
 | TC-FE-237 | TR-115 | Given a keyboard activation, then focus is kept so the same key can press it again | `::TC-FE-237` | passing |
 | TC-BE-342 | TR-086 | Given a typed tool call at the end of a good sentence, then the call is cut and the sentence kept; a segment that is only the call comes back empty | `tests/test_turn.py::test_a_typed_tool_call_is_cut_off_and_the_sentence_before_it_kept` | passing |
 | TC-BE-343 | TR-086 | Given "let's go to slide four" or slide 5's own description of the tools, then nothing is cut | `::test_natural_speech_about_slides_and_tools_is_left_alone` | passing |
+| TC-BE-344 | TR-204 | Given a pacer with a 31 s interval, then the first call is immediate and each later call waits the full interval | `tests/test_evals.py::test_the_pacer_spaces_calls_by_at_least_the_interval` | passing |
+| TC-BE-345 | TR-204 | Given a paced provider, then it waits its turn and then delegates the stream unchanged | `::test_a_paced_provider_waits_then_delegates_unchanged` | passing |
 
 ### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
 

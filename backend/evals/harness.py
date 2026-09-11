@@ -47,6 +47,10 @@ a silent wait. An eval is the opposite -- a 429 says nothing about the agent's b
 counting it as a wrong answer would make the measurement a measurement of the free tier.
 """
 
+MIN_RETRY_WAIT_S: float = 61.0
+"""Shortest wait after a rate limit: one full minute, because a refused request is
+still counted against the minute that refused it."""
+
 MAX_RATE_LIMIT_WAIT_S: float = 300.0
 """Longest to wait on one attempt. Module state so ``--max-wait`` can raise it.
 
@@ -228,7 +232,10 @@ async def run_one(
                 return trace
             # The deck moved on the attempt that failed, so the controller is reset with it.
             slides = SlideController(deck, current_slide=current_slide)
-            await asyncio.sleep(wait + 0.5)
+            # Never shorter than a whole minute. A refused request still counts against the
+            # per-minute window, so retrying on the advertised wait re-fills the window that
+            # refused it; letting the whole minute clear is the only wait that can succeed.
+            await asyncio.sleep(max(wait, MIN_RETRY_WAIT_S) + 0.5)
         except Exception as exc:  # an eval records a failure as a result, rather than dying
             trace.error = f"{type(exc).__name__}: {exc}"
             trace.final_slide = slides.current_slide

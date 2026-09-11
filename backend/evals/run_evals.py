@@ -20,6 +20,7 @@ from app.pipeline.prompt import PromptBuilder
 
 from . import harness, suites
 from .harness import build_llm, build_tts, load_deck
+from .pacing import PacedLLM, Pacer
 from .report import write
 from .suites import Context, SuiteResult
 
@@ -66,6 +67,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         help="items in flight at once; 1 when the budget is the bottleneck (default 2)",
+    )
+    parser.add_argument(
+        "--min-interval",
+        type=float,
+        default=0.0,
+        help="seconds between model calls, shared by subject and judge; 31 keeps a 7,000-token "
+        "minute from ever refusing a ~2,800-token call (default 0, no pacing)",
     )
     parser.add_argument(
         "--limit",
@@ -123,6 +131,11 @@ async def run(args: argparse.Namespace) -> int:
     llm = build_llm(settings, model, provider=args.provider)
     # Zero, because a rubric graded differently on two runs is not a measurement (TR-201).
     judge_llm = build_llm(settings, judge_model, provider=args.provider, temperature=0.0)
+    if args.min_interval > 0:
+        # One pacer for both: they draw on the same account, and the account's minute is shared.
+        pacer = Pacer(args.min_interval)
+        llm = PacedLLM(llm, pacer)
+        judge_llm = PacedLLM(judge_llm, pacer)
     results: list[SuiteResult] = []
 
     needs_judge = any(name in JUDGED for name in wanted)

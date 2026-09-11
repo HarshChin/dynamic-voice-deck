@@ -25,6 +25,36 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · The eval runner was refusing itself · uncommitted
+**Scope:** `evals/pacing.py`, `evals/run_evals.py`, `evals/harness.py`, `docs/EVALS.md`
+
+**Asked for:** run the pending Qwen release eval. The owner supplied a key from a second account with
+a fresh daily budget, so the daily ceiling that blocked it twice today was gone.
+
+**And it still did not run.** Ten minutes in: 34 rate-limit refusals, zero successful calls, every
+refusal carrying a short wait of six to twenty-three seconds. That is not a spent daily budget -- it
+is a loop. Killing the run and reading the 429 body directly explained it: `input tokens per minute
+(ITPM): Limit 7000, Used 5406, Requested 2816`, recorded one second after a run that had completed
+*nothing*. **A refused request counts against the window that refused it.** So the runner's strategy
+-- retry after the advertised `retry-after` -- re-filled the very window it was waiting on, forever.
+Each item burned its five attempts and was recorded as excluded. The run would have finished in
+minutes with forty exclusions and a table of zeros.
+
+**The fix is to stop reacting and start pacing.** `Pacer` hands out start times a fixed interval
+apart, process-wide; `PacedLLM` waits for one before every call. One pacer is shared by the subject
+model and the judge, because they draw on the same account and the account's minute is shared. At
+~2,800 tokens a call under a 7,000-token minute, two calls a minute is the ceiling, so 31 seconds is
+the spacing, and nothing is ever refused. The retry path keeps a one-minute floor for the rare 429
+that still arrives, since a shorter wait cannot succeed against this limiter. First 75 seconds of
+the paced run: zero refusals.
+
+**Two things I was wrong about today, in order.** This morning's `EVALS.md` said a full run was "a
+third of a day's budget"; it is about two and a half days'. And this afternoon I assumed the free
+tier's refusals were free. Both corrections are in the document that made the claims.
+
+**Verification:** two tests on the pacer with a faked clock; 590 backend cases; the run itself, in
+progress at the time of writing, is the real test.
+
 ### 2026-09-11 · Pre-submission stress test: two defects, one false alarm, one real scare · uncommitted
 **Scope:** `frontend/src/components/Controls.tsx`, `app/providers/kokoro_tts.py`, `docs/TRD.md`
 (TR-091)

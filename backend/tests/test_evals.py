@@ -14,8 +14,9 @@ from typing import Any
 
 import pytest
 from app.providers.base import Message, TokenDelta, ToolSpec
-from evals import harness
+from evals import harness, pacing
 from evals.judge import judge
+from evals.pacing import PacedLLM, Pacer
 from evals.report import to_markdown
 from evals.suites import (
     STYLE_MAX_SENTENCES,
@@ -350,3 +351,46 @@ async def test_the_rubric_is_the_system_message_and_the_case_is_the_user_message
 
     roles = [(message.role, message.content) for message in scripted.calls[0]]
     assert roles == [("system", "THE RUBRIC"), ("user", "THE CASE")]
+
+
+async def test_the_pacer_spaces_calls_by_at_least_the_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-BE-344: a refused request counts against the minute that refused it; never be refused."""
+
+    clock = {"now": 100.0}
+    slept: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        clock["now"] += seconds
+
+    monkeypatch.setattr(pacing.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(pacing.asyncio, "sleep", fake_sleep)
+    pacer = pacing.Pacer(31.0)
+
+    await pacer.wait()  # first call goes immediately
+    await pacer.wait()  # second waits the full interval
+    await pacer.wait()
+
+    assert slept == [31.0, 31.0]
+
+
+async def test_a_paced_provider_waits_then_delegates_unchanged() -> None:
+    """TC-BE-345: pacing changes when a call happens, never what it returns."""
+
+    inner = ScriptedJudge('{"score": 2}')
+    waited: list[bool] = []
+
+    class CountingPacer(Pacer):
+        async def wait(self) -> None:
+            waited.append(True)
+
+    paced = PacedLLM(inner, CountingPacer(31.0))
+    events = [
+        event async for event in paced.stream([Message(role="user", content="q")], [], "none")
+    ]
+
+    assert waited == [True]
+    assert [event.text for event in events if isinstance(event, TokenDelta)] == ['{"score": 2}']
+    assert paced.name == inner.name

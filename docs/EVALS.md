@@ -22,6 +22,25 @@ this paragraph said a third of a day; that was an underestimate by a factor of s
 ceiling is a rolling 24-hour window, so a run started against a spent budget crawls at the refill
 rate rather than failing outright. Run them at milestone boundaries, not on every commit.
 
+**Pace the run; do not let it be refused.** The 429 body from the per-minute limiter reads
+`input tokens per minute (ITPM): Limit 7000, Used 5406, Requested 2816` -- and that `Used` figure
+was recorded one second after a run with *zero* successful calls was stopped. A refused request
+counts against the very window it was refused for, so retrying on the advertised `retry-after`
+re-fills that window and loops indefinitely; one such run made 34 attempts in ten minutes and
+completed none. The runner therefore paces proactively: `--min-interval 31` spaces every model
+call -- subject and judge share one pacer, because they share the account's minute -- so that two
+~2,800-token calls fit inside a 7,000-token minute and nothing is ever refused. Any retry that does
+happen now waits a full minute, since a shorter wait cannot succeed. `--concurrency 1` keeps items
+from competing, and `--max-wait` raises the per-attempt patience for a run that must sit out a
+spent daily budget.
+
+```bash
+cd backend && GROQ_API_KEY="$(cat ~/.dvd-eval-key)" uv run python -m evals.run_evals \
+  --suite E1,E4,E6 --model qwen/qwen3.8-27b --min-interval 31 --concurrency 1 --max-wait 1800
+```
+
+E1 at two calls a minute is about forty minutes. Nothing in the run logs a credential.
+
 **Two measurement decisions worth stating.** An item the provider refused with a 429 is excluded
 from the denominator rather than counted as a wrong answer: otherwise a run during a rate limit
 measures the free tier instead of the agent, and the number moves for reasons that have nothing to
