@@ -30,6 +30,8 @@ from app.providers.groq_llm import GroqLLM
 from app.providers.kokoro_tts import KokoroTTS
 from app.providers.ollama_llm import OllamaLLM
 
+from .budget import BUDGET, NOT_ATTEMPTED
+
 BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:  # pragma: no cover - import convenience for `python -m evals`
     sys.path.insert(0, str(BACKEND))
@@ -54,11 +56,12 @@ still counted against the minute that refused it."""
 MAX_RATE_LIMIT_WAIT_S: float = 300.0
 """Longest to wait on one attempt. Module state so ``--max-wait`` can raise it.
 
-Generous on purpose. When the daily budget is nearly spent the free tier stops answering in
-minutes rather than seconds -- observed waits of 115 to 224 seconds -- and an opt-in eval run can
-afford to sit through that where a live session cannot. Past five minutes the budget is gone rather
-than throttled, and no amount of patience recovers it; those items are recorded as failures and
-counted in the run's notes rather than as wrong answers.
+The per-minute limiter never asks for more than a minute. A longer wait comes from the daily
+bucket, which refills at about 2.3 tokens a second: once it is empty, a ~2,800-token call is
+refused with a wait of twenty minutes, and every call after it costs the same wait again. So a
+wait past this bound is read as the day being spent, and the run stops attempting items rather
+than crawling (TR-205); the items it did not attempt are recorded as such and excluded, never
+counted as wrong answers.
 """
 
 
@@ -207,6 +210,9 @@ async def run_one(
         return None
 
     for attempt in range(RATE_LIMIT_ATTEMPTS):
+        if BUDGET.exhausted:
+            trace.error = NOT_ATTEMPTED
+            return trace
         try:
             result = await run_turn(
                 turn_id=1,
@@ -226,6 +232,10 @@ async def run_one(
         except ProviderError as exc:
             wait = exc.retry_after if exc.retryable else None
             last = attempt == RATE_LIMIT_ATTEMPTS - 1
+            if wait is not None and wait > MAX_RATE_LIMIT_WAIT_S:
+                # Longer than any per-minute wait: the day's bucket is empty. Declaring it here
+                # means the items still to come are skipped, not refused one at a time.
+                BUDGET.spend(wait)
             if wait is None or last or wait > MAX_RATE_LIMIT_WAIT_S:
                 trace.error = f"{type(exc).__name__}: {exc}"
                 trace.final_slide = slides.current_slide

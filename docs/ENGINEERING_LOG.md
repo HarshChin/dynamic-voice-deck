@@ -25,6 +25,60 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · The eval suites were sized for a budget they never had · uncommitted
+**Scope:** `evals/datasets/*.jsonl`, `evals/budget.py` (new), `evals/harness.py`, `evals/judge.py`,
+`evals/suites.py`, `evals/run_evals.py`, `tests/test_evals.py`, `docs/TRD.md` §13, `docs/EVALS.md`,
+`docs/TEST_CASES.md`, `README.md`
+
+**Asked for:** the pending Qwen release eval; then, once it was clear the run could not finish,
+"scope down the evals, considering our tight token budgets."
+
+**What the paced run showed.** On a second account's fresh budget the pacer did its job: 45 calls at
+31-second spacing and zero per-minute refusals, where the reactive runner had managed no successful
+call at all. Then at call 46 the *daily* bucket refused with an 855-second wait, and the retry after
+that wait was refused for 1,217 seconds -- the refill time of one whole call, as though the refused
+request had been charged. A one-token probe of the same key succeeded and returned the headers that
+explain everything: 72 requests used, reset in 1 h 43 m 40 s, which is 72 × 86.4 s. The daily
+limits are not a midnight reset; they are buckets refilling continuously -- 1,000 requests and
+200,000 tokens a day, about 2.3 tokens a second -- and an empty one serves a ~2,800-token call
+every twenty minutes. The run was killed at 18:40 with 45 answers in memory and nowhere else,
+because the runner wrote results only at the end.
+
+**The arithmetic the design skipped.** Forty routing items, 28 of them navigating and so two calls
+each: 68 calls, about 190,000 tokens, a full day for one model -- before E2's and E3's judge calls,
+before any development on the same key. This morning's document said a third of a day. A release
+gate that cannot run on release day is not a gate, so the sets are now 18 / 6 / 10: three routing
+items per category, six interruptions, five answerable and five unanswerable grounded questions.
+Calibration stays at ten, because a 90 % bar on fewer items allows no disagreement at all. Whole
+run about 75 calls and 170,000 tokens; E1 with E4 and E6 about 30 calls and 85,000. The bars these
+sizes imply are written next to them in TRD §13.1, so nobody reads 90 % on 18 items as anything
+but "one miss". The items kept were chosen for spread across target slides, relative forms and
+the adversarial off-topic question about Groq's subscription cost.
+
+**The runner learned two things (TR-205).** Pacing is the default now rather than a flag, because
+there is no correct unpaced run against this limiter. And a wait past the per-attempt bound is read
+for what it is -- the day is spent -- so the runner stops attempting items and judge calls there,
+records the rest as *not attempted* separately from *refused*, and exits non-zero. Before, it would
+have been refused once per remaining item, each refusal charged, and then written a table of
+exclusions that looked like a run.
+
+**Alternatives considered.** A tagged release subset inside the full sets: keeps the forty for a
+multi-day run, at the cost of machinery for a dataset nobody can afford to run. Stopping a
+navigating item after its tool call, since routing is decided in call one: halves E1's cost at
+forty items, but stops measuring the answer's style on exactly the items that navigate. Per-item
+checkpointing with `--resume`: the right fix for a run that dies mid-way, deferred because at thirty
+calls a run fits one sitting and the stop makes a dead day cost one call. The owner chose to shrink
+outright.
+
+**Verification:** 593 backend tests, 96 % coverage; 187 frontend tests; lint clean. Three new cases
+(TC-BE-346 to 348) pin the stop-on-spent-day behaviour; TC-BE-290 and TC-BE-292 pin the new sizes
+and the three-per-category balance. Not verified: a real run at the new size. Both keys are spent
+for the day; the second refills to the ~85,000 tokens E1 needs by about six tomorrow morning.
+
+**Follow-ups:** run E1, E4 and E6 for `qwen/qwen3.8-27b` on a full bucket and fill the pending row
+in `EVALS.md`; rotate both Groq keys exposed today; add checkpoint-and-resume if a run ever again
+needs more than one sitting.
+
 ### 2026-09-11 · The eval runner was refusing itself · uncommitted
 **Scope:** `evals/pacing.py`, `evals/run_evals.py`, `evals/harness.py`, `docs/EVALS.md`
 

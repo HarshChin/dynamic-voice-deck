@@ -1,34 +1,17 @@
-# E3 groundedness (TRD §13.1).
+# E3 groundedness (TRD §13.1). Ten items: five the notes answer, one for each of slides 2 to 6,
+# and five they do not, one per slide.
 #
 # `slide` is where the deck is when the question is asked, which is also the slide whose notes the
 # prompt carries. `answerable` is false for questions the deck genuinely does not cover; those must
 # be declined rather than answered from the model's own knowledge.
-{"id": "g001", "slide": 2, "question": "How long does endpointing take?", "answerable": true}
+#
+# Five unanswerable items because the decline threshold is 80 %: with four, one miss would fail
+# it; with five, one is allowed. Cut from thirty-one items on 2026-09-11 (EVALS.md).
 {"id": "g002", "slide": 2, "question": "What is the budget for first sound?", "answerable": true}
-{"id": "g003", "slide": 2, "question": "How long does speech to text take?", "answerable": true}
-{"id": "g004", "slide": 2, "question": "What is the p95 target?", "answerable": true}
-{"id": "g005", "slide": 2, "question": "What first-token time are you actually measuring?", "answerable": true}
 {"id": "g006", "slide": 3, "question": "Where does speech detection run?", "answerable": true}
-{"id": "g007", "slide": 3, "question": "How much silence ends my turn?", "answerable": true}
-{"id": "g008", "slide": 3, "question": "What happens to a very short noise?", "answerable": true}
-{"id": "g009", "slide": 3, "question": "How much audio do you keep from before I start?", "answerable": true}
-{"id": "g010", "slide": 3, "question": "How many transcription requests does a turn cost?", "answerable": true}
 {"id": "g011", "slide": 4, "question": "What are the two tiers of interruption?", "answerable": true}
-{"id": "g012", "slide": 4, "question": "How is the conversation history changed when I interrupt?", "answerable": true}
-{"id": "g013", "slide": 4, "question": "What marks the point where I cut you off?", "answerable": true}
-{"id": "g014", "slide": 4, "question": "How quickly should the sound stop?", "answerable": true}
-{"id": "g015", "slide": 4, "question": "Which tier does the browser handle?", "answerable": true}
-{"id": "g016", "slide": 5, "question": "What does go_to_slide do?", "answerable": true}
-{"id": "g017", "slide": 5, "question": "What is highlight_bullet for?", "answerable": true}
 {"id": "g018", "slide": 5, "question": "How many round trips does navigating cost?", "answerable": true}
-{"id": "g019", "slide": 5, "question": "What happens if you do not call a tool?", "answerable": true}
-{"id": "g020", "slide": 5, "question": "Do you see it when I move the deck myself?", "answerable": true}
 {"id": "g021", "slide": 6, "question": "Why not use a speech-to-speech model?", "answerable": true}
-{"id": "g022", "slide": 6, "question": "What does running on a free tier cost you?", "answerable": true}
-{"id": "g023", "slide": 6, "question": "What is next for this project?", "answerable": true}
-{"id": "g024", "slide": 1, "question": "What can I ask you?", "answerable": true}
-{"id": "g025", "slide": 1, "question": "How do I get the full tour?", "answerable": true}
-{"id": "g026", "slide": 1, "question": "Are the models open weight?", "answerable": true}
 {"id": "g027", "slide": 2, "question": "What does this cost per thousand tokens in dollars?", "answerable": false}
 {"id": "g028", "slide": 3, "question": "Which version of the Silero model are you running?", "answerable": false}
 {"id": "g029", "slide": 4, "question": "How many people have used this demo so far?", "answerable": false}

@@ -193,9 +193,9 @@ describe.
 
 | Suite                  | What it asks                                                                                                                                  | Threshold                                |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| E1 Slide routing       | Does it land on the right slide, and stay put when it should? 40 utterances across paraphrase, relative, cross-reference, stay and off-topic. | accuracy ≥ 90 %, false navigation ≤ 5 %  |
-| E2 Interruption memory | After being cut off, does it avoid repeating what was heard and avoid referring to what was never said? 16 scripted interruptions.            | repetition ≤ 10 %, phantom reference 0 % |
-| E3 Groundedness        | Are answers faithful to the speaker notes, and are unanswerable questions declined? 31 questions, 5 of them unanswerable.                     | mean ≥ 1.7 / 2, decline ≥ 80 %           |
+| E1 Slide routing       | Does it land on the right slide, and stay put when it should? 18 utterances, three in each of six categories: direct, paraphrase, relative, cross-reference, stay, off-topic. | accuracy ≥ 90 %, false navigation ≤ 5 %  |
+| E2 Interruption memory | After being cut off, does it avoid repeating what was heard and avoid referring to what was never said? Six scripted interruptions.                                           | repetition ≤ 10 %, phantom reference 0 % |
+| E3 Groundedness        | Are answers faithful to the speaker notes, and are unanswerable questions declined? Ten questions, five of them unanswerable.                                                 | mean ≥ 1.7 / 2, decline ≥ 80 %           |
 | E4 Spoken style        | Is the output speakable: short, no markdown, no URLs, no emoji? Derived from every answer E1–E3 produced.                                     | pass ≥ 95 %                              |
 | E5 Latency             | Stage latencies with real synthesis, three live turns.                                                                                        | within the budgets above                 |
 | E6 Tool-call hygiene   | Are tool calls valid, and kept away from off-topic input? Derived from the E1 traces.                                                         | 0 invalid, ≤ 5 % on off-topic            |
@@ -204,17 +204,23 @@ E2 and E3 are graded by the same model family at `temperature=0` against written
 `backend/evals/judges/`. The judge is itself checked on every run against ten hand-labelled items;
 if it agrees with fewer than nine of them, the run says so and its judged numbers are not believed.
 
-Evals are opt-in because they spend real quota: a full run is roughly a hundred model calls at
-about 2,900 input tokens each, against a free-tier ceiling of 200,000 tokens per model per day. A
-full run is therefore about a third of a day's budget for one model.
+Evals are opt-in because they spend real quota. One call through the shipped prompt is about
+2,800 tokens, a navigating turn makes two, and the free tier's daily budget is a bucket of 200,000
+tokens per model that refills at about 2.3 tokens a second. The suites were cut to their present
+sizes on release day, when the forty-item routing set turned out to cost a whole day on its own; a
+full run is now about 75 calls and 170,000 tokens, and E1 with E4 and E6 about 30 calls. Calls are
+paced 31 s apart so the per-minute limiter never refuses one, and the runner stops the moment the
+daily bucket does, rather than being refused once per remaining item.
 
-**What has been run so far.** `openai/gpt-oss-120b` scored **58.3 %** on routing (24 of 40 items
-answered; the rest were refused by the free tier and excluded rather than counted wrong), with zero
+**What has been run so far.** `openai/gpt-oss-120b` scored **58.3 %** on routing (24 of the
+original forty items answered; the rest were refused by the free tier and excluded rather than
+counted wrong), with zero
 false navigation and two invalid tool calls. Seven of the eight paraphrased questions it answered
 produced no visible text at all — the reasoning-model failure mode, where the token allowance goes
 on hidden reasoning before anything is said. That is the numeric version of why the default is
-Qwen. The default model's own run is still pending: the day's budget for it was spent on building
-and verifying the thing. Both runs, including the one that measured nothing, are recorded in
+Qwen. The default model's own run is still pending: two attempts on release day both ran into the
+daily budget, the second after 45 paced calls without a single per-minute refusal, which is what
+forced the resizing. All of it, including the runs that measured nothing, is recorded in
 [`docs/EVALS.md`](docs/EVALS.md).
 
 ---

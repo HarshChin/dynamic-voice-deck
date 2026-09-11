@@ -16,6 +16,8 @@ from typing import Any
 
 from app.providers.base import LLMProvider, Message, TokenDelta
 
+from .budget import BUDGET, NOT_ATTEMPTED
+
 JUDGES = Path(__file__).resolve().parent / "judges"
 """Where the rubric prompts live."""
 
@@ -59,8 +61,11 @@ async def judge(llm: LLMProvider, instructions: str, case: str) -> Verdict:
         case: The item to grade, as the user message.
 
     Returns:
-        The verdict, with ``error`` set when the reply was not usable JSON.
+        The verdict, with ``error`` set when the reply was not usable JSON, or when the day's
+        budget was already spent and the judge was not asked (TR-205).
     """
+    if BUDGET.exhausted:
+        return Verdict(payload={}, error=NOT_ATTEMPTED)
     messages = [
         Message(role="system", content=instructions),
         Message(role="user", content=case),

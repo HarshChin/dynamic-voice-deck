@@ -1,22 +1,15 @@
-# E2 interruption memory (TRD §13.1).
+# E2 interruption memory (TRD §13.1). Six items.
 #
 # Each item is a conversation that was cut off. `heard` is what the listener actually heard before
 # they interrupted; `unheard` is what the agent had generated but never spoke. The agent's history
 # keeps only `heard`, marked with "[interrupted by user]", so a correct reply neither repeats what
 # was heard unprompted nor refers to the unheard sentences as though they had been said.
+#
+# Six is few enough that the 10 % repetition threshold allows no repeat at all, which is the bar a
+# presenter should clear anyway. Cut from sixteen items on 2026-09-11 (EVALS.md).
 {"id": "i001", "current_slide": 4, "question": "How does barge-in work?", "heard": ["Two layers, actually."], "unheard": ["The browser flushes playback the instant its detector hears you.", "Then the server cancels the pipeline task."], "follow_up": "Go on."}
 {"id": "i002", "current_slide": 2, "question": "Walk me through the latency budget.", "heard": ["About a second and a half to first sound."], "unheard": ["Endpointing is six hundred milliseconds of that.", "Transcription is about three hundred."], "follow_up": "What did you say the endpointing number was?"}
-{"id": "i003", "current_slide": 3, "question": "How do you know when I have finished?", "heard": ["Six hundred milliseconds of quiet."], "unheard": ["Anything shorter than two hundred and fifty milliseconds is discarded as a misfire."], "follow_up": "And what about short noises?"}
-{"id": "i004", "current_slide": 5, "question": "How do you move the deck?", "heard": ["I call a function called go_to_slide."], "unheard": ["There is also highlight_bullet for emphasising one line.", "Navigating costs two model round trips."], "follow_up": "Is there anything else you can call?"}
 {"id": "i005", "current_slide": 6, "question": "What are the trade-offs?", "heard": ["Speech-to-speech would be faster."], "unheard": ["But it hides the turn-taking you came here to see.", "This pipeline owns every millisecond instead."], "follow_up": "So why did you not use it?"}
-{"id": "i006", "current_slide": 1, "question": "What is this?", "heard": ["A voice agent explaining its own architecture."], "unheard": ["You can ask anything, in any order.", "Interrupt me and I stop."], "follow_up": "Carry on."}
 {"id": "i007", "current_slide": 4, "question": "How fast does the sound stop?", "heard": ["Under a hundred and fifty milliseconds."], "unheard": ["That is the browser, not the server."], "follow_up": "Which part of the system does that?"}
-{"id": "i008", "current_slide": 2, "question": "Where does the time go?", "heard": ["Most of it is the model's first token."], "unheard": ["Synthesis adds about another quarter of a second."], "follow_up": "And synthesis?"}
-{"id": "i009", "current_slide": 3, "question": "Does the microphone stream the whole time?", "heard": ["No, only a finished turn is uploaded."], "unheard": ["That is one transcription request per turn rather than a permanent stream."], "follow_up": "What does that cost you?"}
 {"id": "i010", "current_slide": 5, "question": "What happens if you forget to call the tool?", "heard": ["The server scores my answer against the slides."], "unheard": ["If one scores strongly enough, it moves the deck for me."], "follow_up": "And then what?"}
-{"id": "i011", "current_slide": 6, "question": "What is next?", "heard": ["Local models, so none of it needs a network."], "unheard": ["Streaming transcription, so I do not have to wait for you to stop.", "And decks generated from a topic."], "follow_up": "Anything else on the list?"}
-{"id": "i012", "current_slide": 4, "question": "What happens to what you had already said?", "heard": ["The history is cut to what you actually heard."], "unheard": ["The cut is marked with a note saying you interrupted."], "follow_up": "How do you record the cut?"}
 {"id": "i013", "current_slide": 1, "question": "How should I use this?", "heard": ["Just talk."], "unheard": ["Ask anything, in any order.", "Say walk me through it for the full tour."], "follow_up": "Is there a guided version?"}
-{"id": "i014", "current_slide": 2, "question": "Is a second and a half good?", "heard": ["It is the budget, not the record."], "unheard": ["Measured right now, first token is seven hundred milliseconds to two point three seconds."], "follow_up": "What are you actually measuring?"}
-{"id": "i015", "current_slide": 3, "question": "Why detect speech in the browser?", "heard": ["Because then interruption needs no round trip."], "unheard": ["The cost is that transcription cannot start until you stop talking."], "follow_up": "What does that cost you?"}
-{"id": "i016", "current_slide": 5, "question": "Do you know when I click around myself?", "heard": ["Yes, your manual moves are reported to me."], "unheard": ["So my next answer is about the slide you chose, not the one I last spoke about."], "follow_up": "Why does that matter?"}

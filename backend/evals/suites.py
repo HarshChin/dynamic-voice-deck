@@ -19,6 +19,7 @@ from app.pipeline.history import ConversationHistory
 from app.pipeline.prompt import PromptBuilder
 from app.providers.base import LLMProvider, TTSProvider
 
+from .budget import NOT_ATTEMPTED
 from .harness import TurnTrace, read_dataset, run_one
 from .judge import judge, rubric
 
@@ -129,6 +130,27 @@ async def _map(items: list[Any], work: Any) -> list[Any]:
     return list(await asyncio.gather(*(bounded(item) for item in items)))
 
 
+def _exclusions(items: list[dict[str, Any]]) -> str:
+    """Describe the items a suite could not count, for its note.
+
+    Args:
+        items: Every record the suite produced.
+
+    Returns:
+        A clause ending in a full stop: just the stop when every item answered, otherwise how
+        many were excluded and how many of those were never attempted because the day's budget
+        had run out (TR-205). A reader has to be able to tell a spent budget from a flaky provider.
+    """
+    failed = [row for row in items if row.get("error") is not None]
+    if not failed:
+        return "."
+    skipped = sum(1 for row in failed if row["error"] == NOT_ATTEMPTED)
+    text = f"; {len(failed)} excluded after a provider failure"
+    if skipped:
+        text += f", {skipped} of them not attempted once the daily budget had run out"
+    return text + "."
+
+
 def _style_failures(answer: str, sentences: list[str]) -> list[str]:
     """List the ways an answer is unspeakable (E4).
 
@@ -194,7 +216,6 @@ async def e1_routing(context: Context) -> SuiteResult:
     # counted wrong: otherwise a run during a rate limit measures the free tier, not the agent.
     answered = [row for row in items if row["error"] is None]
     stay = [row for row in answered if row["expected_slide"] is None]
-    skipped = len(items) - len(answered)
     return SuiteResult(
         suite="E1",
         title="Slide routing",
@@ -204,10 +225,7 @@ async def e1_routing(context: Context) -> SuiteResult:
         },
         thresholds={"accuracy": (">=", 0.90), "false_navigation": ("<=", 0.05)},
         items=items,
-        note=(
-            f"{len(answered)} of {len(items)} items answered"
-            + (f"; {skipped} excluded after a provider failure." if skipped else ".")
-        ),
+        note=f"{len(answered)} of {len(items)} items answered" + _exclusions(items),
     )
 
 
@@ -274,7 +292,7 @@ async def e2_interruption(context: Context) -> SuiteResult:
         },
         thresholds={"repetition": ("<=", 0.10), "phantom_reference": ("<=", 0.0)},
         items=items,
-        note=f"{len(scored)} of {len(items)} items were gradeable.",
+        note=f"{len(scored)} of {len(items)} items were gradeable" + _exclusions(items),
     )
 
 
@@ -337,7 +355,10 @@ async def e3_grounded(context: Context) -> SuiteResult:
         },
         thresholds={"mean_score": (">=", 1.7), "decline_rate": (">=", 0.80)},
         items=items,
-        note=f"{len(answerable)} answerable and {len(unanswerable)} unanswerable items graded.",
+        note=(
+            f"{len(answerable)} answerable and {len(unanswerable)} unanswerable items graded"
+            + _exclusions(items)
+        ),
     )
 
 

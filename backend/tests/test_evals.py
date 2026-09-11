@@ -9,12 +9,16 @@ a recorded number means what it claims, so they are worth pinning.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from app.errors import ProviderError
+from app.pipeline.prompt import PromptBuilder
 from app.providers.base import Message, TokenDelta, ToolSpec
 from evals import harness, pacing
+from evals.budget import BUDGET, NOT_ATTEMPTED
 from evals.judge import judge
 from evals.pacing import PacedLLM, Pacer
 from evals.report import to_markdown
@@ -22,11 +26,22 @@ from evals.suites import (
     STYLE_MAX_SENTENCES,
     STYLE_MAX_WORDS,
     SuiteResult,
+    _exclusions,
     _ratio,
     _style_failures,
     e4_style,
     e6_tools,
 )
+
+from tests.fakes import FakeTTS
+
+
+@pytest.fixture(autouse=True)
+def _fresh_budget() -> Iterator[None]:
+    """A spent budget is module state, and must not leak from one test into the next."""
+    BUDGET.reset()
+    yield
+    BUDGET.reset()
 
 
 class ScriptedJudge:
@@ -46,6 +61,27 @@ class ScriptedJudge:
         """Yield the scripted reply as one token."""
         self.calls.append(list(messages))
         yield TokenDelta(text=self._reply)
+
+
+class RefusingModel:
+    """A model whose account has been refused for the day: every call is a 429 with a long wait."""
+
+    name = "refusing"
+
+    def __init__(self, retry_after: float) -> None:
+        self._retry_after = retry_after
+        self.calls = 0
+
+    async def stream(
+        self,
+        messages: list[Message],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> Any:
+        """Refuse, the way the free tier does once the daily bucket is empty."""
+        self.calls += 1
+        raise ProviderError("groq_llm", "HTTP 429", retryable=True, retry_after=self._retry_after)
+        yield  # pragma: no cover - unreachable, kept so this is an async generator
 
 
 class FailingJudge:
@@ -71,10 +107,14 @@ class FailingJudge:
 
 @pytest.mark.parametrize(
     ("name", "minimum"),
-    [("routing.jsonl", 40), ("interruption.jsonl", 15), ("grounded.jsonl", 25)],
+    [("routing.jsonl", 18), ("interruption.jsonl", 6), ("grounded.jsonl", 10)],
 )
 def test_every_dataset_meets_the_size_the_trd_requires(name: str, minimum: int) -> None:
-    """TC-BE-290: TRD §13.1 -- a suite below its stated size is not the suite that was specified."""
+    """TC-BE-290: TRD §13.1 -- a suite below its stated size is not the suite that was specified.
+
+    The sizes are the release-gate sizes set on 2026-09-11, when the forty-item routing set turned
+    out to cost a whole day of the free tier on its own (EVALS.md).
+    """
     assert len(harness.read_dataset(name)) >= minimum
 
 
@@ -97,13 +137,14 @@ def test_the_routing_set_covers_every_category_the_design_names() -> None:
     for item in harness.read_dataset("routing.jsonl"):
         counts[item["category"]] = counts.get(item["category"], 0) + 1
 
+    # Three per category: the set is balanced so no category's rate is hidden by another's.
     assert counts == {
-        "direct": 8,
-        "paraphrase": 10,
-        "relative": 6,
-        "cross-reference": 4,
-        "stay": 6,
-        "off-topic": 6,
+        "direct": 3,
+        "paraphrase": 3,
+        "relative": 3,
+        "cross-reference": 3,
+        "stay": 3,
+        "off-topic": 3,
     }
 
 
@@ -351,6 +392,59 @@ async def test_the_rubric_is_the_system_message_and_the_case_is_the_user_message
 
     roles = [(message.role, message.content) for message in scripted.calls[0]]
     assert roles == [("system", "THE RUBRIC"), ("user", "THE CASE")]
+
+
+# --------------------------------------------------------------------------- #
+# The daily budget (TR-205)                                                    #
+# --------------------------------------------------------------------------- #
+
+
+async def test_a_refusal_longer_than_the_wait_bound_ends_the_runs_attempts() -> None:
+    """TC-BE-346: TR-205 -- once the day is spent, later items are skipped rather than refused."""
+    refusing = RefusingModel(retry_after=1217.0)
+    shared: dict[str, Any] = {
+        "deck": harness.load_deck(),
+        "llm": refusing,
+        "tts": FakeTTS(),
+        "prompts": PromptBuilder(),
+        "current_slide": 1,
+    }
+
+    first = await harness.run_one(utterance="How does barge-in work?", **shared)
+    second = await harness.run_one(utterance="Next slide please.", **shared)
+
+    assert first.error is not None
+    assert "429" in first.error
+    assert BUDGET.exhausted_after_s == 1217.0
+    assert second.error == NOT_ATTEMPTED
+    assert refusing.calls == 1
+
+
+async def test_the_judge_is_not_asked_once_the_day_is_spent() -> None:
+    """TC-BE-347: TR-205 -- the judge is not asked against a budget that is known to be spent."""
+    BUDGET.spend(900.0)
+    scripted = ScriptedJudge('{"score": 2}')
+
+    verdict = await judge(scripted, "rubric", "case")
+
+    assert verdict.error == NOT_ATTEMPTED
+    assert scripted.calls == []
+
+
+def test_the_note_separates_items_never_attempted_from_items_refused() -> None:
+    """TC-BE-348: TR-205 -- a reader must be able to tell a spent budget from a flaky provider."""
+    items = [
+        {"error": None},
+        {"error": "ProviderError: groq_llm: HTTP 429"},
+        {"error": NOT_ATTEMPTED},
+        {"error": NOT_ATTEMPTED},
+    ]
+
+    assert _exclusions(items) == (
+        "; 3 excluded after a provider failure, 2 of them not attempted once the daily budget "
+        "had run out."
+    )
+    assert _exclusions([{"error": None}]) == "."
 
 
 async def test_the_pacer_spaces_calls_by_at_least_the_interval(

@@ -667,12 +667,14 @@ Unit tests check the code; evals check the **agent's behaviour** with real model
 
 | Suite | Dataset | Metric | Release threshold |
 |---|---|---|---|
-| **E1 Slide routing** | `datasets/routing.jsonl`: ≥ 40 utterances × `{utterance, current_slide, expected_slide \| null, expected_source: llm\|fallback\|none}` including paraphrases, "next/back", off-topic, and "stay on this slide" cases | Exact-match accuracy on `expected_slide`; false-navigation rate on `null` cases | accuracy ≥ 90 %; false navigation ≤ 5 % |
-| **E2 Interruption memory** | `datasets/interruption.jsonl`: ≥ 15 scripted turns where the assistant was cut after sentence *k*, followed by "go on" or a new question | LLM-as-judge (rubric): does the reply repeat content before the cut? does it reference content after the cut as if spoken? | repetition ≤ 10 %; phantom-reference 0 % |
-| **E3 Groundedness** | `datasets/grounded.jsonl`: ≥ 25 questions, each with the slide notes that contain the answer, plus 5 unanswerable | Judge scores 0–2 for faithfulness to notes; unanswerable must be declined | mean ≥ 1.7; decline rate on unanswerable ≥ 80 % |
+| **E1 Slide routing** | `datasets/routing.jsonl`: 18 utterances, three in each of six categories (direct, paraphrase, relative, cross-reference, stay, off-topic) × `{utterance, current_slide, expected_slide \| null, expected_source: llm\|fallback\|none}` | Exact-match accuracy on `expected_slide`; false-navigation rate on `null` cases | accuracy ≥ 90 %; false navigation ≤ 5 % |
+| **E2 Interruption memory** | `datasets/interruption.jsonl`: 6 scripted turns where the assistant was cut after sentence *k*, followed by "go on" or a new question | LLM-as-judge (rubric): does the reply repeat content before the cut? does it reference content after the cut as if spoken? | repetition ≤ 10 %; phantom-reference 0 % |
+| **E3 Groundedness** | `datasets/grounded.jsonl`: 5 questions the slide notes answer, one for each of slides 2–6, plus 5 unanswerable | Judge scores 0–2 for faithfulness to notes; unanswerable must be declined | mean ≥ 1.7; decline rate on unanswerable ≥ 80 % |
 | **E4 Spoken style** | All E1–E3 outputs | Deterministic checks: sentence count 1–5 (unless asked for more), no markdown/list symbols, no URLs, no emoji, ≤ 90 words | pass ≥ 95 % |
 | **E5 Latency** | Walkthrough scenario replayed with recorded utterance WAVs against live providers, 3 runs | p50/p95 of `stt_ms`, `llm_ttft_ms`, `tts_ttfb_ms`, computed `first_audio_ms` | within §8.1 budgets |
 | **E6 Tool-call hygiene** | E1 traces | Invalid tool calls (bad index, unknown tool), calls on off-topic inputs | 0 invalid; ≤ 5 % on off-topic |
+
+**Sizing (2026-09-11).** The sets were 40, 16 and 31 items. A call through the shipped prompt is about 2,800 tokens, a navigating turn makes two, and the free tier's daily budget is a bucket of 200,000 tokens per model that refills at about 2.3 tokens a second — so the 40-item routing set alone cost a full day and the six suites two and a half, and a gate that cannot run on the day it gates is not a gate. At 18 / 6 / 10 items the whole run is about 75 calls and 170,000 tokens, and E1 with E4 and E6 about 30 calls. The bars these sizes imply are stated so nobody mistakes them: 90 % on 18 items allows one miss; 10 % repetition on 6 allows none; 80 % decline on 5 allows one; 90 % judge agreement on 10 allows one. Records made on the larger sets are marked as such in `docs/EVALS.md`. Sets still grow by TR-203, and a run's cost grows with them, knowingly.
 
 ### 13.2 Runner design
 
@@ -682,7 +684,8 @@ Unit tests check the code; evals check the **agent's behaviour** with real model
 | TR-201 | The judge for E2/E3 is the same LLM provider with a fixed rubric prompt and `temperature=0`; judge prompts live in `evals/judges/`. Judge outputs are JSON with a score and a one-line rationale. |
 | TR-202 | Each run writes a machine-readable JSON and a Markdown summary; the summary table is pasted into `docs/EVALS.md` with the git SHA, model IDs, and date. |
 | TR-203 | Datasets are versioned in the repo; adding a failing real-world utterance to a dataset is the standard response to a routing bug. |
-| TR-204 | Evals are opt-in (`make evals`) because they consume free-tier quota; E1 with 40 items uses ≈ 40 LLM calls. |
+| TR-204 | Evals are opt-in (`make evals`) because they consume free-tier quota. A navigating turn is two LLM calls, so E1 with 18 items is ≈ 30 calls and ≈ 85,000 tokens, four tenths of a day's budget; the six suites are ≈ 75 calls and ≈ 170,000 tokens. Hosted calls are paced 31 s apart by default, because a refused request counts against the minute that refused it. |
+| TR-205 | A rate-limit wait longer than the per-attempt bound (`--max-wait`, default 300 s) means the day's budget is spent, not throttled. The runner records that item as excluded, attempts no further item or judge call, says in each suite's note how many items were never attempted (separately from how many were refused), and exits non-zero. The bucket refills continuously at ~2.3 tokens/s, so crawling on would yield one answer per twenty minutes; stopping wastes one call instead of the remainder. |
 
 ### 13.3 Model comparison
 

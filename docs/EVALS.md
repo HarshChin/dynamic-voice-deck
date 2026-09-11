@@ -15,38 +15,48 @@ rationale) and `<timestamp>.md` (the summary table below), and prints the table.
 non-zero when a threshold is missed, so it can gate a release.
 
 Evals consume Groq free-tier quota, and more of it than the item counts suggest. One model call is
-about 3,000 tokens (read off the 429 bodies), a turn that navigates makes two, and E2 and E3 add a
-judge call each. That puts **E1 alone at roughly 200,000 tokens -- a whole day's free-tier budget
-for one model** -- and the six suites together at about two and a half days'. An earlier version of
-this paragraph said a third of a day; that was an underestimate by a factor of seven. The daily
-ceiling is a rolling 24-hour window, so a run started against a spent budget crawls at the refill
-rate rather than failing outright. Run them at milestone boundaries, not on every commit.
+about 2,800 tokens (read off the 429 bodies), a turn that navigates makes two, and E2 and E3 add a
+judge call each. The daily ceiling is not a midnight reset but a bucket of 200,000 tokens per model
+that refills continuously at about 2.3 tokens a second: the rate-limit headers on a probe showed 72
+requests used against a daily 1,000 with a reset of 1 h 43 m 40 s, which is 72 × 86.4 s exactly, and
+the same arithmetic on tokens gives 2.31 a second. An empty bucket refuses a ~2,800-token call with
+a wait of about twenty minutes, and the refused request appears to be charged like a served one:
+the retry after the advertised wait was refused again, for the full wait again. At the original
+sizes that put **E1 alone at roughly 190,000 tokens -- a whole day's budget for one model** -- and
+the six suites at two and a half days; an earlier version of this paragraph said a third of a day,
+an underestimate by a factor of seven. The sets were therefore cut on 2026-09-11 (*Sizing*, below):
+E1 with E4 and E6 is now about 30 calls and 85,000 tokens, the whole run about 75 calls and
+170,000. Run them at milestone boundaries, not on every commit.
 
 **Pace the run; do not let it be refused.** The 429 body from the per-minute limiter reads
 `input tokens per minute (ITPM): Limit 7000, Used 5406, Requested 2816` -- and that `Used` figure
 was recorded one second after a run with *zero* successful calls was stopped. A refused request
 counts against the very window it was refused for, so retrying on the advertised `retry-after`
 re-fills that window and loops indefinitely; one such run made 34 attempts in ten minutes and
-completed none. The runner therefore paces proactively: `--min-interval 31` spaces every model
-call -- subject and judge share one pacer, because they share the account's minute -- so that two
+completed none. The runner therefore paces proactively, and by default: 31 seconds between model
+calls -- subject and judge share one pacer, because they share the account's minute -- so that two
 ~2,800-token calls fit inside a 7,000-token minute and nothing is ever refused. Any retry that does
-happen now waits a full minute, since a shorter wait cannot succeed. `--concurrency 1` keeps items
-from competing, and `--max-wait` raises the per-attempt patience for a run that must sit out a
-spent daily budget.
+happen waits a full minute, since a shorter wait cannot succeed. `--concurrency 1` keeps items from
+competing. `--max-wait` is the bound past which a wait is read as the day being spent rather than
+the minute being full; raising it does not help, because the bucket refills at one call per twenty
+minutes, so the runner stops instead (TR-205).
 
 ```bash
 cd backend && GROQ_API_KEY="$(cat ~/.dvd-eval-key)" uv run python -m evals.run_evals \
-  --suite E1,E4,E6 --model qwen/qwen3.8-27b --min-interval 31 --concurrency 1 --max-wait 1800
+  --suite E1,E4,E6 --model qwen/qwen3.8-27b --out evals/results/qwen3.8-27b-release.json
 ```
 
-E1 at two calls a minute is about forty minutes. Nothing in the run logs a credential.
+E1 at two calls a minute is about sixteen minutes, the whole run about forty. `--min-interval 0`
+turns pacing off for a local model, which has no limiter to respect. Nothing in the run logs a
+credential.
 
 **Two measurement decisions worth stating.** An item the provider refused with a 429 is excluded
 from the denominator rather than counted as a wrong answer: otherwise a run during a rate limit
 measures the free tier instead of the agent, and the number moves for reasons that have nothing to
-do with the code. And the runner waits out a per-minute limit (up to 70 seconds) but not a daily
-one, because no amount of patience recovers a spent daily budget; those items are recorded as
-failures and named in the run's notes.
+do with the code. And the runner waits out a per-minute limit (a full minute) but not a daily one:
+the first wait past the bound marks the day as spent, no further item or judge call is attempted,
+and each suite's note says how many items were never attempted, separately from how many the
+provider refused (TR-205).
 
 ## Suites
 
@@ -65,18 +75,41 @@ failures and named in the run's notes.
 
 Each line: `{"id": "r001", "utterance": "...", "current_slide": 1, "expected_slide": 4, "expected_source": "llm", "category": "paraphrase"}`.
 
-Categories and minimum counts:
+Categories, three items each:
 
 | Category | Count | Example |
 |---|---|---|
-| direct | 8 | "Tell me about the latency budget." → 2 |
-| paraphrase | 10 | "Why does it take a moment before you answer?" → 2 |
-| relative | 6 | "Next.", "Go back one.", "Start over." |
-| cross-reference | 4 | "Which slide talks about cost?" → 6 |
-| stay | 6 | "Can you expand on that second point?" → `null` (no navigation) |
-| off-topic | 6 | "What's the weather like?" → `null` |
+| direct | 3 | "How does barge-in work?" → 4 |
+| paraphrase | 3 | "Why does it take a moment before you answer?" → 2 |
+| relative | 3 | "Next slide please.", "Go back one.", "Take me back to the start." |
+| cross-reference | 3 | "Which slide talks about cost?" → 6 |
+| stay | 3 | "Can you expand on that second point?" → `null` (no navigation) |
+| off-topic | 3 | "How much does a Groq subscription cost per month?" → `null` |
 
 Items are added whenever a real session mis-routes; the utterance is copied verbatim from the event log.
+
+### Sizing (2026-09-11)
+
+The sets were 40, 16 and 31 items until release day, when two attempts to run E1 against the
+default model both ran into the daily budget (results log, below). The arithmetic: a call through
+the shipped prompt is about 2,800 tokens, a navigating turn makes two, the daily bucket holds
+200,000 per model and refills at about 2.3 tokens a second. The forty-item routing set was 68 calls
+and about 190,000 tokens -- the whole day -- and the six suites together two and a half days. A
+gate that cannot run on the day it gates is not a gate.
+
+| Set | Was | Is | Calls | What the threshold allows at this size |
+|---|---|---|---|---|
+| routing | 40 | 18, three per category | ~30 | 90 % accuracy: one miss |
+| interruption | 16 | 6 | ~13 with the judge | 10 % repetition: none |
+| grounded | 31 | 10, five unanswerable | ~20 with the judge | 80 % decline: one miss |
+| judge calibration | 10 | 10 | 10 | 90 % agreement: one disagreement |
+
+Whole run about 75 calls and 170,000 tokens; E1 with E4 and E6 about 30 calls and 85,000. The
+items kept were chosen for spread: every target slide, every relative form (next, back, start),
+the cross-references that need the notes rather than the titles, and the off-topic question about
+Groq's subscription cost, which is the one that tempts a move to the trade-offs slide. Rows in the
+model comparison measured on the old sets say so. Sets still grow by TR-203 when a real utterance
+mis-routes, and a run's cost grows with them, knowingly.
 
 ### E2 interruption memory (`interruption.jsonl`)
 
@@ -105,10 +138,14 @@ answer as fully grounded, and vagueness is the failure mode a presenter actually
 
 | Model | E1 accuracy | E1 false nav | E4 style | E6 invalid | Notes |
 |---|---|---|---|---|---|
-| **qwen/qwen3.8-27b (Groq)** | pending | pending | pending | pending | **current default.** Chosen on the smoke comparison below and on latency; its own suite run is blocked on the daily free-tier budget, see 2026-09-11 below. |
-| openai/gpt-oss-120b (Groq) | **58.3 %** (24 of 40 answered) | 0.0 % | 87.5 % | 2 | rejected. Seven of eight paraphrased questions produced no visible answer at all. |
+| **qwen/qwen3.8-27b (Groq)** | pending | pending | pending | pending | **current default.** Chosen on the smoke comparison below and on latency. Its own run hit the daily budget twice on release day (both entries below); it runs on the eighteen-item set the next time a bucket is full. |
+| openai/gpt-oss-120b (Groq) | **58.3 %** (24 of 40 answered) | 0.0 % | 87.5 % | 2 | rejected. Forty-item set. Seven of eight paraphrased questions produced no visible answer at all. |
 | openai/gpt-oss-20b (Groq) | — | — | — | — | untested; same reasoning-model family as the 120b. |
-| **qwen2.5:7b (Ollama, local)** | **57.5 %** (40 of 40 answered) | 8.3 % | 77.5 % | 0 | **the fallback** (TR-085). Not a candidate for primary; see the run below for why it is a good fallback anyway. |
+| **qwen2.5:7b (Ollama, local)** | **57.5 %** (40 of 40 answered) | 8.3 % | 77.5 % | 0 | **the fallback** (TR-085). Forty-item set. Not a candidate for primary; see the run below for why it is a good fallback anyway. |
+
+The two measured rows were made on the forty-item routing set, before it was cut to eighteen
+(*Sizing*, above). The categories are the same and the smaller set is balanced across them, but a
+number from one set is not directly comparable with a number from the other.
 
 Note: `llama-3.3-70b-versatile` is no longer offered on this account; the models actually available
 are `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`,
@@ -144,6 +181,31 @@ Models: STT=<id> LLM=<id> TTS=<id>
 |---|---|---|---|---|
 Notes: <what changed since the last run, failures investigated, dataset additions>
 ```
+
+### 2026-09-11 — a8f1e88 — `qwen/qwen3.8-27b` — attempt 2, paced: **no record, and the reason the suites shrank**
+
+No result file: the runner wrote results only at the end of a run, and this run did not end.
+
+Run on a second account's fresh daily budget, with the pacer that the morning's loop had made
+necessary (`--min-interval 31 --concurrency 1 --max-wait 1800`), E1, E4 and E6 on the forty-item
+routing set. For 24 minutes it did exactly what it should: 45 calls, one every 31 seconds, **zero
+per-minute refusals** -- the reactive runner had managed no successful call at all in ten minutes
+-- and a single `turn.empty_answer` warning across the 28 or so items it got through. Then at 18:15
+the daily bucket refused a call with a wait of 855 s. The retry, after that wait, was refused with
+1,217 s: the full refill of one call again, as though the refused request had been charged. A
+one-token probe of the same key at 18:28 succeeded and returned the headers that gave the refill
+rate. The run was killed at 18:40 with its 45 answers in memory and nowhere else.
+
+**What it establishes.** The pacer works: the per-minute limiter was never tripped. The daily
+budget is a continuously refilling bucket, and at 200,000 tokens a day and ~2,800 tokens a call the
+forty-item E1 could never be run on the day it was meant to gate, on either key, alongside the
+development that draws on the same keys. So the suites were resized (*Sizing*, above); the runner
+now stops attempting items on the first daily refusal instead of crawling, and says in each suite's
+note how many it never attempted (TR-205); and pacing is its default rather than a flag.
+
+**What it does not establish.** Nothing about the agent: 45 calls whose results were never written
+are not a measurement. The default model's row above stays *pending* until an eighteen-item run
+completes on a full bucket.
 
 ### 2026-09-11 — 8baa145 — `qwen2.5:7b` on Ollama, as the local fallback
 
@@ -225,9 +287,9 @@ in place. When this model answers, it routes sensibly. The problem is how often 
 **Conclusion: the default stays `qwen/qwen3.8-27b`.** This run is the numeric version of the
 qualitative comparison recorded below, and it agrees with it.
 
-### 2026-09-11 — a07b87e — `qwen/qwen3.8-27b` — **not a valid run**
+### 2026-09-11 — a07b87e — `qwen/qwen3.8-27b` — attempt 1, **not a valid run**
 
-Full record: `backend/evals/results/qwen3.8-27b-release.json`.
+Full record: `backend/evals/results/qwen3.8-27b-release-attempt-1.json`.
 
 Every one of the 90 items was refused by the free tier with HTTP 429, with retry-after values of
 115 to 224 seconds, so nothing was measured: 0 of 40 routing items answered, 0 of 16 interruption
@@ -241,12 +303,7 @@ day's budget -- and by the time the suites were finished, the day's Qwen budget 
 development, integration tests and live verification. The three items the judge did grade before
 the budget ran out all agreed with their hand labels.
 
-**What to do about it.** Run it when the budget resets:
-
-```bash
-make evals MODEL=qwen/qwen3.8-27b
-```
-
-The runner now waits out a rate limit for up to five minutes per attempt, which is enough to grind
-through a throttled window; a constrained run takes a couple of hours of mostly waiting.
+**What to do about it.** It was tried again the same evening on a second account's key -- the
+attempt-2 entry at the top of this log -- and that attempt is why the suites are now the size they
+are.
 

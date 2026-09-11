@@ -281,6 +281,9 @@ the real providers. Two product defects, both fixed.
 | TC-BE-343 | TR-086 | Given "let's go to slide four" or slide 5's own description of the tools, then nothing is cut | `::test_natural_speech_about_slides_and_tools_is_left_alone` | passing |
 | TC-BE-344 | TR-204 | Given a pacer with a 31 s interval, then the first call is immediate and each later call waits the full interval | `tests/test_evals.py::test_the_pacer_spaces_calls_by_at_least_the_interval` | passing |
 | TC-BE-345 | TR-204 | Given a paced provider, then it waits its turn and then delegates the stream unchanged | `::test_a_paced_provider_waits_then_delegates_unchanged` | passing |
+| TC-BE-346 | TR-205 | Given a refusal whose wait exceeds the bound, then the day is recorded as spent, the item is excluded, and the next item is not attempted at all | `::test_a_refusal_longer_than_the_wait_bound_ends_the_runs_attempts` | passing |
+| TC-BE-347 | TR-205 | Given a spent budget, then the judge is not called and its verdict says so | `::test_the_judge_is_not_asked_once_the_day_is_spent` | passing |
+| TC-BE-348 | TR-205 | Then a suite's note separates items never attempted from items the provider refused | `::test_the_note_separates_items_never_attempted_from_items_refused` | passing |
 
 ### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
 
@@ -372,9 +375,9 @@ parsed. Those are the parts that decide whether a recorded number means what it 
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-BE-290 | TRD §13.1 | Then each dataset meets the size the design states: routing ≥ 40, interruption ≥ 15, grounded ≥ 25 | `tests/test_evals.py::test_every_dataset_meets_the_size_the_trd_requires` | passing |
+| TC-BE-290 | TRD §13.1 | Then each dataset meets the size the design states: routing ≥ 18, interruption ≥ 6, grounded ≥ 10 (the release-gate sizes set 2026-09-11) | `tests/test_evals.py::test_every_dataset_meets_the_size_the_trd_requires` | passing |
 | TC-BE-291 | TR-203 | Then ids are unique within a file, so no result silently overwrites another | `::test_dataset_ids_are_unique_within_a_file` | passing |
-| TC-BE-292 | TRD §13.1 | Then the routing set covers every category in the stated proportions | `::test_the_routing_set_covers_every_category_the_design_names` | passing |
+| TC-BE-292 | TRD §13.1 | Then the routing set has exactly three items in each of its six categories | `::test_the_routing_set_covers_every_category_the_design_names` | passing |
 | TC-BE-293 | TRD §13.1 | Then at least five grounded items are unanswerable, so the decline rate has something to measure | `::test_the_grounded_set_includes_questions_the_deck_cannot_answer` | passing |
 | TC-BE-294 | TR-203 | Then every slide index a dataset names exists in the deck | `::test_every_slide_a_dataset_names_exists_in_the_deck` | passing |
 | TC-BE-295 | TR-203 | Then comments and blank lines in a dataset are not read as data | `::test_comments_and_blank_lines_are_not_data` | passing |

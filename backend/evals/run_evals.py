@@ -3,8 +3,10 @@
     uv run python -m evals.run_evals --suite all --model qwen/qwen3.8-27b
 
 Opt-in, because every item is a real model call and the free tier is the binding constraint: a full
-run is roughly a hundred of them. Results land in ``evals/results/`` as JSON and as a Markdown
-summary to paste into ``docs/EVALS.md``.
+run is about seventy-five of them, roughly 170,000 tokens against a daily budget of 200,000 per
+model, and E1 on its own is about thirty calls. Calls are paced by default so the per-minute limiter
+never refuses one, and the run stops attempting items once the daily budget does (TR-205). Results
+land in ``evals/results/`` as JSON and as a Markdown summary to paste into ``docs/EVALS.md``.
 """
 
 from __future__ import annotations
@@ -14,11 +16,13 @@ import asyncio
 import sys
 from pathlib import Path
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.logging_setup import configure_logging
 from app.pipeline.prompt import PromptBuilder
+from app.providers.base import LLMProvider
 
 from . import harness, suites
+from .budget import BUDGET
 from .harness import build_llm, build_tts, load_deck
 from .pacing import PacedLLM, Pacer
 from .report import write
@@ -29,6 +33,13 @@ SUITES = ("E1", "E2", "E3", "E4", "E5", "E6")
 
 JUDGED = ("E2", "E3")
 """Suites whose numbers depend on the judge, and are therefore gated on its calibration."""
+
+DEFAULT_MIN_INTERVAL_S = 31.0
+"""Spacing between hosted-model calls unless the command line says otherwise.
+
+Two ~2,800-token calls fit a 7,000-token minute; a third is refused, and a refused request counts
+against the minute that refused it. Local models are not paced: there is no limiter to respect.
+"""
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -59,8 +70,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-wait",
         type=float,
         default=None,
-        help="longest to wait out one rate limit, in seconds; raise it to grind through a spent "
-        "daily budget overnight (default 300)",
+        help="longest to wait out one rate limit, in seconds; a longer wait is read as the daily "
+        "budget being spent, and the run stops attempting items (default 300)",
     )
     parser.add_argument(
         "--concurrency",
@@ -71,9 +82,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--min-interval",
         type=float,
-        default=0.0,
+        default=None,
         help="seconds between model calls, shared by subject and judge; 31 keeps a 7,000-token "
-        "minute from ever refusing a ~2,800-token call (default 0, no pacing)",
+        "minute from ever refusing a ~2,800-token call (default 31 for groq, 0 for ollama)",
     )
     parser.add_argument(
         "--limit",
@@ -99,6 +110,57 @@ def _apply_run_options(args: argparse.Namespace) -> None:
         harness.MAX_RATE_LIMIT_WAIT_S = args.max_wait
     if args.concurrency is not None:
         suites.MAX_CONCURRENCY = args.concurrency
+
+
+def _build_models(
+    args: argparse.Namespace, settings: Settings, model: str, judge_model: str
+) -> tuple[LLMProvider, LLMProvider]:
+    """Build the subject model and the judge, paced together when the provider needs it.
+
+    Args:
+        args: Parsed command line.
+        settings: Loaded settings, supplying credentials and base URLs.
+        model: The model under evaluation.
+        judge_model: The model doing the grading.
+
+    Returns:
+        The subject provider and the judge provider.
+    """
+    llm = build_llm(settings, model, provider=args.provider)
+    # Zero, because a rubric graded differently on two runs is not a measurement (TR-201).
+    judge_llm = build_llm(settings, judge_model, provider=args.provider, temperature=0.0)
+    interval = args.min_interval
+    if interval is None:
+        interval = DEFAULT_MIN_INTERVAL_S if args.provider == "groq" else 0.0
+    if interval > 0:
+        # One pacer for both: they draw on the same account, and the account's minute is shared.
+        pacer = Pacer(interval)
+        return PacedLLM(llm, pacer), PacedLLM(judge_llm, pacer)
+    return llm, judge_llm
+
+
+def _exit_status(results: list[SuiteResult]) -> int:
+    """Decide the exit status, and say why on stderr.
+
+    Args:
+        results: Every suite that ran.
+
+    Returns:
+        0 only when every threshold was met and every item was attempted.
+    """
+    failed = [result.suite for result in results if not result.passed]
+    if failed:
+        print(f"below threshold: {', '.join(failed)}", file=sys.stderr)
+    if BUDGET.exhausted:
+        print(
+            f"the daily budget ran out during the run: the provider asked for a "
+            f"{BUDGET.exhausted_after_s:.0f} s wait, and every item after that was not attempted. "
+            "The numbers above cover the items that were. Run again once the bucket has refilled; "
+            "it does so at about 2.3 tokens a second, so a full day is a full day.",
+            file=sys.stderr,
+        )
+        return 1
+    return 1 if failed else 0
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -128,14 +190,7 @@ async def run(args: argparse.Namespace) -> int:
 
     deck = load_deck()
     prompts = PromptBuilder()
-    llm = build_llm(settings, model, provider=args.provider)
-    # Zero, because a rubric graded differently on two runs is not a measurement (TR-201).
-    judge_llm = build_llm(settings, judge_model, provider=args.provider, temperature=0.0)
-    if args.min_interval > 0:
-        # One pacer for both: they draw on the same account, and the account's minute is shared.
-        pacer = Pacer(args.min_interval)
-        llm = PacedLLM(llm, pacer)
-        judge_llm = PacedLLM(judge_llm, pacer)
+    llm, judge_llm = _build_models(args, settings, model, judge_model)
     results: list[SuiteResult] = []
 
     needs_judge = any(name in JUDGED for name in wanted)
@@ -192,11 +247,7 @@ async def run(args: argparse.Namespace) -> int:
     json_path, markdown_path = write(results, model=model, judge_model=judge_model, out=args.out)
     print(markdown_path.read_text(encoding="utf-8"))
     print(f"wrote {json_path}\n      {markdown_path}")
-    failed = [result.suite for result in results if not result.passed]
-    if failed:
-        print(f"below threshold: {', '.join(failed)}", file=sys.stderr)
-        return 1
-    return 0
+    return _exit_status(results)
 
 
 def main() -> int:

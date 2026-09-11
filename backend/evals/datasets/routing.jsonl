@@ -1,50 +1,32 @@
-# E1 slide routing (TRD §13.1). One JSON object per line.
+# E1 slide routing (TRD §13.1). One JSON object per line; eighteen items, three per category.
 #
 # `expected_slide` is where the deck must end up; null means it must not move.
 # `expected_source` records how the move is expected to happen: "llm" when the model should call
 # go_to_slide, "fallback" when the server's alias scoring is the safety net, "none" when nothing
 # should navigate. Accuracy is measured on `expected_slide`; `expected_source` informs E6 only.
 #
+# Sized to the free tier (EVALS.md, 2026-09-11): a navigating item is two model calls of about
+# 2,800 tokens against a daily bucket of 200,000, so eighteen items are roughly thirty calls and
+# under half a day. The forty-item set this replaced was a full day on its own.
+#
 # Deck: 1 Anatomy of a Voice Agent / 2 The Latency Budget / 3 Hearing: VAD and Turn-Taking /
 # 4 Barge-in: Interrupting Gracefully / 5 Thinking: Tool Calling and Intent Routing /
 # 6 Trade-offs and What's Next
-{"id": "r001", "utterance": "Tell me about the latency budget.", "current_slide": 1, "expected_slide": 2, "expected_source": "llm", "category": "direct"}
 {"id": "r002", "utterance": "How does barge-in work?", "current_slide": 1, "expected_slide": 4, "expected_source": "llm", "category": "direct"}
-{"id": "r003", "utterance": "Explain tool calling.", "current_slide": 1, "expected_slide": 5, "expected_source": "llm", "category": "direct"}
 {"id": "r004", "utterance": "What are the trade-offs?", "current_slide": 2, "expected_slide": 6, "expected_source": "llm", "category": "direct"}
-{"id": "r005", "utterance": "Tell me about voice activity detection.", "current_slide": 1, "expected_slide": 3, "expected_source": "llm", "category": "direct"}
-{"id": "r006", "utterance": "What is this deck about?", "current_slide": 4, "expected_slide": 1, "expected_source": "llm", "category": "direct"}
 {"id": "r007", "utterance": "Show me the slide on turn-taking.", "current_slide": 6, "expected_slide": 3, "expected_source": "llm", "category": "direct"}
-{"id": "r008", "utterance": "Talk about interruption handling.", "current_slide": 2, "expected_slide": 4, "expected_source": "llm", "category": "direct"}
 {"id": "r010", "utterance": "Why does it take a moment before you answer?", "current_slide": 1, "expected_slide": 2, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r011", "utterance": "How do you know when I have stopped talking?", "current_slide": 1, "expected_slide": 3, "expected_source": "llm", "category": "paraphrase"}
 {"id": "r012", "utterance": "What happens if I cut you off mid-sentence?", "current_slide": 1, "expected_slide": 4, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r013", "utterance": "How do you decide which slide to show me?", "current_slide": 1, "expected_slide": 5, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r014", "utterance": "What would you do differently next time?", "current_slide": 3, "expected_slide": 6, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r015", "utterance": "How long do I have to wait to hear you?", "current_slide": 5, "expected_slide": 2, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r016", "utterance": "Does the microphone listen the whole time?", "current_slide": 1, "expected_slide": 3, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r017", "utterance": "How do you stop talking so quickly when I start?", "current_slide": 2, "expected_slide": 4, "expected_source": "llm", "category": "paraphrase"}
-{"id": "r018", "utterance": "What makes the deck move on its own?", "current_slide": 2, "expected_slide": 5, "expected_source": "llm", "category": "paraphrase"}
 {"id": "r019", "utterance": "Why not just use a speech-to-speech model?", "current_slide": 1, "expected_slide": 6, "expected_source": "llm", "category": "paraphrase"}
 {"id": "r020", "utterance": "Next slide please.", "current_slide": 2, "expected_slide": 3, "expected_source": "llm", "category": "relative"}
 {"id": "r021", "utterance": "Go back one.", "current_slide": 4, "expected_slide": 3, "expected_source": "llm", "category": "relative"}
 {"id": "r022", "utterance": "Take me back to the start.", "current_slide": 5, "expected_slide": 1, "expected_source": "llm", "category": "relative"}
-{"id": "r023", "utterance": "Skip to the last slide.", "current_slide": 2, "expected_slide": 6, "expected_source": "llm", "category": "relative"}
-{"id": "r024", "utterance": "Move on.", "current_slide": 3, "expected_slide": 4, "expected_source": "llm", "category": "relative"}
-{"id": "r025", "utterance": "Previous one, please.", "current_slide": 6, "expected_slide": 5, "expected_source": "llm", "category": "relative"}
 {"id": "r030", "utterance": "Which slide talks about cost?", "current_slide": 1, "expected_slide": 6, "expected_source": "llm", "category": "cross-reference"}
 {"id": "r031", "utterance": "Where do you cover the three hundred millisecond pre-roll?", "current_slide": 1, "expected_slide": 3, "expected_source": "llm", "category": "cross-reference"}
 {"id": "r032", "utterance": "Which part explains the two round trips?", "current_slide": 1, "expected_slide": 5, "expected_source": "llm", "category": "cross-reference"}
-{"id": "r033", "utterance": "Where does it say how fast the sound stops?", "current_slide": 1, "expected_slide": 4, "expected_source": "llm", "category": "cross-reference"}
 {"id": "r040", "utterance": "Can you expand on that second point?", "current_slide": 2, "expected_slide": null, "expected_source": "none", "category": "stay"}
 {"id": "r041", "utterance": "Say that again, more slowly.", "current_slide": 3, "expected_slide": null, "expected_source": "none", "category": "stay"}
-{"id": "r042", "utterance": "What does that number actually mean?", "current_slide": 2, "expected_slide": null, "expected_source": "none", "category": "stay"}
-{"id": "r043", "utterance": "Give me an example of that.", "current_slide": 4, "expected_slide": null, "expected_source": "none", "category": "stay"}
-{"id": "r044", "utterance": "Is that measured or estimated?", "current_slide": 2, "expected_slide": null, "expected_source": "none", "category": "stay"}
 {"id": "r045", "utterance": "Summarise this slide in one sentence.", "current_slide": 5, "expected_slide": null, "expected_source": "none", "category": "stay"}
 {"id": "r050", "utterance": "What is the weather in London today?", "current_slide": 1, "expected_slide": null, "expected_source": "none", "category": "off-topic"}
-{"id": "r051", "utterance": "Who won the World Cup in 2022?", "current_slide": 3, "expected_slide": null, "expected_source": "none", "category": "off-topic"}
 {"id": "r052", "utterance": "Write me a Python function that sorts a list.", "current_slide": 2, "expected_slide": null, "expected_source": "none", "category": "off-topic"}
-{"id": "r053", "utterance": "What is the capital of France?", "current_slide": 5, "expected_slide": null, "expected_source": "none", "category": "off-topic"}
-{"id": "r054", "utterance": "Tell me a joke.", "current_slide": 4, "expected_slide": null, "expected_source": "none", "category": "off-topic"}
 {"id": "r055", "utterance": "How much does a Groq subscription cost per month?", "current_slide": 6, "expected_slide": null, "expected_source": "none", "category": "off-topic"}
