@@ -46,9 +46,15 @@ a silent wait. An eval is the opposite -- a 429 says nothing about the agent's b
 counting it as a wrong answer would make the measurement a measurement of the free tier.
 """
 
-MAX_RATE_LIMIT_WAIT_S = 70.0
-"""Longest to wait on one attempt. The per-minute ceiling clears in a minute; a longer wait than
-this is the daily budget, which no amount of patience fixes."""
+MAX_RATE_LIMIT_WAIT_S = 300.0
+"""Longest to wait on one attempt.
+
+Generous on purpose. When the daily budget is nearly spent the free tier stops answering in
+minutes rather than seconds -- observed waits of 115 to 224 seconds -- and an opt-in eval run can
+afford to sit through that where a live session cannot. Past five minutes the budget is gone rather
+than throttled, and no amount of patience recovers it; those items are recorded as failures and
+counted in the run's notes rather than as wrong answers.
+"""
 
 
 @dataclass(slots=True)

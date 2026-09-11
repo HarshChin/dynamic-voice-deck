@@ -691,13 +691,13 @@ The runner accepts `--model` so E1 and E4 can be compared across `openai/gpt-oss
 
 ## 15. Release plan
 
-| Milestone | Scope | Exit criteria |
-|---|---|---|
-| M1 Text loop | Deck repo, protocol, session, LLM streaming with tools, slide.goto, EventLog | TC-BE-01x, TC-FE-01x green; `text.input` moves slides |
-| M2 Audio out | Kokoro provider, chunker, sender, PlaybackQueue, Orb, metrics | TC-BE-02x, TC-FE-02x green; first-audio measured |
-| M3 Audio in + barge-in | Capture, VAD, Groq STT, interrupt tiers, truncation | TC-BE-03x, TC-FE-03x, TC-E2E-001 steps 1–4 green |
-| M4 Polish | Present mode + resume, bidirectional sync, PTT, text fallback, README | All P1 TCs green; E1–E6 run recorded |
-| M5 v0.1.0 | Tag, EVALS.md, ENGINEERING_LOG.md complete | `make lint test` clean in CI |
+| Milestone | Scope | Exit criteria | Status |
+|---|---|---|---|
+| M1 Text loop | Deck repo, protocol, session, LLM streaming with tools, slide.goto, EventLog | TC-BE-01x, TC-FE-01x green; `text.input` moves slides | **shipped 2026-09-10** |
+| M2 Audio out | Kokoro provider, chunker, sender, PlaybackQueue, Orb, metrics | TC-BE-02x, TC-FE-02x green; first-audio measured | **shipped 2026-09-11**, first audio 777 ms |
+| M3 Audio in + barge-in | Capture, speech detection, Groq STT, interrupt tiers, truncation | TC-BE-03x, TC-FE-03x, TC-E2E-001 steps 1–4 green | **shipped 2026-09-11**, cancellation 1.9 ms |
+| M4 Polish | Present mode + resume, bidirectional sync, PTT, text fallback, README | All P1 TCs green; E1–E6 run recorded | **shipped 2026-09-11** |
+| M5 v0.1.0 | Tag, EVALS.md, ENGINEERING_LOG.md complete | `make lint test` clean in CI | in progress |
 
 ---
 

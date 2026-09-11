@@ -613,13 +613,18 @@ dynamic-voice-deck/
 
 ## 12. Milestones
 
-| When | Milestone | Definition of done |
-|---|---|---|
-| Wed 9 Sep (eve) | **M1 Text loop** | Deck renders; WS session; `text.input` → LLM with tools → `slide.goto` + streamed text in log. No audio yet. |
-| Thu 10 Sep (am) | **M2 Audio out** | Kokoro streaming, PlaybackQueue, orb states, `transcript.agent` captions, metrics. |
-| Thu 10 Sep (pm) | **M3 Audio in + barge-in** | VAD, Groq STT, two-tier interrupt, history truncation, `interrupt_stop_ms` in HUD. **Core product complete.** |
-| Fri 11 Sep (am) | **M4 Polish** | Presentation mode + resume, bidirectional sync, push-to-talk, text fallback, README with trade-offs, test suite and eval run green. |
-| Fri 11 Sep (pm) | **M5 Release v0.1.0** | Repo public, `docs/EVALS.md` populated with the release eval run, engineering log complete. Stretch: deck generation. |
+| When | Milestone | Definition of done | Status |
+|---|---|---|---|
+| Wed 9 Sep (eve) | **M1 Text loop** | Deck renders; WS session; `text.input` → LLM with tools → `slide.goto` + streamed text in log. No audio yet. | shipped 10 Sep |
+| Thu 10 Sep (am) | **M2 Audio out** | Kokoro streaming, PlaybackQueue, orb states, `transcript.agent` captions, metrics. | shipped 11 Sep |
+| Thu 10 Sep (pm) | **M3 Audio in + barge-in** | Speech detection, Groq STT, two-tier interrupt, history truncation, `interrupt_stop_ms` in HUD. **Core product complete.** | shipped 11 Sep |
+| Fri 11 Sep (am) | **M4 Polish** | Presentation mode + resume, bidirectional sync, push-to-talk, text fallback, README with trade-offs, test suite and eval run green. | shipped 11 Sep |
+| Fri 11 Sep (pm) | **M5 Release v0.1.0** | Repo public, `docs/EVALS.md` populated with the release eval run, engineering log complete. Stretch: deck generation. | in progress |
+
+The plan slipped by about a day: M2 and M3 both landed on the 11th rather than the 10th. The time
+went on two things that were not in the plan, and both are recorded in the engineering log: Silero
+VAD could not be made to load under Vite and was replaced, and the first real spoken session
+surfaced four defects that no test had covered.
 
 ---
 

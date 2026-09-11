@@ -5,11 +5,26 @@ Evals measure the **behaviour of the agent with real models**, which unit tests 
 ## How to run
 
 ```bash
-make evals                       # all suites, default model, writes backend/evals/results/<ts>.json + .md
-make evals SUITE=E1 MODEL=llama-3.3-70b-versatile
+make evals                                   # every suite, the model in .env
+make evals SUITE=E1,E4,E6 MODEL=openai/gpt-oss-120b
+cd backend && uv run python -m evals.run_evals --suite E1 --limit 5   # cheap smoke run
 ```
 
-Evals consume Groq free-tier quota (≈ 40–120 LLM calls for a full run). Run them at milestone boundaries, not on every commit.
+Each run writes `backend/evals/results/<timestamp>.json` (every item, every answer, every judge
+rationale) and `<timestamp>.md` (the summary table below), and prints the table. The runner exits
+non-zero when a threshold is missed, so it can gate a release.
+
+Evals consume Groq free-tier quota: roughly 100 model calls for a full run, about 2,900 input
+tokens each, against a ceiling of 200,000 tokens per model per day and 7,000 per minute. A full run
+therefore takes tens of minutes of waiting rather than minutes of computing. Run them at milestone
+boundaries, not on every commit.
+
+**Two measurement decisions worth stating.** An item the provider refused with a 429 is excluded
+from the denominator rather than counted as a wrong answer: otherwise a run during a rate limit
+measures the free tier instead of the agent, and the number moves for reasons that have nothing to
+do with the code. And the runner waits out a per-minute limit (up to 70 seconds) but not a daily
+one, because no amount of patience recovers a spent daily budget; those items are recorded as
+failures and named in the run's notes.
 
 ## Suites
 
@@ -54,16 +69,24 @@ Each line: question, the slide notes containing the answer, and an `answerable` 
 
 ### Judge
 
-The judge is the same LLM provider at `temperature=0` with rubric prompts in `backend/evals/judges/`. Judge outputs are strict JSON. A 10-item hand-labelled calibration set (`datasets/judge_calibration.jsonl`) is scored on every run; judge agreement with hand labels must be ≥ 90 % for the run to be valid.
+The judge is the same LLM provider at `temperature=0` with rubric prompts in
+`backend/evals/judges/`. Judge outputs are JSON, extracted from the reply rather than assumed to be
+the whole of it, because models add preambles and code fences. A 10-item hand-labelled calibration
+set (`datasets/judge_calibration.jsonl`) is scored on every run; judge agreement with the hand
+labels must be at least 90 % or the run reports that its judged suites should not be believed.
+
+The calibration set is deliberately adversarial in one direction: half its items are answers that
+are *nearly* right, because a judge that only separates correct from absurd will score a vague
+answer as fully grounded, and vagueness is the failure mode a presenter actually has.
 
 ## Model comparison
 
 | Model | E1 accuracy | E1 false nav | E4 style | E6 invalid | Notes |
 |---|---|---|---|---|---|
-| **qwen/qwen3.8-27b (Groq)** | — | — | — | — | **current default**, chosen on the smoke comparison below |
-| openai/gpt-oss-120b (Groq) | — | — | — | — | rejected on the smoke comparison below |
-| openai/gpt-oss-20b (Groq) | — | — | — | — | untested |
-| local (Ollama, TBD) | — | — | — | — | offline reference |
+| **qwen/qwen3.8-27b (Groq)** | pending | pending | pending | pending | **current default.** Chosen on the smoke comparison below and on latency; its own suite run is blocked on the daily free-tier budget, see 2026-09-11 below. |
+| openai/gpt-oss-120b (Groq) | **58.3 %** (24 of 40 answered) | 0.0 % | 87.5 % | 2 | rejected. Seven of eight paraphrased questions produced no visible answer at all. |
+| openai/gpt-oss-20b (Groq) | — | — | — | — | untested; same reasoning-model family as the 120b. |
+| local (Ollama, TBD) | — | — | — | — | offline reference, not yet implemented (TR-084). |
 
 Note: `llama-3.3-70b-versatile` is no longer offered on this account; the models actually available
 are `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`,
@@ -100,4 +123,62 @@ Models: STT=<id> LLM=<id> TTS=<id>
 Notes: <what changed since the last run, failures investigated, dataset additions>
 ```
 
-_No runs recorded yet._
+### 2026-09-11 — a07b87e — `openai/gpt-oss-120b`
+
+Full record: `backend/evals/results/gpt-oss-120b-E1.json`.
+
+| Suite | Metric | Value | Threshold | Pass |
+|---|---|---|---|---|
+| E1 Slide routing | accuracy | 58.3 % | ≥ 90 % | **no** |
+| E1 Slide routing | false navigation | 0.0 % | ≤ 5 % | yes |
+| E4 Spoken style | pass rate | 87.5 % | ≥ 95 % | **no** |
+| E6 Tool-call hygiene | invalid calls | 2 | 0 | **no** |
+| E6 Tool-call hygiene | off-topic navigation | 0.0 % | ≤ 5 % | yes |
+
+24 of 40 items answered; 16 were excluded after the free tier refused them, and are not counted as
+wrong answers.
+
+**What the failures were.** Seven of the eight paraphrased questions that got an answer produced
+the fallback apology, "Sorry, I lost that one. Could you ask me again?" — which is what the pipeline
+says when the model's stream ends with no visible characters. This is the reasoning-model failure
+mode: the token allowance is spent on hidden reasoning before any answer is emitted. Direct
+questions, where the slide is named almost literally, mostly worked; paraphrases, where the model
+has to think first, mostly did not. That is the wrong way round for this product, whose entire
+premise is that you can ask in your own words.
+
+The two invalid tool calls were both `upstream error: Failed to parse tool call arguments as JSON`,
+raised by Groq's own parser rather than by this code. The three style failures were answers of
+seven, eight and nine sentences, against a five-sentence allowance.
+
+**Nothing here was wrong about navigation itself.** False navigation was zero: every off-topic
+question was declined without moving the deck, and every "stay on this slide" question was answered
+in place. When this model answers, it routes sensibly. The problem is how often it does not answer.
+
+**Conclusion: the default stays `qwen/qwen3.8-27b`.** This run is the numeric version of the
+qualitative comparison recorded below, and it agrees with it.
+
+### 2026-09-11 — a07b87e — `qwen/qwen3.8-27b` — **not a valid run**
+
+Full record: `backend/evals/results/qwen3.8-27b-release.json`.
+
+Every one of the 90 items was refused by the free tier with HTTP 429, with retry-after values of
+115 to 224 seconds, so nothing was measured: 0 of 40 routing items answered, 0 of 16 interruption
+items gradeable, 0 of 31 groundedness items graded. The suite is recorded here rather than quietly
+discarded, because a run that measured nothing is a fact about the day, not a fact about the agent,
+and deleting it would leave the model comparison looking more complete than it is.
+
+**Why.** The free tier allows 200,000 tokens per model per day, and a turn through this pipeline
+costs about 2,900 input tokens. A full six-suite run is therefore roughly a third of a day's budget
+for one model — and by the time the suites were finished, the day's Qwen budget had already gone on
+development, integration tests and live verification. The three items the judge did grade before
+the budget ran out all agreed with their hand labels.
+
+**What to do about it.** Run it when the budget resets:
+
+```bash
+make evals MODEL=qwen/qwen3.8-27b
+```
+
+The runner now waits out a rate limit for up to five minutes per attempt, which is enough to grind
+through a throttled window; a constrained run takes a couple of hours of mostly waiting.
+

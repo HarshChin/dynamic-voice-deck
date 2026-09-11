@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 513 backend cases across 20 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 153 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 541 backend cases across 21 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 153 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -265,6 +265,36 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
+
+### The eval harness (added 2026-09-11)
+
+The suites themselves call real models and are not tests. Everything around them is: how a dataset
+is read, how a style failure is recognised, how a threshold is compared, how a judge's reply is
+parsed. Those are the parts that decide whether a recorded number means what it claims.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-290 | TRD §13.1 | Then each dataset meets the size the design states: routing ≥ 40, interruption ≥ 15, grounded ≥ 25 | `tests/test_evals.py::test_every_dataset_meets_the_size_the_trd_requires` | passing |
+| TC-BE-291 | TR-203 | Then ids are unique within a file, so no result silently overwrites another | `::test_dataset_ids_are_unique_within_a_file` | passing |
+| TC-BE-292 | TRD §13.1 | Then the routing set covers every category in the stated proportions | `::test_the_routing_set_covers_every_category_the_design_names` | passing |
+| TC-BE-293 | TRD §13.1 | Then at least five grounded items are unanswerable, so the decline rate has something to measure | `::test_the_grounded_set_includes_questions_the_deck_cannot_answer` | passing |
+| TC-BE-294 | TR-203 | Then every slide index a dataset names exists in the deck | `::test_every_slide_a_dataset_names_exists_in_the_deck` | passing |
+| TC-BE-295 | TR-203 | Then comments and blank lines in a dataset are not read as data | `::test_comments_and_blank_lines_are_not_data` | passing |
+| TC-BE-296 | TR-200 | Given `--limit`, then a dataset is capped, so a runner change can be proved without a full run | `::test_the_limit_caps_a_dataset_for_a_cheap_smoke_run` | passing |
+| TC-BE-297 | E4 | Then an ordinary spoken answer passes the style check | `::test_speech_passes_the_style_check` | passing |
+| TC-BE-298 | E4 | Then markdown, bullets, links, code spans and emoji all fail it | `::test_anything_that_reads_as_written_fails_the_style_check` | passing |
+| TC-BE-299 | E4 | Then an answer past 90 words or 5 sentences fails on length | `::test_an_answer_that_runs_long_fails_on_length` | passing |
+| TC-BE-300 | E4 | Then E4 is derived from answers the other suites produced and needs no model calls of its own | `::test_the_style_suite_reads_every_answer_the_other_suites_produced` | passing |
+| TC-BE-301 | TRD §13.1 | Then a `>=` threshold and a `<=` threshold are compared in the directions they were written | `::test_a_threshold_is_compared_in_the_direction_it_was_written` | passing |
+| TC-BE-302 | TRD §13.1 | Then a metric that was never measured fails its threshold rather than passing by absence | `::test_a_metric_that_was_never_measured_does_not_silently_pass` | passing |
+| TC-BE-303 | TR-202 | Then a suite whose items all failed still reports rather than dividing by zero | `::test_an_empty_denominator_is_zero_rather_than_an_error` | passing |
+| TC-BE-304 | TR-202 | Then the summary names each metric in its own units, with the git SHA and the model | `::test_the_summary_names_each_metric_with_its_units` | passing |
+| TC-BE-305 | E6 | Then an item the provider refused is excluded from the off-topic rate rather than counted | `::test_tool_hygiene_ignores_items_the_provider_refused` | passing |
+| TC-BE-306 | TR-201 | Given a judge that wraps its JSON in prose and a code fence, then the score is still read | `::test_a_judge_reply_is_read_even_when_it_is_wrapped_in_prose` | passing |
+| TC-BE-307 | TR-201 | Given a reply with no JSON, then the item is ungradeable rather than scored zero | `::test_a_reply_with_no_json_is_an_error_rather_than_a_zero` | passing |
+| TC-BE-308 | TR-201 | Given unparseable JSON, then the raw reply is kept so the verdict can be read back | `::test_unparseable_json_is_reported_with_what_was_said` | passing |
+| TC-BE-309 | TR-201 | Given a judge whose provider fails, then a verdict is returned rather than the run ending | `::test_a_judge_whose_provider_fails_returns_a_verdict_not_an_exception` | passing |
+| TC-BE-310 | TR-201 | Then the rubric is the system message and the item is the user message, not the other way round | `::test_the_rubric_is_the_system_message_and_the_case_is_the_user_message` | passing |
 
 ### Rate limiting, the single-process build, and resuming a tour (added 2026-09-11)
 

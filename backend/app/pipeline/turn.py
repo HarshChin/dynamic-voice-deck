@@ -1006,12 +1006,19 @@ def provider_error_message(exc: ProviderError) -> ErrorMsg:
         KOKORO_NAME: ErrorCode.TTS_FAILED,
     }.get(exc.provider, ErrorCode.LLM_FAILED)
     if exc.retryable and exc.retry_after is not None:
-        code = ErrorCode.RATE_LIMITED
         # The wait travels as a number so the client can count it down rather than parse a
         # sentence out of an upstream error string that changes shape between providers (TR-171).
+        #
+        # The upstream text is deliberately not forwarded. Groq's 429 body is a JSON blob naming
+        # the organisation id, the billing page and the exact token counts; it belongs in the
+        # server log, where it already is, and not in a panel the user reads or in an event log
+        # they may export and share.
+        seconds = round(exc.retry_after)
         return ErrorMsg(
-            code=code,
-            message=exc.message,
+            code=ErrorCode.RATE_LIMITED,
+            message=(
+                f"the free tier is out of capacity for a moment; ready again in about {seconds}s"
+            ),
             recoverable=True,
             retry_after_s=exc.retry_after,
         )

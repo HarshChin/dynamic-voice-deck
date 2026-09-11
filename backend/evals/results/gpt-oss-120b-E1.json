@@ -1,0 +1,1113 @@
+{
+  "timestamp": "2026-09-11T00-41-09Z",
+  "git_sha": "a07b87e",
+  "model": "openai/gpt-oss-120b",
+  "judge_model": "openai/gpt-oss-120b",
+  "suites": [
+    {
+      "suite": "E1",
+      "title": "Slide routing",
+      "metrics": {
+        "accuracy": 0.5833333333333334,
+        "false_navigation": 0.0
+      },
+      "thresholds": {
+        "accuracy": [
+          ">=",
+          0.9
+        ],
+        "false_navigation": [
+          "<=",
+          0.05
+        ]
+      },
+      "items": [
+        {
+          "id": "r001",
+          "category": "direct",
+          "utterance": "Tell me about the latency budget.",
+          "current_slide": 1,
+          "expected_slide": 2,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 5493, Requested 2549. Please try again in 315ms. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r002",
+          "category": "direct",
+          "utterance": "How does barge-in work?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 4,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "Two layers, actually. The browser instantly flushes any playback as soon as the voice detector hears you speak, cutting the sound in under a hundred and fifty milliseconds and recording the last sentence you actually heard. Then the server receives an interrupt message, cancels the ongoing pipeline task, and truncates the conversation history to what you truly heard, marking the cut with \"interrupted by user.\"",
+          "sentences": [
+            "Two layers, actually.",
+            "The browser instantly flushes any playback as soon as the voice detector hears you speak,",
+            "cutting the sound in under a hundred and fifty milliseconds and recording the last sentence you actually heard.",
+            "Then the server receives an interrupt message,",
+            "cancels the ongoing pipeline task,",
+            "and truncates the conversation history to what you truly heard,",
+            "marking the cut with \"interrupted by user.\""
+          ],
+          "error": null
+        },
+        {
+          "id": "r003",
+          "category": "direct",
+          "utterance": "Explain tool calling.",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 5,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "fallback"
+          ],
+          "answer": "Two layers, actually. The language model can invoke functions like go to slide or highlight bullet when it decides a tool will help answer",
+          "sentences": [
+            "Two layers, actually.",
+            "The language model can invoke functions like go to slide or highlight bullet when it decides a tool will help answer"
+          ],
+          "error": null
+        },
+        {
+          "id": "r004",
+          "category": "direct",
+          "utterance": "What are the trade-offs?",
+          "current_slide": 2,
+          "expected_slide": 6,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7747, Requested 2631. Please try again in 17.835s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r005",
+          "category": "direct",
+          "utterance": "Tell me about voice activity detection.",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7585, Requested 2687. Please try again in 17.04s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r006",
+          "category": "direct",
+          "utterance": "What is this deck about?",
+          "current_slide": 4,
+          "expected_slide": 1,
+          "landed_on": 1,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7479, Requested 2706. Please try again in 16.3875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r007",
+          "category": "direct",
+          "utterance": "Show me the slide on turn-taking.",
+          "current_slide": 6,
+          "expected_slide": 3,
+          "landed_on": 6,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7316, Requested 2561. Please try again in 14.0775s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r008",
+          "category": "direct",
+          "utterance": "Talk about interruption handling.",
+          "current_slide": 2,
+          "expected_slide": 4,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r010",
+          "category": "paraphrase",
+          "utterance": "Why does it take a moment before you answer?",
+          "current_slide": 1,
+          "expected_slide": 2,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r011",
+          "category": "paraphrase",
+          "utterance": "How do you know when I have stopped talking?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r012",
+          "category": "paraphrase",
+          "utterance": "What happens if I cut you off mid-sentence?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7419, Requested 2562. Please try again in 14.8575s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r013",
+          "category": "paraphrase",
+          "utterance": "How do you decide which slide to show me?",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r014",
+          "category": "paraphrase",
+          "utterance": "What would you do differently next time?",
+          "current_slide": 3,
+          "expected_slide": 6,
+          "landed_on": 3,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "That isn't covered in this deck.",
+          "sentences": [
+            "That isn't covered in this deck."
+          ],
+          "error": null
+        },
+        {
+          "id": "r015",
+          "category": "paraphrase",
+          "utterance": "How long do I have to wait to hear you?",
+          "current_slide": 5,
+          "expected_slide": 2,
+          "landed_on": 5,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r016",
+          "category": "paraphrase",
+          "utterance": "Does the microphone listen the whole time?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7671, Requested 2636. Please try again in 17.3025s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r017",
+          "category": "paraphrase",
+          "utterance": "How do you stop talking so quickly when I start?",
+          "current_slide": 2,
+          "expected_slide": 4,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r018",
+          "category": "paraphrase",
+          "utterance": "What makes the deck move on its own?",
+          "current_slide": 2,
+          "expected_slide": 5,
+          "landed_on": 5,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "fallback"
+          ],
+          "answer": "It doesn't. The slides only change when I explicitly call go to slide or when someone clicks to a new slide. In QA mode I stay on the current slide until a question requires a different one, and there's no background animation that flips pages on its own. So the deck moves only by a deliberate command or a manual click.",
+          "sentences": [
+            "It doesn't.",
+            "The slides only change when I explicitly call go to slide or when someone clicks to a new slide.",
+            "In QA mode I stay on the current slide until a question requires a different one,",
+            "and there's no background animation that flips pages on its own.",
+            "So the deck moves only by a deliberate command or a manual click."
+          ],
+          "error": null
+        },
+        {
+          "id": "r019",
+          "category": "paraphrase",
+          "utterance": "Why not just use a speech-to-speech model?",
+          "current_slide": 1,
+          "expected_slide": 6,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r020",
+          "category": "relative",
+          "utterance": "Next slide please.",
+          "current_slide": 2,
+          "expected_slide": 3,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7625, Requested 2597. Please try again in 16.665s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r021",
+          "category": "relative",
+          "utterance": "Go back one.",
+          "current_slide": 4,
+          "expected_slide": 3,
+          "landed_on": 4,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7046, Requested 2610. Please try again in 12.42s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r022",
+          "category": "relative",
+          "utterance": "Take me back to the start.",
+          "current_slide": 5,
+          "expected_slide": 1,
+          "landed_on": 5,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7784, Requested 2622. Please try again in 18.045s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r023",
+          "category": "relative",
+          "utterance": "Skip to the last slide.",
+          "current_slide": 2,
+          "expected_slide": 6,
+          "landed_on": 6,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "fallback"
+          ],
+          "answer": "Here's the wrap\u2011up. This slide looks ahead at where we can go next. Speech\u2011to\u2011speech cuts latency and even includes barge\u2011in, but it hides the turn\u2011taking we've been dissecting. Our current pipeline still owns every millisecond, and open\u2011weight models on a free tier keep latency low. The roadmap points to local models, streaming transcription, and new decks to keep improving.",
+          "sentences": [
+            "Here's the wrap\u2011up.",
+            "This slide looks ahead at where we can go next.",
+            "Speech\u2011to\u2011speech cuts latency and even includes barge\u2011in,",
+            "but it hides the turn\u2011taking we've been dissecting.",
+            "Our current pipeline still owns every millisecond,",
+            "and open\u2011weight models on a free tier keep latency low.",
+            "The roadmap points to local models, streaming transcription,",
+            "and new decks to keep improving."
+          ],
+          "error": null
+        },
+        {
+          "id": "r024",
+          "category": "relative",
+          "utterance": "Move on.",
+          "current_slide": 3,
+          "expected_slide": 4,
+          "landed_on": 3,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: upstream error: Failed to parse tool call arguments as JSON"
+        },
+        {
+          "id": "r025",
+          "category": "relative",
+          "utterance": "Previous one, please.",
+          "current_slide": 6,
+          "expected_slide": 5,
+          "landed_on": 6,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r030",
+          "category": "cross-reference",
+          "utterance": "Which slide talks about cost?",
+          "current_slide": 1,
+          "expected_slide": 6,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: upstream error: Failed to parse tool call arguments as JSON"
+        },
+        {
+          "id": "r031",
+          "category": "cross-reference",
+          "utterance": "Where do you cover the three hundred millisecond pre-roll?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7862, Requested 2567. Please try again in 18.217499999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r032",
+          "category": "cross-reference",
+          "utterance": "Which part explains the two round trips?",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r033",
+          "category": "cross-reference",
+          "utterance": "Where does it say how fast the sound stops?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7764, Requested 2606. Please try again in 17.775s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r040",
+          "category": "stay",
+          "utterance": "Can you expand on that second point?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r041",
+          "category": "stay",
+          "utterance": "Say that again, more slowly.",
+          "current_slide": 3,
+          "expected_slide": null,
+          "landed_on": 3,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "Sure, I'll slow it down. Hearing happens right in your browser, not on a server. An audio worklet down\u2011mixes the mic, resamples to sixteen kilohertz, and checks loudness every thirty\u2011two milliseconds. One loud frame means you've started, three in a row while I'm speaking let my own voice leak without cutting me off, and six hundred milliseconds of quiet tells the system you're finished. Anything under two hundred and fifty milliseconds is tossed",
+          "sentences": [
+            "Sure, I'll slow it down.",
+            "Hearing happens right in your browser, not on a server.",
+            "An audio worklet down\u2011mixes the mic,",
+            "resamples to sixteen kilohertz,",
+            "and checks loudness every thirty\u2011two milliseconds.",
+            "One loud frame means you've started,",
+            "three in a row while I'm speaking let my own voice leak without cutting me off,",
+            "and six hundred milliseconds of quiet tells the system you're finished.",
+            "Anything under two hundred and fifty milliseconds is tossed"
+          ],
+          "error": null
+        },
+        {
+          "id": "r042",
+          "category": "stay",
+          "utterance": "What does that number actually mean?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7500, Requested 2605. Please try again in 15.7875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r043",
+          "category": "stay",
+          "utterance": "Give me an example of that.",
+          "current_slide": 4,
+          "expected_slide": null,
+          "landed_on": 4,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r044",
+          "category": "stay",
+          "utterance": "Is that measured or estimated?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "sentences": [
+            "Sorry, I lost that one. Could you ask me again?"
+          ],
+          "error": null
+        },
+        {
+          "id": "r045",
+          "category": "stay",
+          "utterance": "Summarise this slide in one sentence.",
+          "current_slide": 5,
+          "expected_slide": null,
+          "landed_on": 5,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7795, Requested 2585. Please try again in 17.849999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r050",
+          "category": "off-topic",
+          "utterance": "What is the weather in London today?",
+          "current_slide": 1,
+          "expected_slide": null,
+          "landed_on": 1,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "that's outside this deck, let's stay on the voice agent slide.",
+          "sentences": [
+            "that's outside this deck,",
+            "let's stay on the voice agent slide."
+          ],
+          "error": null
+        },
+        {
+          "id": "r051",
+          "category": "off-topic",
+          "utterance": "Who won the World Cup in 2022?",
+          "current_slide": 3,
+          "expected_slide": null,
+          "landed_on": 3,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "that's outside this deck, let's keep focusing on the slides.",
+          "sentences": [
+            "that's outside this deck, let's keep focusing on the slides."
+          ],
+          "error": null
+        },
+        {
+          "id": "r052",
+          "category": "off-topic",
+          "utterance": "Write me a Python function that sorts a list.",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's outside this deck, let's stay on the slides.",
+          "sentences": [
+            "That's outside this deck, let's stay on the slides."
+          ],
+          "error": null
+        },
+        {
+          "id": "r053",
+          "category": "off-topic",
+          "utterance": "What is the capital of France?",
+          "current_slide": 5,
+          "expected_slide": null,
+          "landed_on": 5,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's outside this deck, so let's keep our focus on the current slide.",
+          "sentences": [
+            "That's outside this deck,",
+            "so let's keep our focus on the current slide."
+          ],
+          "error": null
+        },
+        {
+          "id": "r054",
+          "category": "off-topic",
+          "utterance": "Tell me a joke.",
+          "current_slide": 4,
+          "expected_slide": null,
+          "landed_on": 4,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "I'm sticking to the deck right now, so let's keep the focus on barge\u2011in handling.",
+          "sentences": [
+            "I'm sticking to the deck right now,",
+            "so let's keep the focus on barge\u2011in handling."
+          ],
+          "error": null
+        },
+        {
+          "id": "r055",
+          "category": "off-topic",
+          "utterance": "How much does a Groq subscription cost per month?",
+          "current_slide": 6,
+          "expected_slide": null,
+          "landed_on": 6,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's outside this deck, let's stay on the trade\u2011offs slide.",
+          "sentences": [
+            "That's outside this deck,",
+            "let's stay on the trade\u2011offs slide."
+          ],
+          "error": null
+        }
+      ],
+      "note": "24 of 40 items answered; 16 excluded after a provider failure.",
+      "passed": false
+    },
+    {
+      "suite": "E4",
+      "title": "Spoken style",
+      "metrics": {
+        "pass_rate": 0.875
+      },
+      "thresholds": {
+        "pass_rate": [
+          ">=",
+          0.95
+        ]
+      },
+      "items": [
+        {
+          "id": "E1:r002",
+          "answer": "Two layers, actually. The browser instantly flushes any playback as soon as the voice detector hears you speak, cutting the sound in under a hundred and fifty milliseconds and recording the last sentence you actually heard. Then the server receives an interrupt message, cancels the ongoing pipeline task, and truncates the conversation history to what you truly heard, marking the cut with \"interrupted by user.\"",
+          "problems": [
+            "7 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r003",
+          "answer": "Two layers, actually. The language model can invoke functions like go to slide or highlight bullet when it decides a tool will help answer",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r008",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r010",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r011",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r013",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r014",
+          "answer": "That isn't covered in this deck.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r015",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r017",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r018",
+          "answer": "It doesn't. The slides only change when I explicitly call go to slide or when someone clicks to a new slide. In QA mode I stay on the current slide until a question requires a different one, and there's no background animation that flips pages on its own. So the deck moves only by a deliberate command or a manual click.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r019",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r023",
+          "answer": "Here's the wrap\u2011up. This slide looks ahead at where we can go next. Speech\u2011to\u2011speech cuts latency and even includes barge\u2011in, but it hides the turn\u2011taking we've been dissecting. Our current pipeline still owns every millisecond, and open\u2011weight models on a free tier keep latency low. The roadmap points to local models, streaming transcription, and new decks to keep improving.",
+          "problems": [
+            "8 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r025",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r032",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r040",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r041",
+          "answer": "Sure, I'll slow it down. Hearing happens right in your browser, not on a server. An audio worklet down\u2011mixes the mic, resamples to sixteen kilohertz, and checks loudness every thirty\u2011two milliseconds. One loud frame means you've started, three in a row while I'm speaking let my own voice leak without cutting me off, and six hundred milliseconds of quiet tells the system you're finished. Anything under two hundred and fifty milliseconds is tossed",
+          "problems": [
+            "9 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r043",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r044",
+          "answer": "Sorry, I lost that one. Could you ask me again?",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r050",
+          "answer": "that's outside this deck, let's stay on the voice agent slide.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r051",
+          "answer": "that's outside this deck, let's keep focusing on the slides.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r052",
+          "answer": "That's outside this deck, let's stay on the slides.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r053",
+          "answer": "That's outside this deck, so let's keep our focus on the current slide.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r054",
+          "answer": "I'm sticking to the deck right now, so let's keep the focus on barge\u2011in handling.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r055",
+          "answer": "That's outside this deck, let's stay on the trade\u2011offs slide.",
+          "problems": [],
+          "ok": true
+        }
+      ],
+      "note": "Derived from 24 answers across the suites that ran.",
+      "passed": false
+    },
+    {
+      "suite": "E6",
+      "title": "Tool-call hygiene",
+      "metrics": {
+        "invalid_calls": 2.0,
+        "off_topic_navigation": 0.0
+      },
+      "thresholds": {
+        "invalid_calls": [
+          "<=",
+          0.0
+        ],
+        "off_topic_navigation": [
+          "<=",
+          0.05
+        ]
+      },
+      "items": [
+        {
+          "id": "r001",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r002",
+          "category": "direct",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r003",
+          "category": "direct",
+          "sources": [
+            "fallback"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r004",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r005",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r006",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r007",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r008",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r010",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r011",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r012",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r013",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r014",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r015",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r016",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r017",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r018",
+          "category": "paraphrase",
+          "sources": [
+            "fallback"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r019",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r020",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r021",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r022",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r023",
+          "category": "relative",
+          "sources": [
+            "fallback"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r024",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r025",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r030",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r031",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r032",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r033",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r040",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r041",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r042",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r043",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r044",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r045",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r050",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r051",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r052",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r053",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r054",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r055",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        }
+      ],
+      "note": "Derived from the E1 traces; a rejected tool call surfaces as a turn error.",
+      "passed": false
+    }
+  ]
+}

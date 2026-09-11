@@ -204,8 +204,18 @@ E2 and E3 are graded by the same model family at `temperature=0` against written
 `backend/evals/judges/`. The judge is itself checked on every run against ten hand-labelled items;
 if it agrees with fewer than nine of them, the run says so and its judged numbers are not believed.
 
-Evals are opt-in because they spend real quota: a full run is roughly a hundred model calls, and
-the free tier allows 200,000 tokens per model per day.
+Evals are opt-in because they spend real quota: a full run is roughly a hundred model calls at
+about 2,900 input tokens each, against a free-tier ceiling of 200,000 tokens per model per day. A
+full run is therefore about a third of a day's budget for one model.
+
+**What has been run so far.** `openai/gpt-oss-120b` scored **58.3 %** on routing (24 of 40 items
+answered; the rest were refused by the free tier and excluded rather than counted wrong), with zero
+false navigation and two invalid tool calls. Seven of the eight paraphrased questions it answered
+produced no visible text at all — the reasoning-model failure mode, where the token allowance goes
+on hidden reasoning before anything is said. That is the numeric version of why the default is
+Qwen. The default model's own run is still pending: the day's budget for it was spent on building
+and verifying the thing. Both runs, including the one that measured nothing, are recorded in
+[`docs/EVALS.md`](docs/EVALS.md).
 
 ---
 

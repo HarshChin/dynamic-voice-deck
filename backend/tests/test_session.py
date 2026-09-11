@@ -2127,6 +2127,12 @@ def test_a_rate_limit_reports_how_long_to_wait(isolated_env: Any) -> None:
     assert error["code"] == "rate_limited"
     assert error["retry_after_s"] == pytest.approx(13.9)
     assert error["recoverable"] is True
+    # The upstream body is not forwarded: Groq's 429 names the organisation id, the billing page
+    # and the exact token counts, and the event log is exportable.
+    assert error["message"] == (
+        "the free tier is out of capacity for a moment; ready again in about 14s"
+    )
+    assert "organization" not in error["message"]
 
 
 def test_an_ordinary_failure_carries_no_wait(isolated_env: Any) -> None:

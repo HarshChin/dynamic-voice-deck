@@ -25,6 +25,63 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Phase 5: evals that can fail, and a README with numbers in it · uncommitted
+**Scope:** `backend/evals/` (harness, six suites, four datasets, two judge rubrics, runner,
+reporter), `backend/tests/test_evals.py`, `README.md`, `docs/EVALS.md`, `docs/PRD.md`,
+`docs/TRD.md`, `app/pipeline/turn.py`
+
+**Change:** The eval suite the TRD has specified since day one, built and wired to `make evals`, and
+the README rewritten for release with measured numbers rather than budgets.
+
+**The suites drive the shipped pipeline, not a copy of it.** `run_one` calls the same `run_turn`,
+with the same prompt builder, slide controller and keyword fallback; only the socket is replaced by
+a list and synthesis is faked for the suites that do not measure it. An eval that reimplemented the
+routing logic would pass while the product failed.
+
+**Two measurement decisions that change what the numbers mean.** An item the provider refuses with
+a 429 is excluded from the denominator rather than counted as a wrong answer: otherwise a run
+during a rate limit measures the free tier, and accuracy moves for reasons unrelated to the code.
+And the runner waits out a per-minute limit but not a daily one, because patience does not recover
+a spent daily budget; those items are recorded as failures and named in the run's notes.
+
+**The judge is checked before it is believed.** E2 and E3 are graded by the same model family at
+`temperature=0` against written rubrics, and the judge is scored on every run against ten
+hand-labelled items. Half of those are deliberately *nearly* right, because a judge that only
+separates correct from absurd will wave through a vague answer, and vagueness is the failure mode a
+presenter actually has. Below 90 % agreement the run says so and its judged numbers are not to be
+believed.
+
+**What can be tested about an eval was tested.** Twenty-eight cases cover the deterministic half:
+dataset size against what the TRD requires, category coverage, unique ids, every slide an item
+names actually existing, the style checker, threshold direction, the summary table's units, and the
+judge's tolerance for a model that wraps its JSON in a code fence. The suites themselves are not
+tests and never run in CI.
+
+**The smoke test found one thing the screenshot made obvious.** A rate-limited turn was putting
+Groq's raw 429 body into the event log panel: a JSON blob naming the organisation id, the billing
+URL and the exact token counts. The log is exportable, so that is a small privacy leak as well as
+an ugly one. The client now gets a sentence and the wait in seconds; the upstream text stays in the
+server log, where it was already.
+
+**Verified in a browser, against the real providers, as one process.** `make serve` builds the
+frontend and the backend serves it at `/`. In that build: the deck renders before any session; the
+walkthrough speaks real Kokoro audio (786 frames, 3.6 MB); holding the space bar captures a real
+utterance (57,344 bytes) that Whisper transcribes word-perfectly as "How do you handle
+interruptions?"; the interruption cancels the walkthrough with `truncated_at_sentence_id: 4` and
+the log shows "Interrupted after 5 sentences"; the rate-limit chip appears with `retry_after_s: 4`
+and counts down; a typed question still gets a spoken answer. No console errors, no page errors.
+
+**One behaviour worth recording as an eval item.** Asked "what are the trade-offs?" while the deck
+sat on slide 2, the agent answered from slide 2's notes instead of navigating to slide 6. That is
+exactly the kind of miss E1 exists to count, and the utterance has been added to
+`routing.jsonl` as `r004`.
+
+**Follow-ups:** the release eval run against the default model is blocked on quota. Qwen's daily
+budget was at 198,011 of 200,000 tokens when the suites were finished, and the window releases
+roughly 450 tokens a minute, so a forty-item run needs about four hours of waiting. The run against
+`gpt-oss-120b` is recorded in `docs/EVALS.md`; the Qwen run is the first thing to do when the budget
+resets, and the command is one line.
+
 ### 2026-09-11 · Phase 4 closes: a wait you can see, one process, and a browser that proves it · uncommitted
 **Scope:** `app/protocol.py`, `app/pipeline/turn.py`, `app/main.py`, `app/session.py`,
 `frontend/src/{protocol.ts,store.ts,keyboard.ts,time.ts}`,

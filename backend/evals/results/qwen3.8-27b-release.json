@@ -1,0 +1,1631 @@
+{
+  "timestamp": "2026-09-11T00-45-44Z",
+  "git_sha": "a07b87e",
+  "model": "qwen/qwen3.8-27b",
+  "judge_model": "qwen/qwen3.8-27b",
+  "suites": [
+    {
+      "suite": "JUDGE",
+      "title": "Judge calibration",
+      "metrics": {
+        "agreement": 0.3
+      },
+      "thresholds": {
+        "agreement": [
+          ">=",
+          0.9
+        ]
+      },
+      "items": [
+        {
+          "id": "c001",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "verbatim from the notes",
+          "rationale": "The answer correctly identifies the 600 milliseconds duration for endpointing as stated in the notes.",
+          "judge_error": null
+        },
+        {
+          "id": "c002",
+          "expected": 0,
+          "actual": null,
+          "agrees": false,
+          "why": "contradicts the notes, which say six hundred milliseconds",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199132, Requested 887. Please try again in 8.208s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "c003",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "the notes state that target",
+          "rationale": "The answer accurately reflects the specific timing constraint mentioned in the notes regarding the browser tier's response to speech onset.",
+          "judge_error": null
+        },
+        {
+          "id": "c004",
+          "expected": 1,
+          "actual": null,
+          "agrees": false,
+          "why": "true in spirit but drops the number the notes give",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199668, Requested 849. Please try again in 3m43.344s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "c005",
+          "expected": 2,
+          "actual": null,
+          "agrees": false,
+          "why": "exactly what the notes say",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199353, Requested 913. Please try again in 1m54.912s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "c006",
+          "expected": 0,
+          "actual": null,
+          "agrees": false,
+          "why": "the opposite of the notes",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199353, Requested 913. Please try again in 1m54.912s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "c007",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "stated in the notes",
+          "rationale": "The notes explicitly state that navigating costs two round trips, which matches the answer.",
+          "judge_error": null
+        },
+        {
+          "id": "c008",
+          "expected": 1,
+          "actual": null,
+          "agrees": false,
+          "why": "vaguely right, the specific number is in the notes",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199899, Requested 549. Please try again in 3m13.535999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "c009",
+          "expected": 2,
+          "actual": null,
+          "agrees": false,
+          "why": "both halves are in the notes",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199899, Requested 857. Please try again in 5m26.592s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "c010",
+          "expected": 0,
+          "actual": null,
+          "agrees": false,
+          "why": "invented; the notes give a different reason",
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199899, Requested 847. Please try again in 5m22.272s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        }
+      ],
+      "note": "Judged suites are only believed when this clears its threshold.",
+      "passed": false
+    },
+    {
+      "suite": "E1",
+      "title": "Slide routing",
+      "metrics": {
+        "accuracy": 0.0,
+        "false_navigation": 0.0
+      },
+      "thresholds": {
+        "accuracy": [
+          ">=",
+          0.9
+        ],
+        "false_navigation": [
+          "<=",
+          0.05
+        ]
+      },
+      "items": [
+        {
+          "id": "r001",
+          "category": "direct",
+          "utterance": "Tell me about the latency budget.",
+          "current_slide": 1,
+          "expected_slide": 2,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2391. Please try again in 16m40.944s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r002",
+          "category": "direct",
+          "utterance": "How does barge-in work?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2391. Please try again in 16m40.944s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r003",
+          "category": "direct",
+          "utterance": "Explain tool calling.",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2415. Please try again in 16m51.312s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r004",
+          "category": "direct",
+          "utterance": "What are the trade-offs?",
+          "current_slide": 2,
+          "expected_slide": 6,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2762. Please try again in 19m21.216s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r005",
+          "category": "direct",
+          "utterance": "Tell me about voice activity detection.",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2739. Please try again in 19m11.28s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r006",
+          "category": "direct",
+          "utterance": "What is this deck about?",
+          "current_slide": 4,
+          "expected_slide": 1,
+          "landed_on": 4,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2730. Please try again in 19m7.392s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r007",
+          "category": "direct",
+          "utterance": "Show me the slide on turn-taking.",
+          "current_slide": 6,
+          "expected_slide": 3,
+          "landed_on": 6,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2725. Please try again in 19m5.232s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r008",
+          "category": "direct",
+          "utterance": "Talk about interruption handling.",
+          "current_slide": 2,
+          "expected_slide": 4,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2440. Please try again in 17m2.112s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r010",
+          "category": "paraphrase",
+          "utterance": "Why does it take a moment before you answer?",
+          "current_slide": 1,
+          "expected_slide": 2,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2742. Please try again in 19m12.576s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r011",
+          "category": "paraphrase",
+          "utterance": "How do you know when I have stopped talking?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2421. Please try again in 16m53.904s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r012",
+          "category": "paraphrase",
+          "utterance": "What happens if I cut you off mid-sentence?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2422. Please try again in 16m54.336s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r013",
+          "category": "paraphrase",
+          "utterance": "How do you decide which slide to show me?",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2742. Please try again in 19m12.576s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r014",
+          "category": "paraphrase",
+          "utterance": "What would you do differently next time?",
+          "current_slide": 3,
+          "expected_slide": 6,
+          "landed_on": 3,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2795. Please try again in 19m35.472s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r015",
+          "category": "paraphrase",
+          "utterance": "How long do I have to wait to hear you?",
+          "current_slide": 5,
+          "expected_slide": 2,
+          "landed_on": 5,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2777. Please try again in 19m27.696s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r016",
+          "category": "paraphrase",
+          "utterance": "Does the microphone listen the whole time?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2419. Please try again in 16m53.04s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r017",
+          "category": "paraphrase",
+          "utterance": "How do you stop talking so quickly when I start?",
+          "current_slide": 2,
+          "expected_slide": 4,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2446. Please try again in 17m4.704s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r018",
+          "category": "paraphrase",
+          "utterance": "What makes the deck move on its own?",
+          "current_slide": 2,
+          "expected_slide": 5,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199926, Requested 2444. Please try again in 17m3.839999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r019",
+          "category": "paraphrase",
+          "utterance": "Why not just use a speech-to-speech model?",
+          "current_slide": 1,
+          "expected_slide": 6,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2743. Please try again in 19m12.576s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r020",
+          "category": "relative",
+          "utterance": "Next slide please.",
+          "current_slide": 2,
+          "expected_slide": 3,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2760. Please try again in 19m19.919999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r021",
+          "category": "relative",
+          "utterance": "Go back one.",
+          "current_slide": 4,
+          "expected_slide": 3,
+          "landed_on": 4,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2728. Please try again in 19m6.096s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r022",
+          "category": "relative",
+          "utterance": "Take me back to the start.",
+          "current_slide": 5,
+          "expected_slide": 1,
+          "landed_on": 5,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2452. Please try again in 17m6.864s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r023",
+          "category": "relative",
+          "utterance": "Skip to the last slide.",
+          "current_slide": 2,
+          "expected_slide": 6,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2441. Please try again in 17m2.112s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r024",
+          "category": "relative",
+          "utterance": "Move on.",
+          "current_slide": 3,
+          "expected_slide": 4,
+          "landed_on": 3,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2469. Please try again in 17m14.208s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r025",
+          "category": "relative",
+          "utterance": "Previous one, please.",
+          "current_slide": 6,
+          "expected_slide": 5,
+          "landed_on": 6,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2722. Please try again in 19m3.504s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r030",
+          "category": "cross-reference",
+          "utterance": "Which slide talks about cost?",
+          "current_slide": 1,
+          "expected_slide": 6,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2738. Please try again in 19m10.416s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r031",
+          "category": "cross-reference",
+          "utterance": "Where do you cover the three hundred millisecond pre-roll?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2744. Please try again in 19m13.008s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r032",
+          "category": "cross-reference",
+          "utterance": "Which part explains the two round trips?",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2740. Please try again in 19m11.28s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r033",
+          "category": "cross-reference",
+          "utterance": "Where does it say how fast the sound stops?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2421. Please try again in 16m53.472s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r040",
+          "category": "stay",
+          "utterance": "Can you expand on that second point?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2764. Please try again in 19m21.648s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r041",
+          "category": "stay",
+          "utterance": "Say that again, more slowly.",
+          "current_slide": 3,
+          "expected_slide": null,
+          "landed_on": 3,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2473. Please try again in 17m15.936s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r042",
+          "category": "stay",
+          "utterance": "What does that number actually mean?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2442. Please try again in 17m2.544s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r043",
+          "category": "stay",
+          "utterance": "Give me an example of that.",
+          "current_slide": 4,
+          "expected_slide": null,
+          "landed_on": 4,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2731. Please try again in 19m7.392s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r044",
+          "category": "stay",
+          "utterance": "Is that measured or estimated?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2441. Please try again in 17m2.112s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r045",
+          "category": "stay",
+          "utterance": "Summarise this slide in one sentence.",
+          "current_slide": 5,
+          "expected_slide": null,
+          "landed_on": 5,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2775. Please try again in 19m26.4s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r050",
+          "category": "off-topic",
+          "utterance": "What is the weather in London today?",
+          "current_slide": 1,
+          "expected_slide": null,
+          "landed_on": 1,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199925, Requested 2424. Please try again in 16m54.768s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r051",
+          "category": "off-topic",
+          "utterance": "Who won the World Cup in 2022?",
+          "current_slide": 3,
+          "expected_slide": null,
+          "landed_on": 3,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2483. Please try again in 17m19.824s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r052",
+          "category": "off-topic",
+          "utterance": "Write me a Python function that sorts a list.",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2766. Please try again in 19m22.08s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r053",
+          "category": "off-topic",
+          "utterance": "What is the capital of France?",
+          "current_slide": 5,
+          "expected_slide": null,
+          "landed_on": 5,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2452. Please try again in 17m6.432s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r054",
+          "category": "off-topic",
+          "utterance": "Tell me a joke.",
+          "current_slide": 4,
+          "expected_slide": null,
+          "landed_on": 4,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2408. Please try again in 16m47.424s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "r055",
+          "category": "off-topic",
+          "utterance": "How much does a Groq subscription cost per month?",
+          "current_slide": 6,
+          "expected_slide": null,
+          "landed_on": 6,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "",
+          "sentences": [],
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2728. Please try again in 19m5.664s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        }
+      ],
+      "note": "0 of 40 items answered; 40 excluded after a provider failure.",
+      "passed": false
+    },
+    {
+      "suite": "E2",
+      "title": "Interruption memory",
+      "metrics": {
+        "repetition": 0.0,
+        "phantom_reference": 0.0
+      },
+      "thresholds": {
+        "repetition": [
+          "<=",
+          0.1
+        ],
+        "phantom_reference": [
+          "<=",
+          0.0
+        ]
+      },
+      "items": [
+        {
+          "id": "i001",
+          "follow_up": "Go on.",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 687. Please try again in 4m23.952s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2438. Please try again in 17m0.383999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i002",
+          "follow_up": "What did you say the endpointing number was?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 378. Please try again in 2m10.464s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2482. Please try again in 17m19.392s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i003",
+          "follow_up": "And what about short noises?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 367. Please try again in 2m5.711999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2828. Please try again in 19m48.864s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i004",
+          "follow_up": "Is there anything else you can call?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 373. Please try again in 2m8.304s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199924, Requested 2810. Please try again in 19m41.088s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i005",
+          "follow_up": "So why did you not use it?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 694. Please try again in 4m26.543999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2443. Please try again in 17m2.112s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i006",
+          "follow_up": "Carry on.",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 684. Please try again in 4m22.224s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2446. Please try again in 17m3.408s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i007",
+          "follow_up": "Which part of the system does that?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 680. Please try again in 4m20.495999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2445. Please try again in 17m2.976s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i008",
+          "follow_up": "And synthesis?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 363. Please try again in 2m3.552s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2795. Please try again in 19m34.176s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i009",
+          "follow_up": "What does that cost you?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 368. Please try again in 2m5.711999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2830. Please try again in 19m49.296s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i010",
+          "follow_up": "And then what?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 361. Please try again in 2m2.688s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2488. Please try again in 17m21.551999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i011",
+          "follow_up": "Anything else on the list?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 376. Please try again in 2m9.168s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2437. Please try again in 16m59.52s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i012",
+          "follow_up": "How do you record the cut?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 363. Please try again in 2m3.552s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2454. Please try again in 17m6.864s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i013",
+          "follow_up": "Is there a guided version?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 368. Please try again in 2m5.711999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2451. Please try again in 17m5.568s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i014",
+          "follow_up": "What are you actually measuring?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 372. Please try again in 2m7.44s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199923, Requested 2483. Please try again in 17m19.392s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i015",
+          "follow_up": "What does that cost you?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 366. Please try again in 2m4.416s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2512. Please try again in 17m31.488s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "i016",
+          "follow_up": "Why does that matter?",
+          "answer": "",
+          "sentences": [],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 374. Please try again in 2m7.872s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2489. Please try again in 17m21.551999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        }
+      ],
+      "note": "0 of 16 items were gradeable.",
+      "passed": true
+    },
+    {
+      "suite": "E3",
+      "title": "Groundedness",
+      "metrics": {
+        "mean_score": 0.0,
+        "decline_rate": 0.0
+      },
+      "thresholds": {
+        "mean_score": [
+          ">=",
+          1.7
+        ],
+        "decline_rate": [
+          ">=",
+          0.8
+        ]
+      },
+      "items": [
+        {
+          "id": "g001",
+          "slide": 2,
+          "question": "How long does endpointing take?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 558. Please try again in 3m27.36s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2763. Please try again in 19m19.919999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g002",
+          "slide": 2,
+          "question": "What is the budget for first sound?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 559. Please try again in 3m27.792s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2443. Please try again in 17m1.68s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g003",
+          "slide": 2,
+          "question": "How long does speech to text take?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 559. Please try again in 3m27.792s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2764. Please try again in 19m20.351999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g004",
+          "slide": 2,
+          "question": "What is the p95 target?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 564. Please try again in 3m29.952s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2443. Please try again in 17m1.68s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g005",
+          "slide": 2,
+          "question": "What first-token time are you actually measuring?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 565. Please try again in 3m30.384s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2449. Please try again in 17m4.271999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g006",
+          "slide": 3,
+          "question": "Where does speech detection run?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 583. Please try again in 3m37.728s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199922, Requested 2472. Please try again in 17m14.208s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g007",
+          "slide": 3,
+          "question": "How much silence ends my turn?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 589. Please try again in 3m40.32s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2794. Please try again in 19m32.88s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g008",
+          "slide": 3,
+          "question": "What happens to a very short noise?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 585. Please try again in 3m38.592s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2474. Please try again in 17m14.639999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g009",
+          "slide": 3,
+          "question": "How much audio do you keep from before I start?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 593. Please try again in 3m42.047999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2798. Please try again in 19m34.608s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g010",
+          "slide": 3,
+          "question": "How many transcription requests does a turn cost?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 591. Please try again in 3m41.184s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2796. Please try again in 19m33.744s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g011",
+          "slide": 4,
+          "question": "What are the two tiers of interruption?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 844. Please try again in 5m30.479999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2411. Please try again in 16m47.424s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g012",
+          "slide": 4,
+          "question": "How is the conversation history changed when I interrupt?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 530. Please try again in 3m14.832s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2418. Please try again in 16m50.448s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g013",
+          "slide": 4,
+          "question": "What marks the point where I cut you off?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 530. Please try again in 3m14.832s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2418. Please try again in 16m50.448s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g014",
+          "slide": 4,
+          "question": "How quickly should the sound stop?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 527. Please try again in 3m13.535999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2731. Please try again in 19m5.664s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g015",
+          "slide": 4,
+          "question": "Which tier does the browser handle?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 527. Please try again in 3m13.535999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2410. Please try again in 16m46.992s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g016",
+          "slide": 5,
+          "question": "What does go_to_slide do?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 886. Please try again in 5m48.624s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2773. Please try again in 19m23.808s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g017",
+          "slide": 5,
+          "question": "What is highlight_bullet for?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 569. Please try again in 3m31.248s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2456. Please try again in 17m6.864s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g018",
+          "slide": 5,
+          "question": "How many round trips does navigating cost?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 566. Please try again in 3m29.952s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199921, Requested 2774. Please try again in 19m24.24s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g019",
+          "slide": 5,
+          "question": "What happens if you do not call a tool?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 573. Please try again in 3m32.976s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2460. Please try again in 17m8.16s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g020",
+          "slide": 5,
+          "question": "Do you see it when I move the deck myself?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 574. Please try again in 3m33.408s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2456. Please try again in 17m6.432s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g021",
+          "slide": 6,
+          "question": "Why not use a speech-to-speech model?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 524. Please try again in 3m11.808s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2727. Please try again in 19m3.504s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g022",
+          "slide": 6,
+          "question": "What does running on a free tier cost you?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 840. Please try again in 5m28.32s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2411. Please try again in 16m46.992s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g023",
+          "slide": 6,
+          "question": "What is next for this project?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 837. Please try again in 5m27.024s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2403. Please try again in 16m43.536s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g024",
+          "slide": 1,
+          "question": "What can I ask you?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 536. Please try again in 3m16.992s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2417. Please try again in 16m49.584s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g025",
+          "slide": 1,
+          "question": "How do I get the full tour?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 538. Please try again in 3m17.856s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2424. Please try again in 16m52.608s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g026",
+          "slide": 1,
+          "question": "Are the models open weight?",
+          "answerable": true,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 852. Please try again in 5m33.504s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2738. Please try again in 19m8.256s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g027",
+          "slide": 2,
+          "question": "What does this cost per thousand tokens in dollars?",
+          "answerable": false,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 567. Please try again in 3m30.384s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2766. Please try again in 19m20.351999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g028",
+          "slide": 3,
+          "question": "Which version of the Silero model are you running?",
+          "answerable": false,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 589. Please try again in 3m39.888s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2482. Please try again in 17m17.664s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g029",
+          "slide": 4,
+          "question": "How many people have used this demo so far?",
+          "answerable": false,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 531. Please try again in 3m14.832s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2413. Please try again in 16m47.856s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g030",
+          "slide": 5,
+          "question": "What is the model's parameter count and context window?",
+          "answerable": false,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 891. Please try again in 5m50.352s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2461. Please try again in 17m8.592s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "g031",
+          "slide": 6,
+          "question": "When will the next version ship, and who is funding it?",
+          "answerable": false,
+          "answer": "",
+          "sentences": [],
+          "score": null,
+          "rationale": "",
+          "judge_error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199919, Requested 528. Please try again in 3m13.104s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199920, Requested 2730. Please try again in 19m4.8s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        }
+      ],
+      "note": "0 answerable and 0 unanswerable items graded.",
+      "passed": false
+    },
+    {
+      "suite": "E4",
+      "title": "Spoken style",
+      "metrics": {
+        "pass_rate": 0.0
+      },
+      "thresholds": {
+        "pass_rate": [
+          ">=",
+          0.95
+        ]
+      },
+      "items": [],
+      "note": "Derived from 0 answers across the suites that ran.",
+      "passed": false
+    },
+    {
+      "suite": "E5",
+      "title": "Latency",
+      "metrics": {},
+      "thresholds": {
+        "llm_ttft_ms_p95": [
+          "<=",
+          2500.0
+        ],
+        "tts_ttfb_ms_p95": [
+          "<=",
+          600.0
+        ]
+      },
+      "items": [
+        {
+          "id": "What is this deck about?",
+          "answer": "",
+          "sentences": [],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": null,
+            "llm_total_ms": null,
+            "tts_ttfb_ms": null,
+            "sentences": 0
+          },
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199916, Requested 2417. Please try again in 16m47.856s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "How does barge-in work?",
+          "answer": "",
+          "sentences": [],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": null,
+            "llm_total_ms": null,
+            "tts_ttfb_ms": null,
+            "sentences": 0
+          },
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199916, Requested 2418. Please try again in 16m48.288s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        },
+        {
+          "id": "Tell me about the latency budget.",
+          "answer": "",
+          "sentences": [],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": null,
+            "llm_total_ms": null,
+            "tts_ttfb_ms": null,
+            "sentences": 0
+          },
+          "error": "ProviderError: groq_llm: HTTP 429 from qwen/qwen3.8-27b: {\"error\":{\"message\":\"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199916, Requested 2739. Please try again in 19m6.96s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+        }
+      ],
+      "note": "3 live turns with real synthesis; p95 of three runs is the maximum.",
+      "passed": false
+    },
+    {
+      "suite": "E6",
+      "title": "Tool-call hygiene",
+      "metrics": {
+        "invalid_calls": 0.0,
+        "off_topic_navigation": 0.0
+      },
+      "thresholds": {
+        "invalid_calls": [
+          "<=",
+          0.0
+        ],
+        "off_topic_navigation": [
+          "<=",
+          0.05
+        ]
+      },
+      "items": [
+        {
+          "id": "r001",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r002",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r003",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r004",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r005",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r006",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r007",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r008",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r010",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r011",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r012",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r013",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r014",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r015",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r016",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r017",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r018",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r019",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r020",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r021",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r022",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r023",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r024",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r025",
+          "category": "relative",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r030",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r031",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r032",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r033",
+          "category": "cross-reference",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r040",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r041",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r042",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r043",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r044",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r045",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r050",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r051",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r052",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r053",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r054",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r055",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        }
+      ],
+      "note": "Derived from the E1 traces; a rejected tool call surfaces as a turn error.",
+      "passed": true
+    }
+  ]
+}
