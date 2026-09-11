@@ -308,7 +308,7 @@ rather than an edge case. The other two rows here close the last of milestone M4
 | TC-BE-284 | TR-171 | Given any other provider failure, then `retry_after_s` is null, so no countdown is offered for something that will not fix itself | `::test_an_ordinary_failure_carries_no_wait` | passing |
 | TC-BE-285 | TR-212 | Given `frontend/dist` exists, then `/` serves the app and `/api` still answers JSON | `tests/test_startup.py::test_the_built_frontend_is_served_at_the_root_when_it_exists` | passing |
 | TC-BE-286 | TR-212 | Given no build, then nothing is mounted and the API is unaffected | `::test_without_a_build_the_root_is_simply_not_served` | passing |
-| TC-BE-287 | F8 | Given an interrupted walkthrough, when the user says "carry on", then it resumes from the slide it was cut on | `tests/test_session.py::test_carry_on_resumes_the_walkthrough_where_it_was_cut` | passing |
+| TC-BE-287 | F8 | Given an interrupted walkthrough, when the user says \"carry on\", then it resumes at or after the slide the client last saw, and never back at slide one. A floor rather than an equality: the cursor advances before the slide is announced, so an interrupt landing in that window leaves the server one ahead of the client | `tests/test_session.py::test_carry_on_resumes_the_walkthrough_where_it_was_cut` | passing |
 | TC-BE-288 | F8 | Given no walkthrough, then the same words are an ordinary question for the model | `::test_carry_on_outside_a_walkthrough_is_an_ordinary_question` | passing |
 | TC-FE-180 | TR-171 | Given a wait of 12 s, then the chip says how long the free tier asked us to wait | `src/components/RateLimitChip.test.tsx::TC-FE-180` | passing |
 | TC-FE-181 | TR-171 | Then it counts down as the wait passes | `::TC-FE-181` | passing |

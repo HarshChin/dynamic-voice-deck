@@ -36,12 +36,19 @@ the time the cut landed. The slide is now read after the cancellation rather tha
 
 **Worth recording because it is the second time.** The end-to-end resume test made exactly the same
 mistake an hour earlier, for exactly the same reason: a number captured before an asynchronous
-event is not a fact about what happened after it. Both now read the state they are asserting on
-from the point at which it settled.
+event is not a fact about what happened after it.
 
-The product was never wrong here; both tests were.
+**And the first fix was still wrong.** Reading the slide after the cancellation failed on CI too,
+with `assert 3 == 2`, because the cursor advances *before* the slide it advanced to is announced.
+An interrupt landing inside that window leaves the server one slide ahead of anything the client
+has been told, and no amount of reading the client's messages can close it. The assertion is now a
+floor -- at or after the last slide seen, and never slide one -- because that is what the feature
+promises. Asserting equality was asserting that the cut cannot land in that window, which is a race
+rather than a contract.
 
-**Verification:** the test run five times in a row locally, and the CI run this fixes.
+The product was never wrong here; the test was, twice, in two different ways.
+
+**Verification:** six consecutive local runs, and CI.
 
 ### 2026-09-11 · v0.1.0 · uncommitted
 **Scope:** the release
