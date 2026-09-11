@@ -1,4 +1,4 @@
-"""Contract tests for :mod:`app.providers.groq_llm` against recorded SSE text.
+"""Contract tests for the OpenAI-compatible streaming provider, on recorded SSE text.
 
 No test here touches the network. Each one drives the real parser through an
 :class:`httpx.MockTransport` whose body is a transcript of what Groq's
@@ -27,7 +27,7 @@ import pytest
 from app.config import Settings
 from app.errors import ConfigError, ProviderError
 from app.pipeline.tools import GO_TO_SLIDE, HIGHLIGHT_BULLET, build_tools
-from app.providers import groq_llm
+from app.providers import openai_compat
 from app.providers.base import LLMDone, LLMEvent, Message, TokenDelta, ToolCallDelta, ToolSpec
 from app.providers.groq_llm import (
     CONNECT_TIMEOUT_S,
@@ -778,7 +778,8 @@ async def test_a_body_that_never_ends_does_not_hold_up_the_turn(
     hold the turn until the read timeout. The bound is short by design: the cost
     of giving up is one extra handshake on the next turn.
     """
-    monkeypatch.setattr(groq_llm, "DRAIN_TIMEOUT_S", 0.05)
+    # Patched where it is defined: the shared streaming module, not the Groq wrapper.
+    monkeypatch.setattr(openai_compat, "DRAIN_TIMEOUT_S", 0.05)
     whole_body = _sse_body(TEXT_ONLY_FRAMES)
 
     def handler(request: httpx.Request) -> httpx.Response:

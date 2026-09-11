@@ -36,7 +36,8 @@ def test_server_generation_and_pipeline_defaults_are_the_declared_values(
     assert settings.groq_llm_model == "qwen/qwen3.8-27b"
     assert settings.groq_base_url == "https://api.groq.com/openai/v1"
     assert settings.ollama_base_url == "http://localhost:11434/v1"
-    assert settings.ollama_model == "llama3.1:8b"
+    assert settings.ollama_model == "qwen2.5:7b"
+    assert settings.llm_fallback_provider == "none"
 
     assert settings.llm_temperature == 0.4
     assert settings.llm_max_tokens == 350

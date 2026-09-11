@@ -231,8 +231,15 @@ endpoint. The cost is latency: roughly 800 ms to first sound instead of a few hu
 and each provider slot has a local implementation behind the same `Protocol`. The default runs
 Whisper and Qwen on Groq because it is fast and free, and Kokoro in-process because it is small
 enough to be. The cost is that the model is the slowest stage and the free tier's ceiling is
-reachable in normal use — four questions in two minutes is enough, which is why there is a
-countdown chip rather than silence.
+reachable in normal use — four questions in two minutes is enough.
+
+**So the model has a local understudy.** Set `LLM_FALLBACK_PROVIDER=ollama` and a rate-limited turn
+is answered by `qwen2.5:7b` running on your own machine instead of failing, with a banner naming
+both models. It is four to six times slower to first token, and it routes less well: 57.5 % against
+the hosted model on E1. It is kept anyway because of _how_ it fails — it answers the question and
+leaves the deck where it was, rather than going silent. Degrading is a feature; dying is not. The
+numbers are in [`docs/EVALS.md`](docs/EVALS.md), and it is off by default because it needs Ollama
+installed and a 4.7 GB model pulled.
 
 **Detection in the browser, transcription per utterance.** Interruption is detected locally and
 needs no round trip, which is what makes it feel instant. The cost is that transcription cannot
@@ -245,10 +252,14 @@ person started talking", with echo cancellation doing most of the work, and mate
 noisy room. It is one file, and the timings around it are unchanged, so swapping a neural detector
 back in changes nothing else.
 
-**Next, with another week.** Streaming transcription, to overlap the two serial stages. A local
-model path exercised properly, so the whole thing runs with no network. Deck generation from a
-topic, which is designed (PRD F14) and not built. And a second voice, because one of the clearest
-signals in testing was how much the voice shapes whether people interrupt at all.
+**It still is not an offline mode.** The local understudy covers the model; speech-to-text is
+hosted. `STT_PROVIDER=local` is designed and unbuilt, and until it exists the microphone
+path needs the network even when the model does not.
+
+**Next, with another week.** The local speech-to-text provider, which is what would make the whole
+thing run with no network at all. Streaming transcription, to overlap the two serial stages. Deck
+generation from a topic, which is designed (PRD F14) and not built. And a second voice, because one
+of the clearest signals in testing was how much the voice shapes whether people interrupt at all.
 
 ---
 

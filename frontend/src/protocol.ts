@@ -264,6 +264,27 @@ export interface MetricsMessage {
 }
 
 /** A failure the client should surface. `recoverable` keeps the session. */
+/**
+ * The turn is being answered by a different model than usual (TR-085).
+ *
+ * Sent once, before the answer, when the hosted model is out of free-tier capacity and a model on
+ * the user's own machine is answering instead. The voice that follows will be noticeably slower,
+ * and saying so is the difference between a system that degraded and one that looks broken.
+ */
+export interface ProviderFallbackMessage {
+  readonly type: "provider.fallback";
+  readonly turn_id: number;
+  readonly stage: "llm";
+  /** The model that could not answer. */
+  readonly from_model: string;
+  /** The model answering instead. */
+  readonly to_model: string;
+  /** Short phrase for the user, e.g. "the hosted model is out of free-tier capacity". */
+  readonly reason: string;
+  /** When the first model is expected back, if it said. */
+  readonly retry_after_s?: number | null;
+}
+
 export interface ErrorMessage {
   readonly type: "error";
   readonly code: ErrorCode;
@@ -289,6 +310,7 @@ export type ServerMessage =
   | SlideGotoMessage
   | AgentCancelledMessage
   | MetricsMessage
+  | ProviderFallbackMessage
   | ErrorMessage;
 
 export type ServerMessageType = ServerMessage["type"];
@@ -321,6 +343,7 @@ export const SERVER_MESSAGE_TYPES = [
   "slide.goto",
   "agent.cancelled",
   "metrics",
+  "provider.fallback",
   "error",
 ] as const satisfies readonly ServerMessageType[];
 

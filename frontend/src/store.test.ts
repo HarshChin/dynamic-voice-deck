@@ -510,3 +510,83 @@ describe("rate limiting (TR-171)", () => {
     expect(errors).toHaveLength(1);
   });
 });
+
+describe("a substituted model (TR-085)", () => {
+  it("TC-FE-214: records which model is answering, so the banner can say so", () => {
+    useSessionStore.getState().applyServerMessage({
+      type: "provider.fallback",
+      turn_id: 1,
+      stage: "llm",
+      from_model: "qwen/qwen3.8-27b",
+      to_model: "qwen2.5:7b",
+      reason: "the hosted model is out of free-tier capacity",
+      retry_after_s: 12,
+    });
+
+    expect(useSessionStore.getState().fallback).toEqual({
+      fromModel: "qwen/qwen3.8-27b",
+      toModel: "qwen2.5:7b",
+    });
+  });
+
+  it("TC-FE-215: logs it as its own kind, not as an error: the agent did answer", () => {
+    useSessionStore.getState().applyServerMessage({
+      type: "provider.fallback",
+      turn_id: 1,
+      stage: "llm",
+      from_model: "qwen/qwen3.8-27b",
+      to_model: "qwen2.5:7b",
+      reason: "the hosted model is out of free-tier capacity",
+    });
+
+    const events = useSessionStore.getState().events;
+    expect(events.map((entry) => entry.kind)).toEqual(["fallback"]);
+    expect(events.filter((entry) => entry.kind === "error")).toEqual([]);
+  });
+
+  it("TC-FE-216: clearing the session forgets it, so the next one starts honest", () => {
+    const store = useSessionStore.getState();
+    store.applyServerMessage({
+      type: "provider.fallback",
+      turn_id: 1,
+      stage: "llm",
+      from_model: "a",
+      to_model: "b",
+      reason: "rate limit",
+    });
+    store.clearSession();
+
+    expect(useSessionStore.getState().fallback).toBeNull();
+  });
+});
+
+describe("the wait that comes with a substitution (TR-085)", () => {
+  it("TC-FE-217: records when the usual model is back, so the banner can say so", () => {
+    useSessionStore.getState().applyServerMessage({
+      type: "provider.fallback",
+      turn_id: 1,
+      stage: "llm",
+      from_model: "qwen/qwen3.8-27b",
+      to_model: "qwen2.5:7b",
+      reason: "rate limit",
+      retry_after_s: 852,
+    });
+
+    const until = useSessionStore.getState().rateLimitedUntil;
+    // A turn that fell back succeeds, so no `error` message ever carries this wait.
+    expect((until ?? 0) - Date.now()).toBeGreaterThan(840_000);
+  });
+
+  it("TC-FE-218: a substitution with no stated wait leaves the countdown alone", () => {
+    useSessionStore.getState().applyServerMessage({
+      type: "provider.fallback",
+      turn_id: 1,
+      stage: "llm",
+      from_model: "a",
+      to_model: "b",
+      reason: "rate limit",
+    });
+
+    expect(useSessionStore.getState().rateLimitedUntil).toBeNull();
+  });
+});

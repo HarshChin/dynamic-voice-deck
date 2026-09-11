@@ -86,7 +86,7 @@ answer as fully grounded, and vagueness is the failure mode a presenter actually
 | **qwen/qwen3.8-27b (Groq)** | pending | pending | pending | pending | **current default.** Chosen on the smoke comparison below and on latency; its own suite run is blocked on the daily free-tier budget, see 2026-09-11 below. |
 | openai/gpt-oss-120b (Groq) | **58.3 %** (24 of 40 answered) | 0.0 % | 87.5 % | 2 | rejected. Seven of eight paraphrased questions produced no visible answer at all. |
 | openai/gpt-oss-20b (Groq) | — | — | — | — | untested; same reasoning-model family as the 120b. |
-| local (Ollama, TBD) | — | — | — | — | offline reference, not yet implemented (TR-084). |
+| **qwen2.5:7b (Ollama, local)** | **57.5 %** (40 of 40 answered) | 8.3 % | 77.5 % | 0 | **the fallback** (TR-085). Not a candidate for primary; see the run below for why it is a good fallback anyway. |
 
 Note: `llama-3.3-70b-versatile` is no longer offered on this account; the models actually available
 are `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`,
@@ -122,6 +122,52 @@ Models: STT=<id> LLM=<id> TTS=<id>
 |---|---|---|---|---|
 Notes: <what changed since the last run, failures investigated, dataset additions>
 ```
+
+### 2026-09-11 — 8baa145 — `qwen2.5:7b` on Ollama, as the local fallback
+
+Full record: `backend/evals/results/qwen2.5-7b-local-E1.json`. Run with
+`make evals SUITE=E1,E4,E6 MODEL=qwen2.5:7b` plus `--provider ollama`.
+
+| Suite | Metric | Value | Threshold | Pass |
+|---|---|---|---|---|
+| E1 Slide routing | accuracy | 57.5 % | ≥ 90 % | **no** |
+| E1 Slide routing | false navigation | 8.3 % | ≤ 5 % | **no** |
+| E4 Spoken style | pass rate | 77.5 % | ≥ 95 % | **no** |
+| E6 Tool-call hygiene | invalid calls | 0 | 0 | yes |
+| E6 Tool-call hygiene | off-topic navigation | 0.0 % | ≤ 5 % | yes |
+
+All forty items answered, which is the first thing worth saying.
+
+**It fails the thresholds, and it is still the right fallback.** Compare the shape of the failure
+with `gpt-oss-120b`, which scored a nearly identical 58.3 %. That model failed by producing
+*nothing*: seven of eight paraphrased questions returned no visible text and the listener heard
+"Sorry, I lost that one". This one failed by answering the question correctly and leaving the deck
+where it was. Thirteen of its seventeen misses are of the form `N → N`: the right answer, spoken,
+on the wrong slide. For a primary model that is a failure. For a fallback whose alternative is
+silence, it is a good trade.
+
+**Why the keyword fallback did not rescue it.** The server scores an unnavigated answer against the
+deck and moves it when one slide wins clearly (TR-062). It declined to here, and correctly: on
+"how do you know when I have stopped talking" it picked slide 3 as the best match but with a
+runner-up close behind, so it stood down. That conservatism is what keeps false navigation near
+zero for the hosted model, and loosening a shared safety net to flatter a weaker one would trade a
+real property for a measured number. It was left alone.
+
+**Latency, measured through the real pipeline on an M4 Pro:**
+
+| Question | Local TTFT | Local whole turn | Hosted TTFT |
+|---|---|---|---|
+| "How do you handle interruptions?" | 2,142 ms | 3,040 ms | 475 ms |
+| "Tell me about the latency budget." | 3,132 ms | 4,092 ms | 475 ms |
+
+Four to six times slower to first token, because a seven-billion-parameter model has to read the
+whole ~2,900-token prompt before it says anything. The product says so on screen rather than
+letting the listener guess.
+
+**The one outlier worth naming:** a single answer ran to 26 sentences and 231 words. Most of the
+style failures are six-to-eight-sentence answers against a five-sentence allowance; that one is a
+different thing, and it is the argument for a hard cap in the chunker rather than a prompt asking
+politely.
 
 ### 2026-09-11 — a07b87e — `openai/gpt-oss-120b`
 

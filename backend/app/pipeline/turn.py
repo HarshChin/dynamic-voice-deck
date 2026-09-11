@@ -29,6 +29,7 @@ from ..logging_setup import get_logger
 from ..protocol import (
     ErrorCode,
     ErrorMsg,
+    ProviderFallbackMsg,
     ServerMessage,
     SlideGotoMsg,
     ToolCallMsg,
@@ -42,6 +43,7 @@ from ..providers.base import (
     LLMEvent,
     LLMProvider,
     Message,
+    ProviderSwitched,
     TokenDelta,
     ToolCallDelta,
     ToolSpec,
@@ -442,6 +444,19 @@ async def _run_step(
                 # treating it as navigation would silence the keyword fallback
                 # for a turn in which nothing moved at all.
                 navigated = navigated or applied
+            elif isinstance(event, ProviderSwitched):
+                # The provider has told us it could not answer and something else will.
+                # Announced before a word is spoken, so the transcript explains why the
+                # voice that follows is slower than usual (TR-085).
+                await emit(
+                    ProviderFallbackMsg(
+                        turn_id=turn_id,
+                        from_model=event.from_model,
+                        to_model=event.to_model,
+                        reason=event.reason,
+                        retry_after_s=event.retry_after_s,
+                    )
+                )
             elif isinstance(event, LLMDone):
                 finish_reason = event.finish_reason
                 for sentence in chunker.flush():
@@ -578,6 +593,31 @@ it get ahead of what the listener could plausibly still hear.
 """
 
 
+TOOL_SYNTAX = re.compile(
+    r"\b(go[\s_-]?to[\s_-]?slide|highlight[\s_-]?bullet)\s*\(",
+    re.IGNORECASE,
+)
+"""A tool call written out as prose rather than made as a call (TR-086).
+
+The opening bracket is what makes this safe: an answer may legitimately *name* a
+tool -- "I call a function called go_to_slide" -- and only a call has arguments
+after it. Matching the name alone would silence the slide that explains how
+navigation works.
+"""
+
+
+def looks_like_tool_syntax(sentence: str) -> bool:
+    """Report whether a sentence is a tool call the model typed instead of made.
+
+    Args:
+        sentence: A segment about to be spoken.
+
+    Returns:
+        ``True`` when it should be dropped rather than read aloud.
+    """
+    return TOOL_SYNTAX.search(sentence) is not None
+
+
 def _speech_key(sentence: str) -> str:
     """Normalise a sentence for comparing it against what has already been said.
 
@@ -674,6 +714,13 @@ class SpeechSender:
                 loudly instead of blocking.
         """
         await self._raise_if_finished()
+        if looks_like_tool_syntax(sentence):
+            # TR-086. Smaller models sometimes write the call instead of making it, and the
+            # listener then hears `go to slide(4, "User asked about interruptions")` read aloud.
+            # Observed from the local fallback model, and previously from gpt-oss-120b. The
+            # prompt asks them not to; this is what makes it true.
+            logger.info("speech.tool_syntax_dropped", turn_id=self._turn_id, sentence=sentence)
+            return
         key = _speech_key(sentence)
         if key and key in self._said:
             logger.info("speech.duplicate_dropped", turn_id=self._turn_id, sentence=sentence)

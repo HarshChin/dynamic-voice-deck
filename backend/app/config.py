@@ -27,6 +27,7 @@ MODELS_DIR = BACKEND_ROOT / "models"
 SttProviderName = Literal["groq", "local", "fake"]
 LlmProviderName = Literal["groq", "ollama", "fake"]
 TtsProviderName = Literal["kokoro", "fake"]
+LlmFallbackName = Literal["none", "ollama", "fake"]
 
 
 class Settings(BaseSettings):
@@ -49,6 +50,15 @@ class Settings(BaseSettings):
     llm_provider: LlmProviderName = "groq"
     tts_provider: TtsProviderName = "kokoro"
 
+    llm_fallback_provider: LlmFallbackName = "none"
+    """Model to answer with when the primary is rate limited (TR-085).
+
+    ``none`` keeps the previous behaviour: the turn fails and the client shows a
+    countdown. ``ollama`` answers anyway, more slowly, on this machine. It is
+    off by default because it needs Ollama installed and a model pulled, and a
+    fresh clone of this repository should not silently require a 5 GB download.
+    """
+
     # --- Credentials --------------------------------------------------------
     groq_api_key: SecretStr | None = None
 
@@ -57,7 +67,7 @@ class Settings(BaseSettings):
     groq_llm_model: str = "qwen/qwen3.8-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     ollama_base_url: str = "http://localhost:11434/v1"
-    ollama_model: str = "llama3.1:8b"
+    ollama_model: str = "qwen2.5:7b"
 
     # --- Generation tuning --------------------------------------------------
     llm_temperature: float = Field(default=0.4, ge=0.0, le=2.0)

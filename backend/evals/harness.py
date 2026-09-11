@@ -28,6 +28,7 @@ from app.protocol import ServerMessage
 from app.providers.base import LLMProvider, TTSProvider
 from app.providers.groq_llm import GroqLLM
 from app.providers.kokoro_tts import KokoroTTS
+from app.providers.ollama_llm import OllamaLLM
 
 BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:  # pragma: no cover - import convenience for `python -m evals`
@@ -91,19 +92,34 @@ class TurnTrace:
 
 
 def build_llm(
-    settings: Settings, model: str | None = None, *, temperature: float | None = None
+    settings: Settings,
+    model: str | None = None,
+    *,
+    provider: str = "groq",
+    temperature: float | None = None,
 ) -> LLMProvider:
     """Build the model provider an eval calls.
 
     Args:
         settings: Loaded settings, supplying the credential and base URL.
         model: Model identifier to override the configured one, for comparisons.
+        provider: ``groq`` for the hosted models, ``ollama`` for one running on
+            this machine. The local fallback has to be measurable by the same
+            suites as the hosted model, or choosing it is guesswork (TR-085).
         temperature: Sampling temperature; the judge uses zero, because a rubric
             graded differently on two runs is not a measurement (TR-201).
 
     Returns:
-        A provider pointed at Groq.
+        The provider.
     """
+    sampling = settings.llm_temperature if temperature is None else temperature
+    if provider == "ollama":
+        return OllamaLLM(
+            model=model or settings.ollama_model,
+            base_url=settings.ollama_base_url,
+            temperature=sampling,
+            max_tokens=settings.llm_max_tokens,
+        )
     key = settings.groq_api_key
     if key is None:
         msg = "GROQ_API_KEY is not set; evals call real models"
@@ -112,7 +128,7 @@ def build_llm(
         api_key=key.get_secret_value(),
         base_url=settings.groq_base_url,
         model=model or settings.groq_llm_model,
-        temperature=settings.llm_temperature if temperature is None else temperature,
+        temperature=sampling,
         max_tokens=settings.llm_max_tokens,
     )
 

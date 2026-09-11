@@ -4,6 +4,7 @@ import type {
   AgentLogEvent,
   ErrorLogEvent,
   EventsExport,
+  FallbackLogEvent,
   InterruptLogEvent,
   LogEvent,
   MetricsLogEvent,
@@ -151,6 +152,8 @@ function LogEntry({ event }: { readonly event: LogEvent }): JSX.Element {
       return <MetricsEntry event={event} />;
     case "error":
       return <ErrorEntry event={event} />;
+    case "fallback":
+      return <FallbackEntry event={event} />;
     case "notice":
       return <NoticeEntry event={event} />;
   }
@@ -308,6 +311,30 @@ function ErrorEntry({ event }: { readonly event: ErrorLogEvent }): JSX.Element {
         <span className={styles.chipBody}>
           <span className={styles.chipTitle}>{event.code}</span>
           <span className={styles.chipDetail}>{event.text}</span>
+        </span>
+      </p>
+    </li>
+  );
+}
+
+/**
+ * Which model answered, when it was not the usual one.
+ *
+ * Shown without the debug toggle, because the answer that follows comes from a different model and
+ * an evaluator comparing two answers deserves to know which produced which.
+ *
+ * @param props - The fallback entry.
+ * @returns The element.
+ */
+function FallbackEntry({ event }: { readonly event: FallbackLogEvent }): JSX.Element {
+  return (
+    <li className={styles.row} data-kind="fallback">
+      <p className={styles.chipFallback}>
+        <span className={styles.chipBody}>
+          <span className={styles.chipTitle}>answered locally</span>
+          <span className={styles.chipDetail}>
+            {event.fromModel} → {event.toModel} — {event.reason}
+          </span>
         </span>
       </p>
     </li>

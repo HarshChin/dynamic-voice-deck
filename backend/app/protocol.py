@@ -282,6 +282,23 @@ class MetricsMsg(BaseModel):
     sentences: int = Field(default=0, ge=0)
 
 
+class ProviderFallbackMsg(BaseModel):
+    """The turn is being answered by a different model than usual (TR-085).
+
+    Sent once, before the answer, so the transcript explains itself: the voice
+    that follows is slower and comes from a model running on this machine
+    because the hosted one is out of free-tier capacity.
+    """
+
+    type: Literal["provider.fallback"] = "provider.fallback"
+    turn_id: int
+    stage: Literal["llm"] = "llm"
+    from_model: str
+    to_model: str
+    reason: str
+    retry_after_s: float | None = Field(default=None, ge=0)
+
+
 class ErrorMsg(BaseModel):
     """A failure the client should surface. ``recoverable`` keeps the session."""
 
@@ -306,6 +323,7 @@ ServerMessage = Annotated[
     | SlideGotoMsg
     | AgentCancelledMsg
     | MetricsMsg
+    | ProviderFallbackMsg
     | ErrorMsg,
     Field(discriminator="type"),
 ]
@@ -337,6 +355,7 @@ SERVER_MESSAGE_TYPES: frozenset[str] = frozenset(
         "slide.goto",
         "agent.cancelled",
         "metrics",
+        "provider.fallback",
         "error",
     }
 )

@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 542 backend cases across 21 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 163 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 559 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 172 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -265,6 +265,35 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
+
+### Answering on a local model when the hosted one is rate limited (added 2026-09-11)
+
+The hosted model is the only stage with a token budget, and a demo that goes silent for fifteen
+minutes is a demo that failed. These rows cover the substitution, what is said about it, and the
+one thing that must never happen: a half-spoken answer restarted on another model.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-311 | TR-084 | Given `LLM_PROVIDER=ollama` and no credential, then the local provider is built and satisfies the protocol | `tests/test_registry.py::test_the_local_model_provider_is_built_without_a_credential` | passing |
+| TC-BE-312 | TR-085 | Given a working primary, then the wrapper is invisible and the fallback is never called | `tests/test_fallback.py::test_the_primary_answers_and_nothing_is_substituted` | passing |
+| TC-BE-313 | TR-085 | Given a rate limit, then the local model answers and the switch is announced before any text | `::test_a_rate_limit_is_answered_by_the_local_model` | passing |
+| TC-BE-314 | TR-085 | Given a failure that is not a rate limit, then it is not retried: it would fail the same way twice | `::test_a_failure_that_is_not_a_rate_limit_is_not_retried` | passing |
+| TC-BE-315 | TR-085 | Given a retryable error with no retry-after, then it is a fault rather than a quota, and is not retried | `::test_a_rate_limit_with_no_retry_after_is_not_retried` | passing |
+| TC-BE-316 | TR-085 | Given a failure after the answer began, then it is raised: restarting would repeat what was spoken | `::test_a_failure_after_the_answer_started_is_not_retried` | passing |
+| TC-BE-317 | TR-085 | Then the local model receives the same conversation and the same tools | `::test_the_local_model_gets_the_same_conversation_and_tools` | passing |
+| TC-BE-318 | TR-085 | Then closing the wrapper closes both providers | `::test_closing_the_wrapper_closes_both_providers` | passing |
+| TC-BE-319 | TR-085 | Then `provider.fallback` reaches the client ahead of the answer, and no `error` is sent: the turn succeeded | `tests/test_session.py::test_a_substituted_model_is_announced_to_the_client` | passing |
+| TC-BE-320 | TR-086 | Given a tool call the model typed instead of making, then it is dropped rather than read aloud | `tests/test_turn.py::test_a_tool_call_the_model_typed_is_never_spoken` | passing |
+| TC-BE-321 | TR-086 | Given an answer that merely names a tool, as slide 5 does, then it is still spoken | `::test_an_answer_that_merely_names_a_tool_is_still_spoken` | passing |
+| TC-FE-210 | TR-085 | Then the banner names both models and says the answer comes from this machine | `src/components/FallbackBanner.test.tsx::TC-FE-210` | passing |
+| TC-FE-211 | TR-085 | And says when the usual model is expected back, when that is known | `::TC-FE-211` | passing |
+| TC-FE-212 | TR-085 | Then that estimate counts down and disappears, while the banner itself stays | `::TC-FE-212` | passing |
+| TC-FE-213 | TR-085 | Then nothing is shown when no model has been substituted | `::TC-FE-213` | passing |
+| TC-FE-214 | TR-085 | Then the store records which model is answering | `src/store.test.ts::TC-FE-214` | passing |
+| TC-FE-215 | TR-085 | Then it is logged as its own kind, not as an error: the agent did answer | `::TC-FE-215` | passing |
+| TC-FE-216 | TR-085 | Then clearing the session forgets it | `::TC-FE-216` | passing |
+| TC-FE-217 | TR-085 | Then the wait travels with the substitution, since no error message will carry it | `::TC-FE-217` | passing |
+| TC-FE-218 | TR-085 / TR-171 | Given a substitution with no stated wait, then the countdown is left alone rather than set to now | `::TC-FE-218` | passing |
 
 ### A capture that could never end (added 2026-09-11)
 

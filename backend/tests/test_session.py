@@ -67,6 +67,7 @@ from app.providers.base import (
     ToolCallDelta,
     ToolSpec,
 )
+from app.providers.fallback import FallbackLLM
 from app.providers.groq_stt import PROVIDER_NAME as GROQ_STT_NAME
 from app.session import INTERRUPT_DEBOUNCE_S, Session, SessionManager
 from fastapi import FastAPI, WebSocketDisconnect
@@ -2212,3 +2213,37 @@ def test_carry_on_outside_a_walkthrough_is_an_ordinary_question(isolated_env: An
     assert only(turn, "slide.goto") == []
     assert llm.calls, "the model was never asked"
     assert [m["text"] for m in only(turn, "transcript.agent")] == ["There is more to it."]
+
+
+def test_a_substituted_model_is_announced_to_the_client(isolated_env: Any) -> None:
+    """TC-BE-319: TR-085 -- the listener is told which model answered, before it speaks.
+
+    The whole path: the wrapper reports the switch through the stream, the
+    pipeline turns it into a protocol message, and it arrives ahead of the
+    answer so the transcript explains why the voice that follows is slower.
+    """
+    primary = FailingLLM(ProviderError("groq_llm", "HTTP 429", retryable=True, retry_after=12.0))
+    local = FakeLLM(sentence_script("Answering locally."))
+    llm = FallbackLLM(
+        primary=primary,
+        fallback=local,
+        primary_model="qwen/qwen3.8-27b",
+        fallback_model="qwen2.5:7b",
+    )
+
+    with connect(llm) as harness:
+        turn = harness.ask("How do you handle interruptions?")
+
+    announced = only(turn, "provider.fallback")
+    assert len(announced) == 1
+    assert announced[0]["from_model"] == "qwen/qwen3.8-27b"
+    assert announced[0]["to_model"] == "qwen2.5:7b"
+    assert announced[0]["retry_after_s"] == pytest.approx(12.0)
+    assert announced[0]["stage"] == "llm"
+
+    # It arrives before the answer, and the answer is the local model's.
+    types = types_of(turn)
+    assert types.index("provider.fallback") < types.index("transcript.agent")
+    assert [m["text"] for m in only(turn, "transcript.agent")] == ["Answering locally."]
+    # And no error: the turn succeeded, so nothing should claim otherwise.
+    assert only(turn, "error") == []

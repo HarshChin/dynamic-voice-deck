@@ -126,6 +126,7 @@
 .chipSlide,
 .chipInterrupt,
 .chipError,
+.chipFallback,
 .chipNotice {
   display: flex;
   align-items: flex-start;
@@ -325,4 +326,14 @@
 .rawText {
   min-width: 0;
   word-break: break-word;
+}
+
+/*
+ * The "answered locally" chip. Violet rather than amber: nothing went wrong, the answer simply
+ * came from somewhere else, and colouring it like a failure would misreport a working fallback.
+ */
+.chipFallback {
+  border-color: rgb(167 139 250 / 34%);
+  background-color: var(--dvd-violet-wash);
+  color: var(--dvd-text);
 }

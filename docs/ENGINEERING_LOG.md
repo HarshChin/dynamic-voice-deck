@@ -25,6 +25,87 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Degrade instead of dying: a local model answers when the free tier cannot · uncommitted
+**Scope:** `app/providers/{openai_compat.py,groq_llm.py,ollama_llm.py,fallback.py,registry.py}`,
+`app/providers/base.py`, `app/protocol.py`, `app/pipeline/turn.py`, `app/config.py`,
+`frontend/src/{protocol.ts,store.ts}`, `frontend/src/components/FallbackBanner.*`, `.env.example`,
+`docs/TRD.md` (TR-085, TR-086)
+
+**Asked for:** "why don't we use a locally hosted model as a fallback when qwen is out of tokens?"
+A good question, because the hosted model is the only stage of this pipeline with a token budget:
+speech-to-text bills audio seconds against a separate quota, and synthesis already runs on the
+user's own machine.
+
+**The refactor that made it cheap.** `groq_llm.py` opened with a claim that its parser "serves any
+OpenAI-compatible endpoint, which is what TR-084's Ollama provider will reuse". That was true and
+unexercised. It is now `openai_compat.py`, with `GroqLLM` and `OllamaLLM` as thin subclasses that
+differ in a base URL, a model name and whether a credential is sent. Everything genuinely difficult
+-- reassembling tool-call arguments from fragments, the three SSE line terminators, releasing the
+connection the instant a turn is cancelled -- is written once. The module's existing tests, at
+100 % coverage, are what made moving it safe; one of them had to start patching a constant where it
+now lives, and that was the whole cost.
+
+**The wrapper is deliberately narrow.** `FallbackLLM` switches for a rate limit and nothing else. A
+malformed request would fail identically on the second model, and retrying it would only double the
+wait before the same error reached the user. The rate limit is identified by its shape -- retryable
+*and* carrying a retry-after -- because a 503 is a fault, not a quota.
+
+**And it may only switch before a word has been spoken.** That is the invariant that makes this
+safe to put in front of a live turn: half an answer has already reached the listener's speakers,
+and starting again on another model would repeat it. The wrapper tracks whether it has yielded and
+re-raises rather than substituting. `TC-BE-316` is that rule.
+
+**How the UI finds out.** The provider reports the switch through the stream it already owns, as a
+`ProviderSwitched` event, and the pipeline turns it into a `provider.fallback` message. A callback
+would have been simpler and wrong: the provider is shared by every session in the process, while
+this belongs to one turn. The banner then says, in words, `qwen/qwen3.8-27b hit its rate limit --
+answering with qwen2.5:7b on this machine, back in 14 min`, and the event log records which model
+produced the answer, in violet rather than amber, because nothing went wrong.
+
+**Measured, not assumed.** The eval runner gained `--provider ollama` so the fallback is judged by
+the same suites as the hosted model.
+
+| | qwen2.5:7b (local) | gpt-oss-120b (hosted) |
+|---|---|---|
+| E1 routing accuracy | 57.5 % (40 of 40 answered) | 58.3 % (24 of 40 answered) |
+| E1 false navigation | 8.3 % | 0.0 % |
+| E4 spoken style | 77.5 % | 87.5 % |
+| E6 invalid tool calls | 0 | 2 |
+| Time to first token | 2.1-3.1 s | 0.5 s |
+
+**The two numbers are nearly equal and the two models are not.** `gpt-oss-120b` failed by producing
+*nothing*: seven of eight paraphrases returned no visible text and the listener heard "Sorry, I lost
+that one". `qwen2.5:7b` failed by answering correctly and leaving the deck where it was -- thirteen
+of seventeen misses are `N -> N`. For a primary that is a failure; for a fallback whose alternative
+is silence it is a good trade, and it is why the same score justifies rejecting one model and
+accepting the other.
+
+**One thing I chose not to do.** The server's keyword fallback could have rescued several of those
+misses if it were less conservative. It declined because the runner-up slide scored close behind,
+which is exactly the rule that keeps false navigation near zero for the hosted model. Loosening a
+shared safety net to flatter a weaker model trades a real property for a measured number, so it was
+left alone and the number was reported as it is.
+
+**A bug the screenshot caught.** With the fallback live, the agent said aloud:
+`Go to slide(4, "User asked about interruption handling")`. The local model wrote the call instead
+of making it -- the same failure recorded for gpt-oss-120b in `docs/EVALS.md`, where it emitted the
+literal text `highlightbullet(1)`. TR-086 now drops any segment matching a tool name followed by an
+opening bracket. The bracket is the whole discriminator: slide 5 legitimately names both tools, and
+an answer describing them must still be readable.
+
+**And a bug in my own first fix.** Carrying the retry-after through the fallback message, I wrote
+`now + 0` for an absent wait and let a truthiness check decide. An absent wait became "ready now"
+rather than no countdown. The frontend test for it failed immediately, which is the argument for
+writing the negative case.
+
+**Verified in a browser** against a stub returning a genuine HTTP 429 with a retry-after, since
+neither real model would cooperate by being out of quota: the banner appears with both model names
+and the countdown, the deck still reaches slide 4, the answer is spoken without the tool call in
+it, and no `error` is sent at all, because the turn succeeded.
+
+**Follow-ups:** the local path is a fallback, not an offline mode -- speech-to-text still needs the
+network. Making the whole thing offline needs the `local` STT provider, which is still unbuilt.
+
 ### 2026-09-11 · A walkthrough you could not interrupt, and why my own fix caused it · uncommitted
 **Scope:** `frontend/src/audio/microphone.ts`, `frontend/src/config.ts`, `docs/TRD.md` (TR-116)
 

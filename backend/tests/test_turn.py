@@ -35,6 +35,7 @@ from app.pipeline.turn import (
     cancel_task,
     is_filler,
     is_off_topic_redirect,
+    looks_like_tool_syntax,
     provider_error_message,
     run_turn,
 )
@@ -1016,3 +1017,41 @@ async def test_a_repeat_in_a_later_turn_is_still_allowed(deck: Deck) -> None:
             llm, "How do you handle interruptions?", deck=deck, slides=controller, history=history
         )
         assert [message.text for message in turn.sent(TranscriptAgentMsg)] == [line]
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        'Go to slide(4, "User asked about interruption handling")',
+        "go_to_slide(2, 'latency')",
+        "Let me go to slide (6) for you.",
+        "highlight_bullet(1)",
+        "highlightbullet (0)",
+    ],
+)
+def test_a_tool_call_the_model_typed_is_never_spoken(sentence: str) -> None:
+    """TC-BE-320: TR-086 -- a call written as prose is dropped, not read aloud.
+
+    Seen from the local fallback model and, earlier, from gpt-oss-120b: the
+    model writes the call instead of making it, and the listener hears the
+    arguments read out. The prompt asks them not to; this makes it true.
+    """
+    assert looks_like_tool_syntax(sentence)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "I call a function called go_to_slide to move the deck.",
+        "There is also highlight_bullet for emphasising one line.",
+        "Navigating costs two model round trips per turn.",
+        "The slide about tool calling is slide five.",
+    ],
+)
+def test_an_answer_that_merely_names_a_tool_is_still_spoken(sentence: str) -> None:
+    """TC-BE-321: TR-086 -- slide 5 explains these tools by name, and must still be readable.
+
+    The opening bracket is the whole discriminator: a description names the
+    tool, a mistyped call follows it with arguments.
+    """
+    assert not looks_like_tool_syntax(sentence)

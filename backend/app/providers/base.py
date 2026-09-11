@@ -103,6 +103,29 @@ class ToolCallDelta(BaseModel):
     arguments: dict[str, Any]
 
 
+class ProviderSwitched(BaseModel):
+    """The model answering this turn is not the one that was asked first (TR-085).
+
+    Emitted by :class:`~app.providers.fallback.FallbackLLM` before it replays a
+    request on the local model, so the pipeline can tell the listener why the
+    voice they are about to hear is slower and, sometimes, less sure of itself.
+    Reported through the stream rather than through a callback because the
+    provider is shared by every session, while this belongs to one turn.
+
+    Attributes:
+        from_model: The model that could not answer.
+        to_model: The model answering instead.
+        reason: Short phrase for the user, e.g. "rate limit reached".
+        retry_after_s: When the first model is expected back, if it said.
+    """
+
+    kind: Literal["provider_switched"] = "provider_switched"
+    from_model: str
+    to_model: str
+    reason: str
+    retry_after_s: float | None = None
+
+
 class LLMDone(BaseModel):
     """End of the model's response.
 
@@ -114,7 +137,7 @@ class LLMDone(BaseModel):
     finish_reason: Literal["stop", "tool_calls", "length", "cancelled", "error"]
 
 
-LLMEvent = TokenDelta | ToolCallDelta | LLMDone
+LLMEvent = TokenDelta | ToolCallDelta | ProviderSwitched | LLMDone
 """Anything an :class:`LLMProvider` may yield."""
 
 ToolChoice = Literal["auto", "none"]

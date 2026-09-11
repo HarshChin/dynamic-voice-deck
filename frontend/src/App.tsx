@@ -3,6 +3,7 @@ import { useEffect, useState, type JSX } from "react";
 import { Controls } from "./components/Controls";
 import { EventLog } from "./components/EventLog";
 import { LatencyHUD } from "./components/LatencyHUD";
+import { FallbackBanner } from "./components/FallbackBanner";
 import { RateLimitChip } from "./components/RateLimitChip";
 import { SlideDeck } from "./components/SlideDeck";
 import { usePushToTalk } from "./session/usePushToTalk";
@@ -71,6 +72,7 @@ export function App(): JSX.Element {
   const exportEvents = useSessionStore((state) => state.exportEvents);
   const metrics = useSessionStore((state) => state.metrics);
   const rateLimitedUntil = useSessionStore((state) => state.rateLimitedUntil);
+  const fallback = useSessionStore((state) => state.fallback);
 
   const { deck } = session;
 
@@ -82,7 +84,15 @@ export function App(): JSX.Element {
           <p className="app__tagline">A voice-first slide presenter you can interrupt.</p>
         </div>
         <p className="app__deck">{deck?.title ?? "No deck loaded"}</p>
-        <RateLimitChip until={rateLimitedUntil} />
+        {fallback === null ? (
+          <RateLimitChip until={rateLimitedUntil} />
+        ) : (
+          <FallbackBanner
+            fromModel={fallback.fromModel}
+            toModel={fallback.toModel}
+            until={rateLimitedUntil}
+          />
+        )}
         <p className={`app__health app__health--${backend}`} role="status" aria-live="polite">
           <span className="app__health-dot" aria-hidden="true" />
           backend: {backend}

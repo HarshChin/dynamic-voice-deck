@@ -224,6 +224,6 @@ def test_the_exported_type_sets_match_the_message_unions() -> None:
     assert literal_types(ClientMessage) == CLIENT_MESSAGE_TYPES
     assert literal_types(ServerMessage) == SERVER_MESSAGE_TYPES
     assert len(CLIENT_MESSAGE_TYPES) == 9
-    assert len(SERVER_MESSAGE_TYPES) == 9
+    assert len(SERVER_MESSAGE_TYPES) == 10
     assert CLIENT_MESSAGE_TYPES.isdisjoint(SERVER_MESSAGE_TYPES)
     assert PROTOCOL_VERSION == 1

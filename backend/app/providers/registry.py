@@ -39,6 +39,12 @@ GROQ: Final = "groq"
 KOKORO: Final = "kokoro"
 """On-device Kokoro-82M synthesis (TR-083)."""
 
+NONE: Final = "none"
+"""Value of ``LLM_FALLBACK_PROVIDER`` that leaves the fallback switched off."""
+
+OLLAMA: Final = "ollama"
+"""A model served locally by Ollama (TR-084)."""
+
 FAKE: Final = "fake"
 """Provider value served from :mod:`tests.fakes`."""
 
@@ -72,7 +78,7 @@ def build_providers(settings: Settings) -> Providers:
 
     providers = Providers(
         stt=_build_stt(settings),
-        llm=_build_llm(settings),
+        llm=_build_llm_with_fallback(settings),
         tts=_build_tts(settings),
     )
     logger.info("providers.selected", **providers.names)
@@ -112,6 +118,61 @@ def _build_stt(settings: Settings) -> STTProvider:
     raise ConfigError(_unknown("STT_PROVIDER", name, STT_VALUES))
 
 
+def _build_llm_with_fallback(settings: Settings) -> LLMProvider:
+    """Build the model provider, wrapped in a fallback when one is configured.
+
+    Args:
+        settings: Loaded application settings.
+
+    Returns:
+        The primary provider, or a :class:`~app.providers.fallback.FallbackLLM`
+        wrapping it, when ``LLM_FALLBACK_PROVIDER`` names a second one.
+
+    Raises:
+        ConfigError: If either provider cannot be built, or if the fallback is
+            the same provider as the primary, which would retry a rate limit
+            against the quota that just refused it.
+    """
+    primary = _build_llm(settings)
+    name = settings.llm_fallback_provider
+    if name == NONE:
+        return primary
+    if name == settings.llm_provider:
+        msg = (
+            f"LLM_FALLBACK_PROVIDER={name} is the same as LLM_PROVIDER. A rate limit would be "
+            f"retried against the quota that just refused it. Set it to a different provider, "
+            f"or to {NONE} to disable the fallback."
+        )
+        raise ConfigError(msg)
+
+    from .fallback import FallbackLLM  # noqa: PLC0415 - deferred like the others
+
+    fallback = _build_llm(settings.model_copy(update={"llm_provider": name}))
+    return FallbackLLM(
+        primary=primary,
+        fallback=fallback,
+        primary_model=_model_name(settings, settings.llm_provider),
+        fallback_model=_model_name(settings, name),
+    )
+
+
+def _model_name(settings: Settings, provider: str) -> str:
+    """Name the model a provider will use, for the message the listener sees.
+
+    Args:
+        settings: Loaded application settings.
+        provider: Which provider slot to describe.
+
+    Returns:
+        The model identifier, or the provider's own name when it has no model.
+    """
+    if provider == GROQ:
+        return settings.groq_llm_model
+    if provider == OLLAMA:
+        return settings.ollama_model
+    return provider
+
+
 def _build_llm(settings: Settings) -> LLMProvider:
     """Build the language-model provider.
 
@@ -141,8 +202,15 @@ def _build_llm(settings: Settings) -> LLMProvider:
         # Routed rather than fixed: `LLM_PROVIDER=fake` exists so the end-to-end suite can drive a
         # real browser against a real server and still assert exact slides and exact words.
         return FakeLLM(router=deck_router)
-    if name == "ollama":
-        raise ConfigError(_not_implemented("LLM_PROVIDER", name, "OllamaLLM (TR-084)", "M4"))
+    if name == OLLAMA:
+        from .ollama_llm import OllamaLLM  # noqa: PLC0415 - deferred like the others
+
+        return OllamaLLM(
+            model=settings.ollama_model,
+            base_url=settings.ollama_base_url,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+        )
     raise ConfigError(_unknown("LLM_PROVIDER", name, LLM_VALUES))
 
 

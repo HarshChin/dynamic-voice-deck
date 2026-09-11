@@ -46,6 +46,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=f"which suites to run: all, or a comma-separated list of {', '.join(SUITES)}",
     )
     parser.add_argument("--model", default=None, help="model id to evaluate; defaults to .env")
+    parser.add_argument(
+        "--provider",
+        default="groq",
+        choices=("groq", "ollama"),
+        help="where the model runs; `ollama` measures the local fallback (TR-085)",
+    )
     parser.add_argument("--judge-model", default=None, help="model id to grade with")
     parser.add_argument("--out", type=Path, default=None, help="path for the JSON result")
     parser.add_argument(
@@ -68,7 +74,9 @@ async def run(args: argparse.Namespace) -> int:
     """
     settings = get_settings()
     harness.LIMIT = args.limit
-    model = args.model or settings.groq_llm_model
+    model = args.model or (
+        settings.ollama_model if args.provider == "ollama" else settings.groq_llm_model
+    )
     judge_model = args.judge_model or model
     wanted = (
         SUITES
@@ -82,9 +90,9 @@ async def run(args: argparse.Namespace) -> int:
 
     deck = load_deck()
     prompts = PromptBuilder()
-    llm = build_llm(settings, model)
+    llm = build_llm(settings, model, provider=args.provider)
     # Zero, because a rubric graded differently on two runs is not a measurement (TR-201).
-    judge_llm = build_llm(settings, judge_model, temperature=0.0)
+    judge_llm = build_llm(settings, judge_model, provider=args.provider, temperature=0.0)
     results: list[SuiteResult] = []
 
     needs_judge = any(name in JUDGED for name in wanted)

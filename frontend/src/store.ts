@@ -45,6 +45,7 @@ export type LogEventKind =
   | "interrupt"
   | "metrics"
   | "error"
+  | "fallback"
   | "notice";
 
 interface LogEventCommon {
@@ -148,6 +149,20 @@ export interface ErrorLogEvent extends LogEventCommon {
 }
 
 /**
+ * The turn was answered by a different model than usual (TR-085).
+ *
+ * Not an error: the agent answered. It is in the log because the answer that follows comes from a
+ * smaller model running locally, and an evaluator comparing two answers deserves to know which
+ * produced which.
+ */
+export interface FallbackLogEvent extends LogEventCommon {
+  readonly kind: "fallback";
+  readonly fromModel: string;
+  readonly toModel: string;
+  readonly reason: string;
+}
+
+/**
  * A client-side remark, such as a clamped slide index or a reconnect.
  *
  * Most notices are debugging detail and stay behind the debug toggle (PRD F10). `alert` marks the
@@ -172,6 +187,7 @@ export type LogEvent =
   | InterruptLogEvent
   | MetricsLogEvent
   | ErrorLogEvent
+  | FallbackLogEvent
   | NoticeLogEvent;
 
 /** `Omit` collapses a union into its common members, so distribute it by hand. */
@@ -263,6 +279,14 @@ export interface SessionData {
   /** When the last `state` message arrived, so the next one can report its dwell time. */
   readonly lastStateAt: number | null;
   /**
+   * The model answering right now, when it is not the usual one (TR-085).
+   *
+   * Held as state rather than only logged, because the banner has to stay on screen for as long as
+   * the substitution lasts: a listener who hears a slower voice should be able to find out why
+   * without scrolling a log.
+   */
+  readonly fallback: { readonly fromModel: string; readonly toModel: string } | null;
+  /**
    * Epoch milliseconds until which the provider has asked us to wait (TR-171).
    *
    * An absolute instant rather than a duration, so the countdown stays correct if the tab is
@@ -342,6 +366,7 @@ function createInitialData(): SessionData {
     eventSeq: 0,
     lastStateAt: null,
     rateLimitedUntil: null,
+    fallback: null,
   };
 }
 
@@ -674,6 +699,27 @@ function reduceServerMessage(
       ]);
     }
 
+    case "provider.fallback": {
+      // Not an error: the agent answered. The banner stays up while the substitution lasts, and
+      // the log records which model produced the answer that follows (TR-085).
+      const logged = appendEvents(state.events, state.eventSeq, now, [
+        {
+          kind: "fallback",
+          message,
+          fromModel: message.from_model,
+          toModel: message.to_model,
+          reason: message.reason,
+        },
+      ]);
+      // The wait travels with the fallback too, so the banner can say when the usual model is
+      // back without waiting for a separate error that will never arrive: the turn succeeded.
+      return {
+        ...logged,
+        fallback: { fromModel: message.from_model, toModel: message.to_model },
+        rateLimitedUntil: nextReadyAt(state.rateLimitedUntil, message.retry_after_s, now),
+      };
+    }
+
     case "metrics": {
       // Client-measured timings may already have landed for this turn; keep them.
       const existing = state.metrics.history.find((entry) => entry.turnId === message.turn_id);
@@ -709,12 +755,9 @@ function reduceServerMessage(
       if (message.code !== "rate_limited") {
         return logged;
       }
-      // Stored as an instant, and only ever pushed later: two rate limits in a row should leave
-      // the longer wait standing rather than the more recent one (TR-171).
-      const until = now + Math.round((message.retry_after_s ?? 0) * 1000);
       return {
         ...logged,
-        rateLimitedUntil: Math.max(until, state.rateLimitedUntil ?? 0) || null,
+        rateLimitedUntil: nextReadyAt(state.rateLimitedUntil, message.retry_after_s, now),
       };
     }
 
@@ -722,6 +765,29 @@ function reduceServerMessage(
       logUnhandledMessage(message);
       return null;
   }
+}
+
+/**
+ * Work out when a provider says it will be ready again.
+ *
+ * Returns the *later* of the existing instant and the new one: two rate limits in a row should
+ * leave the longer wait standing rather than the more recent one. A message that states no wait
+ * leaves the countdown exactly as it was, which is not the same as "ready now".
+ *
+ * @param current - The instant already recorded, or `null`.
+ * @param seconds - The wait the provider reported, if it reported one.
+ * @param now - Epoch milliseconds.
+ * @returns The instant to record.
+ */
+function nextReadyAt(
+  current: number | null,
+  seconds: number | null | undefined,
+  now: number,
+): number | null {
+  if (typeof seconds !== "number" || seconds <= 0) {
+    return current;
+  }
+  return Math.max(now + Math.round(seconds * 1000), current ?? 0);
 }
 
 /**

@@ -37,6 +37,7 @@ from app.providers.base import (
     TTSProvider,
 )
 from app.providers.groq_llm import PROVIDER_NAME, GroqLLM
+from app.providers.ollama_llm import OllamaLLM
 from app.providers.registry import (
     ENV_EXAMPLE,
     GROQ,
@@ -180,9 +181,6 @@ def test_missing_groq_key_fails_naming_env_example(
         pytest.param(
             {"stt_provider": "local"}, "STT_PROVIDER", "FasterWhisperSTT", "M3", id="local-stt"
         ),
-        pytest.param(
-            {"llm_provider": "ollama"}, "LLM_PROVIDER", "OllamaLLM", "M4", id="ollama-llm"
-        ),
     ],
 )
 def test_providers_from_later_milestones_say_when_they_arrive(
@@ -206,6 +204,20 @@ def test_providers_from_later_milestones_say_when_they_arrive(
     assert implementation in message
     assert milestone in message
     assert f"{variable}={FAKE}" in message
+
+
+def test_the_local_model_provider_is_built_without_a_credential(settings: Settings) -> None:
+    """TC-BE-311: TR-084 -- `LLM_PROVIDER=ollama` builds, and asks for no API key.
+
+    The point of the local provider is that it works when the hosted one cannot,
+    so requiring the hosted service's credential to construct it would defeat
+    it. Nothing here reaches the network: building a provider opens no socket.
+    """
+    providers = build_providers(_configured(settings, llm_provider="ollama", groq_api_key=None))
+
+    assert isinstance(providers.llm, OllamaLLM)
+    assert providers.names["llm"] == "ollama"
+    assert isinstance(providers.llm, LLMProvider)
 
 
 async def test_selectable_providers_satisfy_their_protocols_and_the_fakes_run(
