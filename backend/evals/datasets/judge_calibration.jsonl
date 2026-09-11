@@ -1,0 +1,15 @@
+# Judge calibration (TRD §13.1, EVALS.md).
+#
+# Ten hand-labelled groundedness items scored against the notes of the slide named. The judge is
+# run over these on every eval run; if it agrees with fewer than nine of these ten labels, the run
+# is reported invalid rather than its numbers being believed.
+{"id": "c001", "slide": 2, "question": "How long does endpointing take?", "answer": "Six hundred milliseconds of silence ends your turn.", "label": 2, "why": "verbatim from the notes"}
+{"id": "c002", "slide": 2, "question": "How long does endpointing take?", "answer": "About two seconds of silence, usually.", "label": 0, "why": "contradicts the notes, which say six hundred milliseconds"}
+{"id": "c003", "slide": 4, "question": "How quickly does the sound stop?", "answer": "The target is under a hundred and fifty milliseconds.", "label": 2, "why": "the notes state that target"}
+{"id": "c004", "slide": 4, "question": "How quickly does the sound stop?", "answer": "Very fast, almost immediately.", "label": 1, "why": "true in spirit but drops the number the notes give"}
+{"id": "c005", "slide": 3, "question": "Where does speech detection run?", "answer": "In your browser, not on a server.", "label": 2, "why": "exactly what the notes say"}
+{"id": "c006", "slide": 3, "question": "Where does speech detection run?", "answer": "On the server, using a streaming endpoint.", "label": 0, "why": "the opposite of the notes"}
+{"id": "c007", "slide": 5, "question": "How many round trips does navigating cost?", "answer": "Two model round trips per turn.", "label": 2, "why": "stated in the notes"}
+{"id": "c008", "slide": 5, "question": "How many round trips does navigating cost?", "answer": "It costs a few extra calls to the model.", "label": 1, "why": "vaguely right, the specific number is in the notes"}
+{"id": "c009", "slide": 6, "question": "Why not speech to speech?", "answer": "It would be faster and includes barge-in, but it hides the turn-taking this deck is about.", "label": 2, "why": "both halves are in the notes"}
+{"id": "c010", "slide": 6, "question": "Why not speech to speech?", "answer": "Because those models are not available to the public yet.", "label": 0, "why": "invented; the notes give a different reason"}

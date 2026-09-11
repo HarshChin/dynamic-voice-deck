@@ -98,6 +98,9 @@ convention = "google"
 "tests/**" = ["D", "S101", "PLR2004", "ARG"]
 # Developer scripts report what they did on stdout; that report is their whole purpose.
 "scripts/**" = ["T201"]
+# Same for the eval runner, whose output is the result. `S607` covers calling `git` by name:
+# resolving it by absolute path would break on every machine that installs it somewhere else.
+"evals/**" = ["T201", "S607"]
 
 [tool.ruff.format]
 quote-style = "double"
