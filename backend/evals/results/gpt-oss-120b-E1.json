@@ -34,7 +34,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 5493, Requested 2549. Please try again in 315ms. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 5493, Requested 2549. Please try again in 315ms. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r002",
@@ -91,7 +91,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7747, Requested 2631. Please try again in 17.835s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7747, Requested 2631. Please try again in 17.835s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r005",
@@ -105,7 +105,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7585, Requested 2687. Please try again in 17.04s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7585, Requested 2687. Please try again in 17.04s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r006",
@@ -119,7 +119,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7479, Requested 2706. Please try again in 16.3875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7479, Requested 2706. Please try again in 16.3875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r007",
@@ -133,7 +133,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7316, Requested 2561. Please try again in 14.0775s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7316, Requested 2561. Please try again in 14.0775s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r008",
@@ -195,7 +195,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7419, Requested 2562. Please try again in 14.8575s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7419, Requested 2562. Please try again in 14.8575s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r013",
@@ -257,7 +257,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7671, Requested 2636. Please try again in 17.3025s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7671, Requested 2636. Please try again in 17.3025s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r017",
@@ -325,7 +325,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7625, Requested 2597. Please try again in 16.665s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7625, Requested 2597. Please try again in 16.665s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r021",
@@ -339,7 +339,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7046, Requested 2610. Please try again in 12.42s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7046, Requested 2610. Please try again in 12.42s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r022",
@@ -353,7 +353,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7784, Requested 2622. Please try again in 18.045s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7784, Requested 2622. Please try again in 18.045s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r023",
@@ -436,7 +436,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7862, Requested 2567. Please try again in 18.217499999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7862, Requested 2567. Please try again in 18.217499999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r032",
@@ -466,7 +466,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7764, Requested 2606. Please try again in 17.775s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7764, Requested 2606. Please try again in 17.775s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r040",
@@ -520,7 +520,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7500, Requested 2605. Please try again in 15.7875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7500, Requested 2605. Please try again in 15.7875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r043",
@@ -566,7 +566,7 @@
           "sources": [],
           "answer": "",
           "sentences": [],
-          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m22dt4h2em6tyxc84k9mj0p3` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7795, Requested 2585. Please try again in 17.849999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
+          "error": "ProviderError: groq_llm: HTTP 429 from openai/gpt-oss-120b: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7795, Requested 2585. Please try again in 17.849999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}"
         },
         {
           "id": "r050",
