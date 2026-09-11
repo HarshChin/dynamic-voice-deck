@@ -55,12 +55,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--judge-model", default=None, help="model id to grade with")
     parser.add_argument("--out", type=Path, default=None, help="path for the JSON result")
     parser.add_argument(
+        "--max-wait",
+        type=float,
+        default=None,
+        help="longest to wait out one rate limit, in seconds; raise it to grind through a spent "
+        "daily budget overnight (default 300)",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=None,
+        help="items in flight at once; 1 when the budget is the bottleneck (default 2)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
         help="evaluate only the first N items of each dataset, for a cheap smoke run",
     )
     return parser.parse_args(argv)
+
+
+def _apply_run_options(args: argparse.Namespace) -> None:
+    """Push the pacing options into the modules that read them.
+
+    Module state rather than parameters threaded through every suite, because
+    these exist only to make a run cheaper or more patient, never to change what
+    it measures.
+
+    Args:
+        args: Parsed command line.
+    """
+    harness.LIMIT = args.limit
+    if args.max_wait is not None:
+        harness.MAX_RATE_LIMIT_WAIT_S = args.max_wait
+    if args.concurrency is not None:
+        suites.MAX_CONCURRENCY = args.concurrency
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -73,7 +103,7 @@ async def run(args: argparse.Namespace) -> int:
         Process exit status: 0 when every threshold was met.
     """
     settings = get_settings()
-    harness.LIMIT = args.limit
+    _apply_run_options(args)
     model = args.model or (
         settings.ollama_model if args.provider == "ollama" else settings.groq_llm_model
     )

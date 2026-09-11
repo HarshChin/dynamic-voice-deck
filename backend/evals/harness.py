@@ -47,8 +47,8 @@ a silent wait. An eval is the opposite -- a 429 says nothing about the agent's b
 counting it as a wrong answer would make the measurement a measurement of the free tier.
 """
 
-MAX_RATE_LIMIT_WAIT_S = 300.0
-"""Longest to wait on one attempt.
+MAX_RATE_LIMIT_WAIT_S: float = 300.0
+"""Longest to wait on one attempt. Module state so ``--max-wait`` can raise it.
 
 Generous on purpose. When the daily budget is nearly spent the free tier stops answering in
 minutes rather than seconds -- observed waits of 115 to 224 seconds -- and an opt-in eval run can

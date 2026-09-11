@@ -14,10 +14,13 @@ Each run writes `backend/evals/results/<timestamp>.json` (every item, every answ
 rationale) and `<timestamp>.md` (the summary table below), and prints the table. The runner exits
 non-zero when a threshold is missed, so it can gate a release.
 
-Evals consume Groq free-tier quota: roughly 100 model calls for a full run, about 2,900 input
-tokens each, against a ceiling of 200,000 tokens per model per day and 7,000 per minute. A full run
-therefore takes tens of minutes of waiting rather than minutes of computing. Run them at milestone
-boundaries, not on every commit.
+Evals consume Groq free-tier quota, and more of it than the item counts suggest. One model call is
+about 3,000 tokens (read off the 429 bodies), a turn that navigates makes two, and E2 and E3 add a
+judge call each. That puts **E1 alone at roughly 200,000 tokens -- a whole day's free-tier budget
+for one model** -- and the six suites together at about two and a half days'. An earlier version of
+this paragraph said a third of a day; that was an underestimate by a factor of seven. The daily
+ceiling is a rolling 24-hour window, so a run started against a spent budget crawls at the refill
+rate rather than failing outright. Run them at milestone boundaries, not on every commit.
 
 **Two measurement decisions worth stating.** An item the provider refused with a 429 is excluded
 from the denominator rather than counted as a wrong answer: otherwise a run during a rate limit
@@ -213,9 +216,9 @@ items gradeable, 0 of 31 groundedness items graded. The suite is recorded here r
 discarded, because a run that measured nothing is a fact about the day, not a fact about the agent,
 and deleting it would leave the model comparison looking more complete than it is.
 
-**Why.** The free tier allows 200,000 tokens per model per day, and a turn through this pipeline
-costs about 2,900 input tokens. A full six-suite run is therefore roughly a third of a day's budget
-for one model — and by the time the suites were finished, the day's Qwen budget had already gone on
+**Why.** The free tier allows 200,000 tokens per model per day, a turn through this pipeline
+costs about 3,000 tokens per model call and two calls when it navigates, so E1 alone is about a
+day's budget -- and by the time the suites were finished, the day's Qwen budget had already gone on
 development, integration tests and live verification. The three items the judge did grade before
 the budget ran out all agreed with their hand labels.
 

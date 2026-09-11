@@ -22,8 +22,8 @@ from app.providers.base import LLMProvider, TTSProvider
 from .harness import TurnTrace, read_dataset, run_one
 from .judge import judge, rubric
 
-MAX_CONCURRENCY = 2
-"""Items in flight at once.
+MAX_CONCURRENCY: int = 2
+"""Items in flight at once. Module state so ``--concurrency`` can lower it.
 
 Two rather than one because a suite of forty items is otherwise several minutes of waiting, and not
 more than two because the free tier's per-minute ceiling is the binding constraint: a wider fan-out

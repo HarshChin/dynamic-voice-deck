@@ -10,4 +10,4 @@ runner are deleted afterwards: they measure four items and would read like resul
 | File | What it is |
 |---|---|
 | `gpt-oss-120b-E1.json` | E1, E4 and E6 against `openai/gpt-oss-120b`. 24 of 40 items answered. |
-| `qwen3.8-27b-release.json` | The attempted release run against the default model. Every item was refused by the free tier; kept because a run that measured nothing is a fact about the day. |
+| `qwen3.8-27b-release-attempt-1.json` | The first attempted release run against the default model. Every item was refused by the free tier; kept because a run that measured nothing is a fact about the day. |
