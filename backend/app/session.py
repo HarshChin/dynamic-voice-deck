@@ -158,6 +158,17 @@ class Session:
         self._task: asyncio.Task[None] | None = None
         self._interrupted_turn: int | None = None
         self._interrupted_at = 0.0
+        self._playing = False
+        """Whether the room is still hearing the current turn (TR-090).
+
+        The server finishes generating several seconds before the browser
+        finishes playing, so a turn is routinely *over* here while the listener
+        is still mid-sentence. This is what distinguishes a barge-in landing in
+        that window -- a real interruption -- from a stray message arriving after
+        an answer was genuinely heard in full.
+        """
+        self._last_sentence_id: int | None = None
+        """Id of the turn's final sentence, once it is known."""
         self._expecting_binary = False
         self._started = False
 
@@ -323,15 +334,41 @@ class Session:
         # client ever sends. Accepting it for the turn just cancelled is also
         # what makes a repeated interrupt idempotent rather than an error
         # (TR-024): re-cutting at the same sentence changes nothing.
-        if last_completed is None or not self._recently_interrupted(self.turn_id):
+        if last_completed is None:
             return  # TR-024: nothing to interrupt, and nothing more precise to say
+        if self._recently_interrupted(self.turn_id):
+            if self.history.truncate_current(self.turn_id, last_completed):
+                logger.info(
+                    "turn.truncation_refined",
+                    session_id=self.id,
+                    turn_id=self.turn_id,
+                    truncated_at=last_completed,
+                )
+            return
+
+        # TR-090. Generation finished while the room was still listening. There is no task left to
+        # cancel, but the two things that matter still have to happen: history is cut to what was
+        # actually heard -- or the agent believes it said sentences nobody received, which is the
+        # failure TR-051 exists to prevent -- and the listener is told their interruption landed.
+        #
+        # Gated on `_playing`, so an interrupt arriving after an answer was genuinely heard in
+        # full changes nothing (TR-024).
+        if not self._playing:
+            return
+        self._playing = False
         if self.history.truncate_current(self.turn_id, last_completed):
+            self._interrupted_turn = self.turn_id
+            self._interrupted_at = time.monotonic()
             logger.info(
-                "turn.truncation_refined",
+                "turn.cut_during_playback",
                 session_id=self.id,
                 turn_id=self.turn_id,
                 truncated_at=last_completed,
             )
+            await self.send(
+                AgentCancelledMsg(turn_id=self.turn_id, truncated_at_sentence_id=last_completed)
+            )
+            await self.set_state(SessionState.HEARING)
 
     def _recently_interrupted(self, turn_id: int) -> bool:
         """Report whether this turn was interrupted within the debounce window.
@@ -422,6 +459,10 @@ class Session:
         """
         if message.turn_id != self.turn_id:
             return  # TR-131: progress for a turn that is no longer current
+        # The last sentence has reached the speakers, so the room has now heard the whole answer
+        # and a later interrupt naming this turn is stray rather than a barge-in (TR-090).
+        if self._last_sentence_id is not None and message.sentence_id >= self._last_sentence_id:
+            self._playing = False
         # ``_task is None`` means this turn is done generating. Progress
         # reported while it is still running names a sentence the client has
         # finished but the answer has not, so it is not the end of the turn.
@@ -645,6 +686,11 @@ class Session:
             await self._end_turn_abnormally()
             return
 
+        # The room is still listening to this turn until the client says the last sentence has
+        # played. Recorded before the state changes, because an interrupt may arrive in the very
+        # next message (TR-090).
+        self._playing = metrics.sentences > 0
+        self._last_sentence_id = metrics.sentences - 1 if metrics.sentences else None
         await self.send(metrics.to_message())
         # SPEAKING was announced when the first frame left, so the turn only has
         # to hand the floor back. With audio the client's `playback.progress`

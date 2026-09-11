@@ -25,6 +25,52 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · The interruption that registered as nothing at all · uncommitted
+**Scope:** `app/session.py`, `tests/test_session.py`, `docs/TRD.md` (TR-090)
+
+**Reported:** "if it is speaking and I interrupt it by asking something else, it stops speaking its
+current answer and starts speaking the answer to my next question, but does not give me the red
+bubble for interrupted by user. I used to get this earlier."
+
+**The missing chip was the symptom, and the smaller half.** `agent.cancelled` is what draws it, and
+it was not being sent -- because the session was no longer in a state that accepts an interrupt.
+Synthesis is streamed several seconds faster than a room can hear it, so the server finishes
+writing an answer long before the listener finishes hearing one, and returns to LISTENING while
+audio is still playing. An `interrupt` arriving in that window was dropped as stray. What the
+listener saw was the audio stopping anyway -- the browser flushes locally, and the new question's
+turn cancels the old task -- so the interruption *looked* like it worked.
+
+**What was actually lost is the history.** Nothing truncated the turn, so the agent went on
+believing it had said every sentence it generated, including the ones that were cut off before
+reaching the speakers, and would never say them again. That is precisely the failure TR-051 exists
+to prevent, and it was silent: no error, no log line, just an agent with a false memory.
+
+**Why it got worse recently.** The window is the gap between the last token and the last sample.
+A slow hosted model leaves almost none; the local fallback finishes generating in a second or two
+and then plays for ten, so nearly every barge-in now lands inside it.
+
+**The fix is a fact the server did not previously keep: is the room still listening?** Set when a
+turn's metrics are written, cleared when the client reports playback progress for that turn's final
+sentence. An interrupt naming the current turn is honoured while it is true, and ignored once it is
+false -- which is what keeps a stray message from rewriting an answer that was genuinely heard in
+full.
+
+**A test had to start telling the truth.** `TC-BE-217` guards exactly that stray case, and it
+passed by *implying* its premise: it asked a question, let the turn finish, and called the answer
+"heard in full" without the client ever saying so. Heard-in-full is a claim only the browser can
+make. The test now sends the progress a browser sends, which is both what makes it pass again and
+what makes it a real test of the rule.
+
+**Left alone deliberately.** The session still announces LISTENING the moment generation ends, so
+the orb reads *listening* while audio is audibly playing. Making it wait for playback would mean a
+client that never reports progress leaves a session stuck in SPEAKING for ever, and the functional
+defect here -- the untruncated history -- is fixed without taking that risk. Noted rather than
+quietly left.
+
+**Verification:** two cases, one for each side of the window. Live: a question asked, generation
+confirmed finished, then interrupted -- `agent.cancelled` with the right cut, the chip on screen,
+and `turn.cut_during_playback` in the server log. 576 backend, 183 frontend, five end-to-end.
+
 ### 2026-09-11 · Four bugs from one exported session · uncommitted
 **Scope:** `app/pipeline/turn.py`, `app/session.py`, `docs/TRD.md` (TR-088, TR-089)
 

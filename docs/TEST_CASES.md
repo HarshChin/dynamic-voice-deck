@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 574 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 183 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 576 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 183 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -277,6 +277,8 @@ its own instructions aloud; the second is why a question had to be asked twice.
 | TC-BE-335 | TR-088 | Given an answer that quotes the marker, as slide 4 does, then it is spoken unchanged | `::test_an_answer_about_the_marker_is_still_spoken` | passing |
 | TC-BE-336 | TR-085 | Given a turn that makes two model requests and is rate limited on both, then the substitution is announced once | `tests/test_session.py::test_a_substitution_is_announced_once_however_many_requests_the_turn_makes` | passing |
 | TC-BE-337 | TR-089 | Given a cough mid-answer that transcribes to filler, then the answer runs to its end, nothing is cancelled, and no turn is opened | `::test_a_cough_during_an_answer_does_not_kill_the_answer` | passing |
+| TC-BE-338 | TR-090 / TR-051 | Given a turn that has finished generating while its audio still plays, when the listener talks over it, then `agent.cancelled` is emitted and history is cut to what was heard | `tests/test_session.py::test_talking_over_an_answer_that_has_finished_generating_still_cuts_it` | passing |
+| TC-BE-339 | TR-090 / TR-024 | Given playback progress for the final sentence, then a later interrupt changes nothing: the answer was genuinely heard | `::test_a_second_interrupt_after_playback_finished_changes_nothing` | passing |
 
 ### Slide arrangements (added 2026-09-11)
 

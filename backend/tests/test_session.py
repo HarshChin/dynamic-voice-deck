@@ -1017,11 +1017,11 @@ def test_a_stray_interrupt_does_not_rewrite_a_turn_that_was_heard_in_full(
     """TC-BE-217: TR-024 -- an interrupt names one turn, and only that turn.
 
     Keeping a finished turn addressable is what lets a barge-in during playback
-    cut it honestly. It also means a stray interrupt -- a VAD misfire, a
-    duplicate from a flaky connection -- arriving once the session is listening
-    again could rewrite an answer the room heard in full, and tell the model it
-    was cut off when it was not. The window is scoped to the turn that was
-    actually cancelled, so this one changes nothing.
+    cut it honestly (TR-090). It also means a stray interrupt -- a VAD misfire, a
+    duplicate from a flaky connection -- arriving once the answer has actually
+    been heard could rewrite it, and tell the model it was cut off when it was
+    not. The gate is whether the room is still listening, which the client
+    reports, so this one changes nothing.
     """
     llm = FakeLLM(short_script(), delay_s=SHORT_STEP_DELAY_S)
 
@@ -1032,8 +1032,13 @@ def test_a_stray_interrupt_does_not_rewrite_a_turn_that_was_heard_in_full(
         harness.send(type="interrupt", last_completed_sentence_id=0)
         harness.recv_until(is_state(SessionState.HEARING))
 
-        # A second turn, heard in full, inside the window the first one opened.
-        harness.ask("And what else?")
+        # A second turn, heard in full, inside the window the first one opened. "Heard in full"
+        # is a claim the client makes rather than one the server can infer, so the test makes it
+        # the way a browser does: progress for the last sentence, which is what tells the server
+        # the room has stopped listening (TR-090).
+        turn = harness.ask("And what else?")
+        last = only(turn, "transcript.agent")[-1]["sentence_id"]
+        harness.send(type="playback.progress", turn_id=2, sentence_id=last)
         harness.send(type="interrupt", last_completed_sentence_id=0)
         assert harness.barrier() == []
         elapsed = time.monotonic() - interrupted
@@ -2310,3 +2315,51 @@ def test_a_cough_during_an_answer_does_not_kill_the_answer(isolated_env: Any) ->
     assert llm.cancelled == 0
     # And the filler never became a turn of its own.
     assert [m["text"] for m in only(rest, "transcript.user")] == []
+
+
+def test_talking_over_an_answer_that_has_finished_generating_still_cuts_it(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-338: TR-090 -- the room is still listening after the server has stopped writing.
+
+    Synthesis is streamed several seconds faster than it can be heard, so a turn
+    is routinely finished here while the listener is mid-sentence. Talking over
+    that is a real barge-in: it has to be announced, and above all the history
+    has to be cut, or the agent believes it said sentences nobody received --
+    the exact failure TR-051 exists to prevent.
+    """
+    llm = FakeLLM(sentence_script("One.", "Two.", "Three."))
+
+    with connect(llm) as harness:
+        # Let the turn finish completely: metrics, then LISTENING.
+        harness.ask("Tell me everything.")
+        # The client is still playing sentence two when the listener speaks.
+        harness.send(type="interrupt", last_completed_sentence_id=1)
+        cancelled = harness.recv_until(is_type("agent.cancelled"))[-1]
+        harness.recv()  # the state that follows
+        harness.ask("Something else.")
+
+    assert cancelled["turn_id"] == 1
+    assert cancelled["truncated_at_sentence_id"] == 1
+    # The agent's memory holds the two sentences that were heard, and not the third.
+    answers = [message.content for message in llm.calls[-1].messages if message.role == "assistant"]
+    assert answers[0] == f"One. Two. {INTERRUPTED_MARKER}"
+    assert "Three." not in answers[0]
+
+
+def test_a_second_interrupt_after_playback_finished_changes_nothing(isolated_env: Any) -> None:
+    """TC-BE-339: TR-090/TR-024 -- once the room has heard it all, a late message is stray."""
+    llm = FakeLLM(sentence_script("One.", "Two."))
+
+    with connect(llm) as harness:
+        turn = harness.ask("Tell me everything.")
+        last = only(turn, "transcript.agent")[-1]["sentence_id"]
+        harness.send(type="playback.progress", turn_id=1, sentence_id=last)
+        harness.send(type="interrupt", last_completed_sentence_id=0)
+
+        assert harness.barrier() == []
+        harness.ask("Something else.")
+
+    answers = [message.content for message in llm.calls[-1].messages if message.role == "assistant"]
+    assert answers[0] == "One. Two."
+    assert INTERRUPTED_MARKER not in answers[0]
