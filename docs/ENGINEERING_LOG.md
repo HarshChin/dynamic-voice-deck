@@ -25,6 +25,46 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · A walkthrough you could not interrupt, and why my own fix caused it · uncommitted
+**Scope:** `frontend/src/audio/microphone.ts`, `frontend/src/config.ts`, `docs/TRD.md` (TR-116)
+
+**Reported:** "once the walk me through audio starts, and if I interrupt saying hey stop, it just
+doesn't and still continues its complete walkthrough."
+
+**It was not the interrupt path.** A WebSocket probe against the running server started a
+walkthrough and sent exactly what the browser sends on voice onset: the turn cancelled,
+`agent.cancelled` arrived with the right truncation point, and the audio stopped. The server was
+never the problem, and neither was the message. The client was not sending it.
+
+**The detector could get into a state where onset was impossible.** Speech detection has two
+states: idle, watching for onset, and capturing, watching for the end of a turn. Onset is only ever
+declared from the idle state. So any capture that cannot end is a capture that permanently disables
+barge-in, and the way a capture ends is 600 ms of silence -- which never arrives while the agent is
+talking into the room. A capture opened by a cough, a chair, or a fragment of the agent's own voice
+just before the walkthrough started would stay open for the entire deck, absorbing "hey stop" into
+an utterance that was never going to be uploaded.
+
+**And my own change that morning made it far more likely.** Conforming to TR-112 dropped onset from
+three consecutive loud frames to one while nothing is playing. That is correct, and it is worth
+64 ms on every turn -- but it also means a single click or keystroke in the moment before the
+walkthrough begins is now enough to open the capture that wedges everything. The earlier rule was
+accidentally hiding this. I would rather have the latency and the honest bug.
+
+**Fixed by making a capture always able to end (TR-116).** Two rules. A capture still open at the
+moment the agent *starts* speaking is abandoned as a misfire: it did not begin as a question, and
+leaving it open is what costs the listener their ability to interrupt. And any capture reaching
+twenty seconds ends regardless -- discarded if the agent is audible, because that is its own voice
+leaking past echo cancellation and uploading it would ask the model to answer itself, and uploaded
+otherwise, because a noisy room is not a stuck detector.
+
+**Why it survived the test suite.** The smoke test did interrupt a walkthrough successfully -- with
+push-to-talk, which is key-driven and bypasses the detector entirely. The voice path into a
+walkthrough had never been exercised end to end. Eight tests now cover it: six on the detector, and
+two at the session seam that drive the exact sequence in order, ending with the interruption that
+used to be impossible.
+
+**Verification:** frontend 163 passing, backend 542, five end-to-end cases, `make lint` clean.
+
 ### 2026-09-11 · CI caught a flake the machine here never showed · uncommitted
 **Scope:** `tests/test_session.py`
 

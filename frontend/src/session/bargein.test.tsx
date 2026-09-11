@@ -453,4 +453,53 @@ describe("client tier of barge-in", () => {
 
     expect(micCalls).toEqual(["ptt:false", "start", "mute", "unmute", "stop"]);
   });
+
+  it("TC-FE-206: a false onset before the agent speaks does not stop a later interruption", () => {
+    const socket = speakingSession();
+
+    // 1. Something opened a capture before the agent was audible -- a click, a chair, a breath --
+    //    so the client announced speech rather than an interruption.
+    act(() => {
+      socket.receive({ type: "state", value: "listening", turn_id: 1, server_ts: 0 });
+    });
+    drainAudio();
+    act(() => {
+      handlers?.onSpeechStart();
+    });
+    expect(sentTypes(socket)).toEqual(["speech.start"]);
+
+    // 2. The agent starts talking. The microphone abandons that stale capture and says so, which
+    //    is what lets a real onset be declared afterwards (TR-116).
+    act(() => {
+      socket.receive({ type: "state", value: "speaking", turn_id: 2, server_ts: 0 });
+      socket.receiveAudio(0, 0);
+      socket.receiveAudio(0, 1);
+    });
+    act(() => {
+      handlers?.onMisfire();
+    });
+
+    // 3. Now the listener talks over it. This is the interruption that used to be impossible.
+    act(() => {
+      handlers?.onSpeechStart();
+    });
+
+    expect(sentTypes(socket)).toEqual(["speech.start", "interrupt"]);
+    expect(events).toContain("audio stopped");
+  });
+
+  it("TC-FE-207: an abandoned capture that had already interrupted takes the interrupt back", () => {
+    const socket = speakingSession();
+
+    act(() => {
+      handlers?.onSpeechStart();
+    });
+    act(() => {
+      handlers?.onMisfire();
+    });
+
+    // The agent was silenced for something that turned out not to be speech, and the server is
+    // told so rather than being left waiting for a question that is never coming.
+    expect(sentTypes(socket)).toEqual(["interrupt", "interrupt.cancel"]);
+  });
 });

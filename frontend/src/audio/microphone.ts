@@ -111,6 +111,9 @@ const REDEMPTION_FRAMES = Math.ceil(VAD.redemptionMs / FRAME_MS);
 /** Shortest run of speech worth uploading. */
 const MIN_SPEECH_FRAMES = Math.ceil(VAD.minSpeechMs / FRAME_MS);
 
+/** Longest a single capture may run before it is abandoned as stuck (TR-116). */
+const MAX_UTTERANCE_FRAMES = Math.ceil(VAD.maxUtteranceMs / FRAME_MS);
+
 /**
  * Owns the microphone and decides when a turn starts and ends.
  */
@@ -125,6 +128,8 @@ export class Microphone {
   // Detection state.
   #pushToTalk = false;
   #speaking = false;
+  // Whether the agent was audible on the previous frame, so the moment it starts can be noticed.
+  #wasPlaying = false;
   #loudRun = 0;
   #silentRun = 0;
   #preRoll: Float32Array[] = [];
@@ -287,11 +292,25 @@ export class Microphone {
       return;
     }
 
+    // TR-116. A capture that is still open at the moment the agent starts talking did not begin
+    // as a question -- it began as a chair, a cough, or a fragment of the agent's own previous
+    // sentence -- and if it is left open the agent's voice keeps resetting the silence counter, so
+    // the turn never ends. That is not merely a lost utterance: while a capture is open, no new
+    // onset can be declared, so the person cannot interrupt at all. Abandoning it here is what
+    // keeps barge-in available for the sentence about to be spoken.
+    const playing = this.#handlers.isPlaying?.() ?? true;
+    const startedPlaying = playing && !this.#wasPlaying;
+    this.#wasPlaying = playing;
+    if (startedPlaying && this.#speaking) {
+      this.#resetDetection();
+      this.#handlers.onMisfire();
+      return;
+    }
+
     if (!this.#speaking) {
       this.#rememberForPadding(frame);
       this.#loudRun = rms >= SPEECH_RMS ? this.#loudRun + 1 : 0;
-      // Absent seam means "assume the agent may be audible": the cautious rule is the safe default.
-      const playing = this.#handlers.isPlaying?.() ?? true;
+      // While the agent is audible, onset needs more evidence: the cautious rule resists echo.
       const needed = playing ? ONSET_FRAMES_WHILE_PLAYING : ONSET_FRAMES_WHILE_IDLE;
       if (this.#loudRun >= needed) {
         this.#beginUtterance();
@@ -301,6 +320,21 @@ export class Microphone {
 
     this.#utterance.push(frame);
     this.#silentRun = rms <= SILENCE_RMS ? this.#silentRun + 1 : 0;
+
+    if (this.#utterance.length >= MAX_UTTERANCE_FRAMES) {
+      // TR-116. Twenty seconds of unbroken sound is not a question. If the agent is audible it is
+      // almost certainly its own voice leaking past echo cancellation, and uploading that would
+      // ask the model to answer itself; otherwise it is a noisy room, and whatever was said is
+      // worth transcribing. Either way the capture ends here, so the next onset can happen.
+      if (playing) {
+        this.#resetDetection();
+        this.#handlers.onMisfire();
+      } else {
+        this.#finishUtterance(0);
+      }
+      return;
+    }
+
     if (this.#silentRun >= REDEMPTION_FRAMES) {
       // TR-114: what is uploaded is the padding plus the speech. The silence that ended the turn
       // is dropped -- every frame in that run is below the silence threshold by definition, so it

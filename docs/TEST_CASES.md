@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 542 backend cases across 21 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 155 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 542 backend cases across 21 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 163 frontend cases across 17 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -265,6 +265,23 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
+
+### A capture that could never end (added 2026-09-11)
+
+Found by using the product: interrupting a walkthrough by speaking did nothing, however loudly.
+The cause was not the interrupt path, which works; it was that no onset could be declared, because
+the detector was already inside a capture that the agent's own leaked voice kept alive.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-FE-200 | TR-116 | Given a capture opened before the agent spoke, when the agent starts speaking, then the capture is abandoned and reported as a misfire | `src/audio/microphone.test.ts::TC-FE-200` | passing |
+| TC-FE-201 | TR-116 | And because it was abandoned, a later onset is declared, so the listener can interrupt | `::TC-FE-201` | passing |
+| TC-FE-202 | TR-116 | Given 20 s of unbroken sound while the agent is audible, then it is discarded rather than transcribed as a question | `::TC-FE-202` | passing |
+| TC-FE-203 | TR-116 | Given the same with nothing playing, then it is uploaded: a noisy room is not a stuck detector | `::TC-FE-203` | passing |
+| TC-FE-204 | TR-116 | Then an ordinary barge-in is unaffected | `::TC-FE-204` | passing |
+| TC-FE-205 | TR-116 | Then a question asked in the quiet after an answer is unaffected | `::TC-FE-205` | passing |
+| TC-FE-206 | TR-116 / F7 | Given a false onset before the agent speaks, then the abandoned capture is followed by a real onset that does interrupt: the whole sequence, at the session seam | `src/session/bargein.test.tsx::TC-FE-206` | passing |
+| TC-FE-207 | TR-116 / TR-024 | Given an abandoned capture that had already silenced the agent, then `interrupt.cancel` is sent so the server is not left waiting for a question | `::TC-FE-207` | passing |
 
 ### The eval harness (added 2026-09-11)
 

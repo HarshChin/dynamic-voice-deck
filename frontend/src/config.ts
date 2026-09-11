@@ -70,6 +70,14 @@ export const VAD = {
   onsetFramesWhilePlaying: 3,
   /** Consecutive loud frames required while nothing is playing, where there is no echo to resist. */
   onsetFramesWhileIdle: 1,
+  /**
+   * Longest a single capture may run before the detector decides it is stuck (TR-116).
+   *
+   * Twenty seconds is far longer than anyone asks a slide deck a question for, and far shorter
+   * than the server's own limit, so a capture that reaches it is a detector that has stopped
+   * endpointing rather than a person who is still talking.
+   */
+  maxUtteranceMs: 20_000,
 } as const;
 
 /**

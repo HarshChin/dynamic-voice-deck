@@ -409,3 +409,88 @@ describe("error messages", () => {
     expect(describeMicrophoneError("odd")).toContain("odd");
   });
 });
+
+describe("a capture that would otherwise never end (TR-116)", () => {
+  it("TC-FE-200: the agent starting to speak abandons a capture that was already open", async () => {
+    const { port } = await open();
+
+    // Something opened a capture just before the agent started: a chair, a cough, or the tail of
+    // its own previous sentence.
+    push(port, 3, LOUD);
+    expect(seen.starts).toBe(1);
+
+    playing = true;
+    push(port, 1, QUIET);
+
+    // The stale capture is gone, and the session is told so it can take back any interrupt.
+    expect(seen.misfires).toBe(1);
+    expect(seen.utterances).toEqual([]);
+  });
+
+  it("TC-FE-201: and because it is gone, the listener can still interrupt", async () => {
+    const { port } = await open();
+    push(port, 3, LOUD);
+    playing = true;
+    push(port, 1, QUIET);
+    const onsetsSoFar = seen.starts;
+
+    // Now the person actually talks over the agent. This is the interruption that used to be
+    // impossible: while a capture was open, no new onset could ever be declared.
+    push(port, 3, LOUD);
+
+    expect(seen.starts).toBe(onsetsSoFar + 1);
+  });
+
+  it("TC-FE-202: the agent's own voice never becomes a question the model has to answer", async () => {
+    playing = true;
+    const { port } = await open();
+
+    // Onset while the agent is audible is a genuine barge-in, so the capture is kept. But if it
+    // then runs for twenty seconds of unbroken sound, it is the agent leaking, not a person.
+    push(port, 3, LOUD);
+    expect(seen.starts).toBe(1);
+    push(port, Math.ceil(VAD.maxUtteranceMs / FRAME_MS), LOUD);
+
+    expect(seen.utterances).toEqual([]);
+    expect(seen.misfires).toBe(1);
+  });
+
+  it("TC-FE-203: a long question in a noisy room is uploaded rather than thrown away", async () => {
+    playing = false;
+    const { port } = await open();
+
+    push(port, 3, LOUD);
+    push(port, Math.ceil(VAD.maxUtteranceMs / FRAME_MS), LOUD);
+
+    // Nothing is playing, so the sound is the room and whatever was said in it. It goes up.
+    expect(seen.utterances).toHaveLength(1);
+    expect(seen.misfires).toBe(0);
+  });
+
+  it("TC-FE-204: an ordinary barge-in is not disturbed by any of this", async () => {
+    playing = true;
+    const { port } = await open();
+
+    push(port, 3, LOUD);
+    push(port, 20, LOUD);
+    push(port, REDEMPTION_FRAMES, QUIET);
+
+    expect(seen.starts).toBe(1);
+    expect(seen.utterances).toHaveLength(1);
+    expect(seen.misfires).toBe(0);
+  });
+
+  it("TC-FE-205: the agent stopping and starting again does not abandon a real question", async () => {
+    playing = true;
+    const { port } = await open();
+    // The agent finishes; the listener starts a question in the quiet that follows.
+    playing = false;
+    push(port, 3, LOUD);
+    push(port, 10, LOUD);
+    // The agent does not start again mid-question, so nothing interferes.
+    push(port, REDEMPTION_FRAMES, QUIET);
+
+    expect(seen.utterances).toHaveLength(1);
+    expect(seen.misfires).toBe(0);
+  });
+});

@@ -448,6 +448,7 @@ frontend/src/
 | TR-113 | On onset: emit `speech.start`; if playing, call `PlaybackQueue.flush()` first and emit `interrupt {last_completed_sentence_id}` (client tier of barge-in). Record `onsetTs = performance.now()`. |
 | TR-114 | On end: assemble `prePad + speech` as one `Int16Array`, emit `speech.end {duration_ms}` then the binary frame. If duration < min speech, emit `interrupt.cancel` if an interrupt was sent, otherwise nothing. |
 | TR-115 | Push-to-talk mode bypasses VAD: keydown Space starts capture (and flushes/interrupts if playing), keyup ends the utterance. |
+| TR-116 | **Added 2026-09-11.** A capture must always be able to end, because while one is open no new onset can be declared and the listener therefore cannot interrupt at all. Two rules enforce it: a capture still open when the agent *starts* speaking is abandoned as a misfire, and any capture reaching `maxUtteranceMs` (20 s) ends — discarded when the agent is audible, since it is the agent's own voice leaking past echo cancellation, and uploaded otherwise. |
 
 ### 5.4 Playback
 
