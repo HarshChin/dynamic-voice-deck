@@ -610,6 +610,13 @@ SPOKEN_SCAFFOLDING = re.compile(
     r"^\s*\[?\s*(?:"
     r"interrupted by user(?:\s+before speaking)?"
     r"|looking at slide\s+\d+\s+of\s+\d+(?:\s*:[^\]]*)?"
+    # Labels from the model's own chat template, leaked as text (release eval, 2026-09-11).
+    # The whole-segment failure string; the turn label wrapping the answer in a JSON object;
+    # and either label followed straight by a fresh capitalised sentence. The case check is
+    # scoped so that "Assistant reasoning is what slide five is about" is left alone.
+    r"|assistant\s+turn\s+failed\s+before\s+producing\s+text"
+    r"|assistant\s+turn\s+\d+\s*\{\s*\"content\"\s*:\s*\""
+    r"|assistant\s+(?:reasoning|turn\s+\d+)(?=\s+(?-i:[A-Z]))"
     r")\s*\]?[\s:,.\u2014-]*",
     re.IGNORECASE,
 )
@@ -627,6 +634,14 @@ own bullet is ``The cut is marked "[interrupted by user]"`` and its notes explai
 that marker, so an answer *about* it must still be speakable; what must not be
 spoken is an answer that *begins* by reciting it. Stripping rather than dropping
 keeps the sentence the echo was prefixed to, which is usually the real answer.
+
+The release eval of 2026-09-11 added a third source that is not this codebase's at
+all: labels from the model's own chat template, leaked as text. ``qwen/qwen3.8-27b``
+opened one answer with "assistant reasoning", another with ``assistant turn 2
+{"content":"`` and the answer inside the braces, and returned one answer that was
+only the sentence "assistant turn failed before producing text". None of those
+strings appears anywhere in this repository. The first two are stripped as
+prefixes; the third strips to nothing, which is what an empty answer should be.
 """
 
 TOOL_SYNTAX = re.compile(

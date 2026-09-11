@@ -29,6 +29,7 @@ from evals.suites import (
     _exclusions,
     _ratio,
     _style_failures,
+    count_sentences,
     e4_style,
     e6_tools,
 )
@@ -193,7 +194,7 @@ def test_the_limit_caps_a_dataset_for_a_cheap_smoke_run() -> None:
 
 def test_speech_passes_the_style_check() -> None:
     """TC-BE-297: E4 -- an ordinary spoken answer has nothing wrong with it."""
-    assert _style_failures("Two layers, actually. The browser stops first.", ["a", "b"]) == []
+    assert _style_failures("Two layers, actually. The browser stops first.") == []
 
 
 @pytest.mark.parametrize(
@@ -205,11 +206,12 @@ def test_speech_passes_the_style_check() -> None:
         ("Great question 🎉", "markup"),
         ("Use `go_to_slide` for that.", "markup"),
         ("See [the docs](https://example.com).", "markup"),
+        ('{"content": "It is a chain of small delays."}', "markup"),
     ],
 )
 def test_anything_that_reads_as_written_fails_the_style_check(answer: str, expected: str) -> None:
-    """TC-BE-298: E4 -- markdown, links and emoji are not speech."""
-    problems = _style_failures(answer, ["one"])
+    """TC-BE-298: E4 -- markdown, links, emoji and a JSON object are not speech."""
+    problems = _style_failures(answer)
     assert problems, answer
     assert any(expected in problem for problem in problems)
 
@@ -217,10 +219,25 @@ def test_anything_that_reads_as_written_fails_the_style_check(answer: str, expec
 def test_an_answer_that_runs_long_fails_on_length() -> None:
     """TC-BE-299: E4 -- a presenter who monologues has stopped presenting."""
     long_answer = " ".join(["word"] * (STYLE_MAX_WORDS + 1))
-    assert any("words" in problem for problem in _style_failures(long_answer, ["one"]))
+    assert any("words" in problem for problem in _style_failures(long_answer))
 
-    many = ["A sentence."] * (STYLE_MAX_SENTENCES + 1)
-    assert any("sentences" in problem for problem in _style_failures("A sentence.", many))
+    many = " ".join(["A sentence."] * (STYLE_MAX_SENTENCES + 1))
+    assert any("sentences" in problem for problem in _style_failures(many))
+
+
+def test_style_counts_sentences_not_the_chunkers_clause_splits() -> None:
+    """TC-BE-349: E4 -- clause splits the chunker makes for early speech are not sentences."""
+    answer = (
+        "Back at the start. This slide is the whole pitch: a voice agent explaining its own "
+        "architecture, with every piece of the chain open weights end to end. Ask anything in "
+        "any order, interrupt me mid-sentence, or say walk me through it for the full tour."
+    )
+
+    assert count_sentences(answer) == 3
+    assert _style_failures(answer) == []
+    assert count_sentences("") == 0
+    assert count_sentences('He said "stop." Then silence. Really?') == 3
+    assert count_sentences("It took 1.5 seconds, e.g. on a laptop.") == 1
 
 
 def test_the_style_suite_reads_every_answer_the_other_suites_produced() -> None:

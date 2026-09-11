@@ -25,6 +25,56 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · The release eval ran, and found two bugs in the instrument and one in the product · uncommitted
+**Scope:** `evals/suites.py`, `app/pipeline/turn.py` (TR-088), `tests/test_evals.py`, `tests/test_turn.py`,
+`docs/TRD.md`, `docs/TEST_CASES.md`
+
+**The run.** E1, E4 and E6 for `qwen/qwen3.8-27b` on a fresh key: 18 of 18 items answered, no refusals,
+fifteen minutes. Routing 83.3 % (15 of 18), false navigation 0 %, tool hygiene clean, style 55.6 % as
+the run recorded it. The record and its reading are in `EVALS.md`; this entry is about what the run
+found in the code.
+
+**Instrument bug one: E4 counted chunks, not sentences.** `_style_failures` took the chunker's output
+as "sentences". The chunker splits a long sentence at a clause once it passes 60 characters so that
+speech can start early (TR-042), so a three-sentence, 46-word answer arrived as six pieces and failed
+a five-sentence allowance. Six of the eight style failures were this. E4 now counts sentence
+terminators in the answer text, and requires the next sentence to open with a capital, a digit or a
+quote so that "e.g. on a laptop" is one sentence. Re-derived from the recorded answers with the fixed
+code, the same run scores 88.9 %: two real failures, a 99-word answer and a JSON-wrapped one.
+
+**Instrument bug two: a JSON object passed as speech.** One answer read
+`assistant turn 2 {"content":"It's a chain of small delays...` and the style check found nothing wrong
+with it, because braces and quotes were not in its idea of markup. They are now.
+
+**Product bug: the model leaks its own chat template.** Three answers began with text that exists
+nowhere in this repository: "assistant reasoning", `assistant turn 2 {"content":"`, and one answer
+that was only "assistant turn failed before producing text". That is a third source of spoken
+scaffolding after our own two markers (TR-088), and it is stripped the same way, with one care taken:
+a bare label is stripped only when a fresh capitalised sentence follows it, so "Assistant reasoning is
+what slide five is about" survives. Whether the provider's chat template exposes those labels or the
+model invents them, the listener should not hear them.
+
+**Two routing misses are follow-ups, not fixes tonight.** "Next slide please." from slide 2 landed on
+5: the model called `go_to_slide` three times, once per round trip, because after each move the tool
+result showed a new current slide and the instruction "next" still stood. A relative command should
+be resolved once. The clean fix is probably a tool result that says the move is done and words are
+owed, or withdrawing `go_to_slide` after a successful move -- and the tool loop's own comment records
+that three cheaper variants of that exchange each failed against the live API, so it is not a
+five-minute change. And "What are the trade-offs?" got the provider's failure string and no
+navigation; the keyword fallback could not rescue six words of template. Both utterances are dataset
+items already; both are named in `EVALS.md`.
+
+**Also.** TRD §7's "Added 2026-09-11" rows for TR-088, TR-090 and TR-091 were present twice; the
+second copies are removed.
+
+**Verification:** 601 backend tests, lint clean. TC-BE-349 pins sentence counting, TC-BE-350 the
+leaked labels, TC-BE-298 the JSON case, TC-BE-335 the negative. The re-derived E4 figure is
+reproducible from the recorded JSON with the command in `EVALS.md`.
+
+**Follow-ups:** the relative-navigation loop; a hard cap on answer length in the chunker (the 99-word
+answer is the second outlier of its kind, after the fallback's 231-word one); E2, E3 and E5 recorded
+when the second run lands.
+
 ### 2026-09-11 · The eval suites were sized for a budget they never had · uncommitted
 **Scope:** `evals/datasets/*.jsonl`, `evals/budget.py` (new), `evals/harness.py`, `evals/judge.py`,
 `evals/suites.py`, `evals/run_evals.py`, `tests/test_evals.py`, `docs/TRD.md` §13, `docs/EVALS.md`,

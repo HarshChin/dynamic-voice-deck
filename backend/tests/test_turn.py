@@ -1092,6 +1092,8 @@ def test_scaffolding_the_model_read_back_is_stripped(spoken: str, expected: str)
         "with a marker reading interrupted by user appended",
         "Two layers, actually.",
         "The browser flushes playback at once.",
+        # Begins with a leaked-label's words but continues as a sentence of its own.
+        "Assistant reasoning is what slide five is about, in a sense.",
     ],
 )
 def test_an_answer_about_the_marker_is_still_spoken(spoken: str) -> None:
@@ -1102,6 +1104,33 @@ def test_an_answer_about_the_marker_is_still_spoken(spoken: str) -> None:
     answer that *begins* by reciting it is an echo.
     """
     assert strip_scaffolding(spoken) == spoken
+
+
+@pytest.mark.parametrize(
+    ("spoken", "expected"),
+    [
+        ("assistant reasoning It would be faster, honestly.", "It would be faster, honestly."),
+        (
+            'assistant turn 2 {"content":"It\'s a chain of small delays.',
+            "It's a chain of small delays.",
+        ),
+        (
+            'Assistant Turn 12 { "content" : "600 milliseconds of quiet.',
+            "600 milliseconds of quiet.",
+        ),
+        ("assistant turn 3 Two layers, actually.", "Two layers, actually."),
+        ("assistant turn failed before producing text", ""),
+    ],
+)
+def test_labels_leaked_from_the_models_own_template_are_stripped(
+    spoken: str, expected: str
+) -> None:
+    """TC-BE-350: TR-088 -- a chat-template label is scaffolding too, even when it is not ours.
+
+    Observed from `qwen/qwen3.8-27b` in the 2026-09-11 release eval; none of these
+    strings exists in this repository, so the model is reading out its own template.
+    """
+    assert strip_scaffolding(spoken) == expected
 
 
 @pytest.mark.parametrize(

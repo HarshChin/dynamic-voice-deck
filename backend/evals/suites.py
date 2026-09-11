@@ -38,9 +38,22 @@ STYLE_MAX_WORDS = 90
 """Longest an answer may be in words (E4)."""
 
 MARKUP = re.compile(
-    r"[*_#`|]|^\s*[-•]\s|\[[^\]]*\]\([^)]*\)|https?://|[\U0001f300-\U0001faff]", re.MULTILINE
+    r"[*_#`|]|^\s*[-•]\s|\[[^\]]*\]\([^)]*\)|https?://|\{\s*\"|[\U0001f300-\U0001faff]",
+    re.MULTILINE,
 )
-"""Anything that reads as written rather than spoken: markdown, bullets, links, emoji."""
+"""Anything that reads as written rather than spoken: markdown, bullets, links, emoji, and a JSON
+object, which is what a model that has confused its answer with its transport writes."""
+
+SENTENCE_END = re.compile(r"(?:(?<=[.!?][\"')\]])|(?<=[.!?]))\s+(?=[\"'(\[]?[A-Z0-9])")
+"""Where one spoken sentence ends and the next begins: a terminator, an optional closing quote or
+bracket, space, and a next sentence that opens with a capital, a digit or a quote -- which is what
+keeps "e.g. on a laptop" from counting as two.
+
+Counted on the answer text, never on the chunker's output. The chunker splits a long sentence at a
+clause so that speech can start early (TR-042), and counting those pieces as sentences made a
+three-sentence, 46-word answer look like six sentences; the 2026-09-11 release run failed six of
+eight style items that way before the mistake was found.
+"""
 
 FULLY_GROUNDED = 2
 """The judge's top score: every claim supported by the notes."""
@@ -151,19 +164,34 @@ def _exclusions(items: list[dict[str, Any]]) -> str:
     return text + "."
 
 
-def _style_failures(answer: str, sentences: list[str]) -> list[str]:
+def count_sentences(answer: str) -> int:
+    """Count the sentences of an answer as a listener would hear them.
+
+    Args:
+        answer: The whole answer.
+
+    Returns:
+        The number of sentences; zero for an empty answer.
+    """
+    text = answer.strip()
+    if not text:
+        return 0
+    return len(SENTENCE_END.split(text))
+
+
+def _style_failures(answer: str) -> list[str]:
     """List the ways an answer is unspeakable (E4).
 
     Args:
         answer: The whole answer.
-        sentences: How it was split for speech.
 
     Returns:
         One short reason per failure; empty when the answer is fine.
     """
     problems: list[str] = []
-    if len(sentences) > STYLE_MAX_SENTENCES:
-        problems.append(f"{len(sentences)} sentences")
+    sentences = count_sentences(answer)
+    if sentences > STYLE_MAX_SENTENCES:
+        problems.append(f"{sentences} sentences")
     words = len(answer.split())
     if words > STYLE_MAX_WORDS:
         problems.append(f"{words} words")
@@ -377,7 +405,7 @@ def e4_style(results: list[SuiteResult]) -> SuiteResult:
             answer = row.get("answer") or ""
             if not answer:
                 continue
-            problems = _style_failures(answer, row.get("sentences") or [])
+            problems = _style_failures(answer)
             items.append(
                 {
                     "id": f"{result.suite}:{row['id']}",

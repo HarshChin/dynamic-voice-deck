@@ -284,6 +284,8 @@ the real providers. Two product defects, both fixed.
 | TC-BE-346 | TR-205 | Given a refusal whose wait exceeds the bound, then the day is recorded as spent, the item is excluded, and the next item is not attempted at all | `::test_a_refusal_longer_than_the_wait_bound_ends_the_runs_attempts` | passing |
 | TC-BE-347 | TR-205 | Given a spent budget, then the judge is not called and its verdict says so | `::test_the_judge_is_not_asked_once_the_day_is_spent` | passing |
 | TC-BE-348 | TR-205 | Then a suite's note separates items never attempted from items the provider refused | `::test_the_note_separates_items_never_attempted_from_items_refused` | passing |
+| TC-BE-349 | E4 | Then E4 counts the listener's sentences, not the chunker's clause splits: a three-sentence answer the chunker cut six ways passes, and "e.g." does not end a sentence | `::test_style_counts_sentences_not_the_chunkers_clause_splits` | passing |
+| TC-BE-350 | TR-088 | Given a segment opening with a label leaked from the model's own chat template ("assistant reasoning", "assistant turn N", the JSON wrapper, the failure string), then the label is stripped, and a sentence that merely begins with those words is not | `tests/test_turn.py::test_labels_leaked_from_the_models_own_template_are_stripped` | passing |
 
 ### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
 
@@ -383,7 +385,7 @@ parsed. Those are the parts that decide whether a recorded number means what it 
 | TC-BE-295 | TR-203 | Then comments and blank lines in a dataset are not read as data | `::test_comments_and_blank_lines_are_not_data` | passing |
 | TC-BE-296 | TR-200 | Given `--limit`, then a dataset is capped, so a runner change can be proved without a full run | `::test_the_limit_caps_a_dataset_for_a_cheap_smoke_run` | passing |
 | TC-BE-297 | E4 | Then an ordinary spoken answer passes the style check | `::test_speech_passes_the_style_check` | passing |
-| TC-BE-298 | E4 | Then markdown, bullets, links, code spans and emoji all fail it | `::test_anything_that_reads_as_written_fails_the_style_check` | passing |
+| TC-BE-298 | E4 | Then markdown, bullets, links, code spans, emoji and a JSON object all fail it | `::test_anything_that_reads_as_written_fails_the_style_check` | passing |
 | TC-BE-299 | E4 | Then an answer past 90 words or 5 sentences fails on length | `::test_an_answer_that_runs_long_fails_on_length` | passing |
 | TC-BE-300 | E4 | Then E4 is derived from answers the other suites produced and needs no model calls of its own | `::test_the_style_suite_reads_every_answer_the_other_suites_produced` | passing |
 | TC-BE-301 | TRD §13.1 | Then a `>=` threshold and a `<=` threshold are compared in the directions they were written | `::test_a_threshold_is_compared_in_the_direction_it_was_written` | passing |
