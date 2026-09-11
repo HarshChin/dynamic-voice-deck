@@ -2179,15 +2179,20 @@ def test_carry_on_resumes_the_walkthrough_where_it_was_cut(isolated_env: Any) ->
     """
     with connect(FakeLLM()) as harness:
         harness.send(type="control", action="start_presentation")
-        harness.recv_until(lambda m: m["type"] == "slide.goto" and m["index"] == 3)
+        harness.recv_until(lambda m: m["type"] == "slide.goto" and m["index"] > 1)
         harness.send(type="interrupt", last_completed_sentence_id=0)
         harness.recv_until(is_type("agent.cancelled"))
+        # Read where it had reached *after* the cut landed, not before sending it: the walkthrough
+        # keeps moving while the interrupt is in flight, so a slide number captured earlier is a
+        # race. This is the same mistake the end-to-end resume test made.
+        cut_at = [m["index"] for m in harness.received if m["type"] == "slide.goto"][-1]
 
         harness.send(type="text.input", text="Carry on.")
         resumed = harness.recv_until(lambda m: m["type"] == "slide.goto")
 
     # The tour picks up on the slide it was speaking, not back at slide one.
-    assert only(resumed, "slide.goto")[0]["index"] == 3
+    assert cut_at > 1
+    assert only(resumed, "slide.goto")[0]["index"] == cut_at
     assert only(resumed, "transcript.user")[0]["text"] == "Carry on."
 
 

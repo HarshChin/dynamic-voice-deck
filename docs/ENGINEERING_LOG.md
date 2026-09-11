@@ -25,6 +25,24 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · CI caught a flake the machine here never showed · uncommitted
+**Scope:** `tests/test_session.py`
+
+**Change:** `test_carry_on_resumes_the_walkthrough_where_it_was_cut` failed on the GitHub runner
+with `assert 4 == 3` while passing every time locally. The test waited for the walkthrough to reach
+slide 3, sent the interrupt, and then asserted the resume started at 3 -- but the walkthrough keeps
+advancing while the interrupt is in flight, so on a faster runner it had already reached slide 4 by
+the time the cut landed. The slide is now read after the cancellation rather than before it.
+
+**Worth recording because it is the second time.** The end-to-end resume test made exactly the same
+mistake an hour earlier, for exactly the same reason: a number captured before an asynchronous
+event is not a fact about what happened after it. Both now read the state they are asserting on
+from the point at which it settled.
+
+The product was never wrong here; both tests were.
+
+**Verification:** the test run five times in a row locally, and the CI run this fixes.
+
 ### 2026-09-11 · v0.1.0 · uncommitted
 **Scope:** the release
 
