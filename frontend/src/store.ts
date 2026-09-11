@@ -285,7 +285,12 @@ export interface SessionData {
    * the substitution lasts: a listener who hears a slower voice should be able to find out why
    * without scrolling a log.
    */
-  readonly fallback: { readonly fromModel: string; readonly toModel: string } | null;
+  readonly fallback: {
+    readonly fromModel: string;
+    readonly toModel: string;
+    /** The turn it answered, so a later turn on the usual model can clear it. */
+    readonly turnId: number;
+  } | null;
   /**
    * Epoch milliseconds until which the provider has asked us to wait (TR-171).
    *
@@ -715,7 +720,11 @@ function reduceServerMessage(
       // back without waiting for a separate error that will never arrive: the turn succeeded.
       return {
         ...logged,
-        fallback: { fromModel: message.from_model, toModel: message.to_model },
+        fallback: {
+          fromModel: message.from_model,
+          toModel: message.to_model,
+          turnId: message.turn_id,
+        },
         rateLimitedUntil: nextReadyAt(state.rateLimitedUntil, message.retry_after_s, now),
       };
     }
@@ -734,8 +743,13 @@ function reduceServerMessage(
         sentences: message.sentences,
       };
       const history = upsertSample(state.metrics.history, sample);
+      // A turn that finished without announcing a substitution was answered by the usual model,
+      // so the banner stops claiming otherwise. Without this it would sit there for the rest of
+      // the session, and once its countdown elapsed it would say nothing about when, either.
+      const stillSubstituted = state.fallback !== null && state.fallback.turnId === message.turn_id;
       return {
         metrics: { last: sample, medians: computeMedians(history), history },
+        fallback: stillSubstituted ? state.fallback : null,
         ...appendEvents(state.events, state.eventSeq, now, [
           { kind: "metrics", message, turnId: message.turn_id, sample },
         ]),

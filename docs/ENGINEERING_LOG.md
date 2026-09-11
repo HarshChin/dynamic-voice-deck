@@ -103,6 +103,13 @@ neither real model would cooperate by being out of quota: the banner appears wit
 and the countdown, the deck still reaches slide 4, the answer is spoken without the tool call in
 it, and no `error` is sent at all, because the turn succeeded.
 
+**A follow-up from a screenshot, the same day.** The banner said which model was answering but not
+when the usual one would be back, and worse, it never went away: `fallback` was only cleared when
+the session was, so once its countdown elapsed it sat there indefinitely claiming a substitution
+that may long since have ended. It is now scoped to the turn it explains -- a later turn that
+completes without announcing one clears it -- and it names the hosted model again in the countdown
+rather than relying on the reader to carry it across the sentence.
+
 **Follow-ups:** the local path is a fallback, not an offline mode -- speech-to-text still needs the
 network. Making the whole thing offline needs the `local` STT provider, which is still unbuilt.
 

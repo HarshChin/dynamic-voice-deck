@@ -34,7 +34,7 @@ describe("FallbackBanner", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("back in 15 min");
+    expect(screen.getByRole("status")).toHaveTextContent("qwen/qwen3.8-27b back in 15 min");
   });
 
   it("TC-FE-212: counts that estimate down and drops it once it has passed", () => {
@@ -46,7 +46,7 @@ describe("FallbackBanner", () => {
         now={now}
       />,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("back in 5s");
+    expect(screen.getByRole("status")).toHaveTextContent("qwen/qwen3.8-27b back in 5s");
 
     act(() => {
       clock += 6_000;

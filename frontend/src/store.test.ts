@@ -526,6 +526,7 @@ describe("a substituted model (TR-085)", () => {
     expect(useSessionStore.getState().fallback).toEqual({
       fromModel: "qwen/qwen3.8-27b",
       toModel: "qwen2.5:7b",
+      turnId: 1,
     });
   });
 
@@ -588,5 +589,65 @@ describe("the wait that comes with a substitution (TR-085)", () => {
     });
 
     expect(useSessionStore.getState().rateLimitedUntil).toBeNull();
+  });
+});
+
+describe("the banner stops claiming a substitution that has ended (TR-085)", () => {
+  /**
+   * Announce that a turn fell back to the local model.
+   *
+   * @param turnId - The turn being answered.
+   */
+  function fellBackOn(turnId: number): void {
+    useSessionStore.getState().applyServerMessage({
+      type: "provider.fallback",
+      turn_id: turnId,
+      stage: "llm",
+      from_model: "qwen/qwen3.8-27b",
+      to_model: "qwen2.5:7b",
+      reason: "rate limit",
+      retry_after_s: 30,
+    });
+  }
+
+  /**
+   * End a turn.
+   *
+   * @param turnId - The turn that finished.
+   */
+  function turnEnded(turnId: number): void {
+    useSessionStore.getState().applyServerMessage({
+      type: "metrics",
+      turn_id: turnId,
+      stt_ms: null,
+      llm_ttft_ms: 200,
+      llm_total_ms: 900,
+      tts_ttfb_ms: 300,
+      sentences: 2,
+    });
+  }
+
+  it("TC-FE-219: the banner survives the turn it is explaining", () => {
+    fellBackOn(1);
+    turnEnded(1);
+
+    expect(useSessionStore.getState().fallback).not.toBeNull();
+  });
+
+  it("TC-FE-220: and goes once a later turn is answered by the usual model", () => {
+    fellBackOn(1);
+    turnEnded(1);
+    turnEnded(2);
+
+    expect(useSessionStore.getState().fallback).toBeNull();
+  });
+
+  it("TC-FE-221: a run of substituted turns keeps it up throughout", () => {
+    fellBackOn(1);
+    turnEnded(1);
+    fellBackOn(2);
+    turnEnded(2);
+
+    expect(useSessionStore.getState().fallback?.turnId).toBe(2);
   });
 });

@@ -64,7 +64,14 @@ export function FallbackBanner({
       <span>
         <strong>{fromModel}</strong> hit its rate limit — answering with <strong>{toModel}</strong>{" "}
         on this machine
-        {remaining > 0 ? `, back in ${describeWait(remaining)}` : ""}
+        {remaining > 0 ? (
+          <>
+            {" · "}
+            <strong>{fromModel}</strong> back in {describeWait(remaining)}
+          </>
+        ) : (
+          ""
+        )}
       </span>
     </p>
   );

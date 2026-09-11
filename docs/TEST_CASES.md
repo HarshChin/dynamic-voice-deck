@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 559 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 172 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 559 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 175 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -294,6 +294,9 @@ one thing that must never happen: a half-spoken answer restarted on another mode
 | TC-FE-216 | TR-085 | Then clearing the session forgets it | `::TC-FE-216` | passing |
 | TC-FE-217 | TR-085 | Then the wait travels with the substitution, since no error message will carry it | `::TC-FE-217` | passing |
 | TC-FE-218 | TR-085 / TR-171 | Given a substitution with no stated wait, then the countdown is left alone rather than set to now | `::TC-FE-218` | passing |
+| TC-FE-219 | TR-085 | Then the banner survives the turn it is explaining | `::TC-FE-219` | passing |
+| TC-FE-220 | TR-085 | And goes once a later turn is answered by the usual model, rather than sitting there for the session | `::TC-FE-220` | passing |
+| TC-FE-221 | TR-085 | Then a run of substituted turns keeps it up throughout | `::TC-FE-221` | passing |
 
 ### A capture that could never end (added 2026-09-11)
 
