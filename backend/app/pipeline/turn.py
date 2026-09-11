@@ -292,9 +292,13 @@ async def run_turn(
         # system note removed the API error but produced worse output still -- once,
         # silence, and once the literal text "highlightbullet(1)" spoken aloud,
         # because the model wanted a tool, could not see one, and typed it instead.
+        # Models already announced as answering this turn, so a substitution is reported once
+        # however many requests the turn takes.
+        announced: set[str] = set()
         for step in range(MAX_LLM_STEPS):
             finish_reason, applied = await _run_step(
                 turn_id=turn_id,
+                announced=announced,
                 messages=messages,
                 tools=tools,
                 llm=llm,
@@ -400,6 +404,7 @@ async def _run_step(
     result: TurnResult,
     metrics: TurnMetrics,
     emit: Emit,
+    announced: set[str],
 ) -> tuple[str, bool]:
     """Consume one model response, speaking and navigating as it arrives.
 
@@ -416,6 +421,8 @@ async def _run_step(
         result: Turn summary, appended to when an action is applied.
         metrics: Timings for this turn, mutated in place.
         emit: Sends a message to the client.
+        announced: Models already reported as answering this turn, mutated here
+            so a substitution is announced once however many requests it takes.
 
     Returns:
         The reason generation stopped, and whether any tool call in this step
@@ -448,15 +455,21 @@ async def _run_step(
                 # The provider has told us it could not answer and something else will.
                 # Announced before a word is spoken, so the transcript explains why the
                 # voice that follows is slower than usual (TR-085).
-                await emit(
-                    ProviderFallbackMsg(
-                        turn_id=turn_id,
-                        from_model=event.from_model,
-                        to_model=event.to_model,
-                        reason=event.reason,
-                        retry_after_s=event.retry_after_s,
+                #
+                # Once per turn, not once per request. A turn that navigates makes two or three
+                # model calls and each one is refused separately, so without this the listener is
+                # told the same thing three times and the log fills with it.
+                if event.to_model not in announced:
+                    announced.add(event.to_model)
+                    await emit(
+                        ProviderFallbackMsg(
+                            turn_id=turn_id,
+                            from_model=event.from_model,
+                            to_model=event.to_model,
+                            reason=event.reason,
+                            retry_after_s=event.retry_after_s,
+                        )
                     )
-                )
             elif isinstance(event, LLMDone):
                 finish_reason = event.finish_reason
                 for sentence in chunker.flush():
@@ -593,6 +606,29 @@ it get ahead of what the listener could plausibly still hear.
 """
 
 
+SPOKEN_SCAFFOLDING = re.compile(
+    r"^\s*\[?\s*(?:"
+    r"interrupted by user(?:\s+before speaking)?"
+    r"|looking at slide\s+\d+\s+of\s+\d+(?:\s*:[^\]]*)?"
+    r")\s*\]?[\s:,.\u2014-]*",
+    re.IGNORECASE,
+)
+"""Prompt scaffolding echoed back at the start of an answer (TR-088).
+
+The conversation the model is given contains two bracketed markers that are
+instructions to it rather than things to say: the note recording where a turn was
+cut off, and the stamp naming the slide the room is looking at. A model that
+continues its own history instead of answering afresh reads them out -- observed
+from the local fallback as "interrupted by user before speaking Detection runs in
+your browser" and "Looking at slide 1 of 6:".
+
+Anchored to the start of a segment, and stripped rather than dropped. Slide 4's
+own bullet is ``The cut is marked "[interrupted by user]"`` and its notes explain
+that marker, so an answer *about* it must still be speakable; what must not be
+spoken is an answer that *begins* by reciting it. Stripping rather than dropping
+keeps the sentence the echo was prefixed to, which is usually the real answer.
+"""
+
 TOOL_SYNTAX = re.compile(
     r"\b(go[\s_-]?to[\s_-]?slide|highlight[\s_-]?bullet)\s*\(",
     re.IGNORECASE,
@@ -604,6 +640,20 @@ tool -- "I call a function called go_to_slide" -- and only a call has arguments
 after it. Matching the name alone would silence the slide that explains how
 navigation works.
 """
+
+
+def strip_scaffolding(sentence: str) -> str:
+    """Remove prompt scaffolding the model has read back at the start of a segment.
+
+    Args:
+        sentence: A segment about to be spoken.
+
+    Returns:
+        The segment without a leading marker, which may be empty if that was all
+        it contained.
+    """
+    stripped = SPOKEN_SCAFFOLDING.sub("", sentence, count=1)
+    return stripped.strip()
 
 
 def looks_like_tool_syntax(sentence: str) -> bool:
@@ -714,6 +764,12 @@ class SpeechSender:
                 loudly instead of blocking.
         """
         await self._raise_if_finished()
+        spoken = strip_scaffolding(sentence)
+        if spoken != sentence:
+            logger.info("speech.scaffolding_stripped", turn_id=self._turn_id, original=sentence)
+            if not spoken:
+                return
+            sentence = spoken
         if looks_like_tool_syntax(sentence):
             # TR-086. Smaller models sometimes write the call instead of making it, and the
             # listener then hears `go to slide(4, "User asked about interruptions")` read aloud.

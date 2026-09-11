@@ -25,6 +25,46 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Four bugs from one exported session · uncommitted
+**Scope:** `app/pipeline/turn.py`, `app/session.py`, `docs/TRD.md` (TR-088, TR-089)
+
+**Source:** a session log exported from the browser, run against the local fallback model because
+the free tier was spent. Every one of these is a defect the hosted model was hiding.
+
+**The agent read its own instructions out loud.** Three times:
+`"interrupted by user before speaking Detection runs in your browser,"`, and once
+`"Looking at slide 1 of 6:"`. The conversation carries two bracketed markers that are notes to the
+model rather than things to say -- where a turn was cut off, and which slide the room is looking at
+-- and a model that continues its own history instead of answering afresh reads them aloud. The
+brackets were gone in the output, so it was paraphrasing them, not copying them.
+
+Fixed at the speech boundary rather than in the prompt, because any model can echo any part of its
+input and only a guard there makes it never reach a listener. **Anchored to the start of a segment,
+and that detail is the whole design:** slide 4's own bullet is `The cut is marked "[interrupted by
+user]"` and its notes explain the marker, so an answer *about* it has to stay speakable. An answer
+that *opens* by reciting it is an echo. Stripped rather than dropped, because the echo is a prefix
+and what follows it is usually the real answer -- `"...before speaking Detection runs in your
+browser,"` becomes `"Detection runs in your browser,"`.
+
+**A substitution was announced three times in one turn.** A turn that navigates makes two or three
+model requests, each refused separately by the rate limit, each producing its own
+`provider.fallback`. Announced once per turn now, which is what the listener experiences.
+
+**A cough destroyed an answer.** In the log: a question at turn 6, a turn 7 that transcribed to
+nothing and produced no answer, and then the same question asked again at turn 8 -- "I said, can
+you go to the first slide?". The filler denylist was being applied inside `run_turn`, which is
+*after* `start_turn` has already cancelled whatever was running. So a stray noise during an answer
+killed that answer and replaced it with nothing at all. It is judged in `handle_utterance` now,
+before anything is cancelled.
+
+**And while fixing that, a smaller one it was hiding.** The filler path announced LISTENING
+unconditionally, so a cough over an answer told the client the agent had stopped while it was
+audibly still speaking. It only takes the floor back if nobody has it.
+
+**Verification:** 574 backend, 183 frontend, five end-to-end, lint clean. The scaffolding guard is
+tested in both directions -- five echoes stripped, four legitimate mentions of the same words left
+alone -- because a guard that silenced slide 4 would be a worse bug than the one it fixed.
+
 ### 2026-09-11 · Slides that are arranged rather than listed, without letting the agent and the screen diverge · uncommitted
 **Scope:** `app/decks/models.py`, `app/decks/anatomy_of_a_voice_agent.json`,
 `frontend/src/protocol.ts`, `frontend/src/components/Slide.{tsx,module.css}`, `docs/PRD.md`,

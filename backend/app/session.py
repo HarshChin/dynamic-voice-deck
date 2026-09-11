@@ -39,6 +39,7 @@ from .pipeline.prompt import PromptBuilder
 from .pipeline.slides import SlideController
 from .pipeline.turn import (
     cancel_task,
+    is_filler,
     provider_error_message,
     run_presentation,
     run_turn,
@@ -476,11 +477,24 @@ class Session:
             await self.set_state(SessionState.LISTENING)
             return
 
-        if not transcript.text.strip():
-            # Silence, a cough, a keyboard. Not an error: just go back to
-            # listening without troubling the model or the user (TR-172).
-            logger.info("session.empty_transcript", session_id=self.id)
-            await self.set_state(SessionState.LISTENING)
+        if is_filler(transcript.text):
+            # Silence, a cough, a keyboard, or one of Whisper's hallucinations on
+            # near-silence. Not an error: go back to listening without troubling
+            # the model or the user (TR-172).
+            #
+            # Judged *here*, before `start_turn`, and that placement is the whole
+            # point. `start_turn` cancels whatever turn is running, so recognising
+            # filler inside `run_turn` -- after the cancellation -- meant a cough
+            # during an answer killed that answer and replaced it with nothing.
+            # Observed in a live session: a question was cut off by a stray
+            # utterance that transcribed to nothing, and the user had to ask again.
+            logger.info("session.empty_transcript", session_id=self.id, text=transcript.text)
+            # Only take the floor back if nobody has it. A turn may still be
+            # speaking -- the cough happened over an answer -- and announcing
+            # LISTENING would tell the client the agent had stopped when it is
+            # audibly still going.
+            if self._task is None or self._task.done():
+                await self.set_state(SessionState.LISTENING)
             return
 
         await self.start_turn(transcript.text, stt_ms=transcript.latency_ms)

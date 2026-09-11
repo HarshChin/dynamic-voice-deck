@@ -38,6 +38,7 @@ from app.pipeline.turn import (
     looks_like_tool_syntax,
     provider_error_message,
     run_turn,
+    strip_scaffolding,
 )
 from app.protocol import (
     ErrorCode,
@@ -1055,3 +1056,48 @@ def test_an_answer_that_merely_names_a_tool_is_still_spoken(sentence: str) -> No
     tool, a mistyped call follows it with arguments.
     """
     assert not looks_like_tool_syntax(sentence)
+
+
+@pytest.mark.parametrize(
+    ("spoken", "expected"),
+    [
+        # Observed from the local fallback model, which continued its own history instead of
+        # answering afresh and read the markers out.
+        (
+            "interrupted by user before speaking Detection runs in your browser,",
+            "Detection runs in your browser,",
+        ),
+        ("interrupted by user before speaking Sure,", "Sure,"),
+        ('[Looking at slide 3 of 6: "Hearing"] Detection runs here.', "Detection runs here."),
+        ("[interrupted by user] Two layers, actually.", "Two layers, actually."),
+        ("Looking at slide 1 of 6:", ""),
+    ],
+)
+def test_scaffolding_the_model_read_back_is_stripped(spoken: str, expected: str) -> None:
+    """TC-BE-334: TR-088 -- a marker meant for the model is never read to the listener.
+
+    The conversation carries two bracketed notes that are instructions rather
+    than things to say: where a turn was cut off, and which slide the room is
+    looking at. Stripping rather than dropping keeps the sentence the echo was
+    prefixed to, which is usually the actual answer.
+    """
+    assert strip_scaffolding(spoken) == expected
+
+
+@pytest.mark.parametrize(
+    "spoken",
+    [
+        'The cut is marked "[interrupted by user]".',
+        "with a marker reading interrupted by user appended",
+        "Two layers, actually.",
+        "The browser flushes playback at once.",
+    ],
+)
+def test_an_answer_about_the_marker_is_still_spoken(spoken: str) -> None:
+    """TC-BE-335: TR-088 -- slide 4 explains that marker, so it must stay speakable.
+
+    The guard is anchored to the start of a segment for exactly this reason: an
+    answer that *mentions* the marker is the deck doing its job, and only an
+    answer that *begins* by reciting it is an echo.
+    """
+    assert strip_scaffolding(spoken) == spoken

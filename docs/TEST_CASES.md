@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 563 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 183 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 574 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 183 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -265,6 +265,18 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
+
+### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
+
+Both found in one exported session against the local fallback model. The first is a model reading
+its own instructions aloud; the second is why a question had to be asked twice.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-334 | TR-088 | Given a segment opening with the interruption marker or the slide stamp, then the prefix is stripped and the real answer survives | `tests/test_turn.py::test_scaffolding_the_model_read_back_is_stripped` | passing |
+| TC-BE-335 | TR-088 | Given an answer that quotes the marker, as slide 4 does, then it is spoken unchanged | `::test_an_answer_about_the_marker_is_still_spoken` | passing |
+| TC-BE-336 | TR-085 | Given a turn that makes two model requests and is rate limited on both, then the substitution is announced once | `tests/test_session.py::test_a_substitution_is_announced_once_however_many_requests_the_turn_makes` | passing |
+| TC-BE-337 | TR-089 | Given a cough mid-answer that transcribes to filler, then the answer runs to its end, nothing is cancelled, and no turn is opened | `::test_a_cough_during_an_answer_does_not_kill_the_answer` | passing |
 
 ### Slide arrangements (added 2026-09-11)
 

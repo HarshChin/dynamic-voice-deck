@@ -2247,3 +2247,66 @@ def test_a_substituted_model_is_announced_to_the_client(isolated_env: Any) -> No
     assert [m["text"] for m in only(turn, "transcript.agent")] == ["Answering locally."]
     # And no error: the turn succeeded, so nothing should claim otherwise.
     assert only(turn, "error") == []
+
+
+def test_a_substitution_is_announced_once_however_many_requests_the_turn_makes(
+    isolated_env: Any,
+) -> None:
+    """TC-BE-336: TR-085 -- a navigating turn makes two model calls, not two announcements.
+
+    Each request is refused separately by a rate limit, so without a per-turn
+    guard the listener is told the same thing twice and the log fills with it.
+    Observed three times in one turn during a live session.
+    """
+    primary = FailingLLM(ProviderError("groq_llm", "HTTP 429", retryable=True, retry_after=12.0))
+    # A call and nothing said, which is exactly what costs a second model request: the tool
+    # result goes back and the model is asked again for the words.
+    local = FakeLLM(
+        [
+            ToolCallDelta(call_id="c1", name="go_to_slide", arguments={"slide_index": 4}),
+            LLMDone(finish_reason="tool_calls"),
+        ]
+    )
+    llm = FallbackLLM(
+        primary=primary,
+        fallback=local,
+        primary_model="qwen/qwen3.8-27b",
+        fallback_model="qwen2.5:7b",
+    )
+
+    with connect(llm) as harness:
+        turn = harness.ask("How do you handle interruptions?")
+
+    assert len(only(turn, "provider.fallback")) == 1
+    # The turn really did make more than one request, which is what makes the count meaningful.
+    assert primary.calls > 1
+
+
+def test_a_cough_during_an_answer_does_not_kill_the_answer(isolated_env: Any) -> None:
+    """TC-BE-337: TR-172 -- filler is recognised before the running turn is cancelled.
+
+    Starting a turn cancels whatever was running, so judging filler inside
+    ``run_turn`` meant a stray noise during an answer destroyed that answer and
+    replaced it with nothing. Observed in a live session: a question was cut off
+    by an utterance that transcribed to a hallucinated "Thank you.", and the
+    listener had to ask again.
+    """
+    stt = FakeSTT(default_text="Thank you.")
+    llm = FakeLLM(long_script(), delay_s=STEP_DELAY_S)
+
+    with connect(llm, stt=stt) as harness:
+        harness.send(type="text.input", text="Tell me everything.")
+        harness.recv_until(is_type("transcript.agent"))
+
+        # A cough, mid-answer. It transcribes to filler, so it must change nothing.
+        harness.send(type="speech.end", duration_ms=400)
+        harness.ws.send_bytes(b"\x00\x01" * 8_000)
+
+        # The answer reaches its own end rather than being cut short. Waited for by the turn's
+        # metrics, which only a turn that finished produces.
+        rest = harness.recv_until(is_type("metrics"))
+
+    assert only(rest, "agent.cancelled") == []
+    assert llm.cancelled == 0
+    # And the filler never became a turn of its own.
+    assert [m["text"] for m in only(rest, "transcript.user")] == []
