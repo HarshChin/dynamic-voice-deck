@@ -25,6 +25,58 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · v0.1.0 · uncommitted
+**Scope:** the release
+
+**What shipped.** A voice-first slide presenter that answers spoken questions about a six-slide
+deck, navigates by tool call, and can be interrupted mid-sentence. Open-weight models end to end:
+Whisper large-v3-turbo and Qwen3.8-27b on Groq, Kokoro-82M in process. Every part of turn-taking
+that a speech-to-speech API would have owned -- onset, endpointing, the two tiers of barge-in,
+history truncation -- is implemented here and tested.
+
+**The numbers that describe it.**
+
+| | |
+|---|---|
+| Question asked to first audio | 777 ms, against a 1,500 ms budget |
+| Interrupt to `agent.cancelled` | 1.9 ms, with zero frames sent after |
+| Audio already in the browser at a cut | 2.6 s -- the reason the client tier exists |
+| Walkthrough to first audio | 202 ms, no model call involved |
+| Backend tests | 542 passing, zero skipped, 97 % line coverage |
+| Frontend tests | 155 passing across 17 files |
+| End to end | 5 Playwright cases, green in 11 s |
+
+**Five things worth knowing about how it was built.**
+
+*The tests found the bugs, not the other way round.* Three of the microphone's behaviours disagreed
+with their own specification -- the minimum-speech gate counted padding as speech, every upload
+carried 600 ms of trailing silence, and onset always waited for three frames -- and none of the
+three was visible until the tests for those rows were finally written. Two more came out of the
+browser: a checkbox disabled the arrow keys, and the push-to-talk button swallowed the first space
+bar press.
+
+*Four failures are recorded that produced no code.* Silero VAD could not be made to load under
+Vite, in four distinct ways, each verified in a real browser before the next was tried. The
+replacement is an energy threshold, and the deck says so out loud on slide 3.
+
+*The instrument was checked before its readings were believed.* The eval judge is scored against
+ten hand-labelled items on every run, half of them deliberately nearly-right, and a run below 90 %
+agreement says its own numbers should not be trusted.
+
+*A measurement that measures the wrong thing was fixed twice.* An item refused by the free tier is
+excluded from an eval's denominator rather than counted wrong, and the first live barge-in probe
+was measuring my own socket buffer rather than the server. Both would have produced a number that
+looked fine.
+
+*The free tier shaped the product.* Four questions in two minutes exhausts the per-minute ceiling,
+which is why there is a countdown chip rather than silence, why the walkthrough reads its own notes
+instead of paraphrasing them through a model, and why the release eval run against the default
+model is still pending. That constraint is recorded in `docs/EVALS.md` rather than smoothed over.
+
+**Known and open.** The release eval run for `qwen/qwen3.8-27b` is blocked on the daily budget and
+is the first thing to do when it resets. Streaming transcription, a local model path and deck
+generation from a topic (PRD F14) are designed and not built.
+
 ### 2026-09-11 · Phase 5: evals that can fail, and a README with numbers in it · uncommitted
 **Scope:** `backend/evals/` (harness, six suites, four datasets, two judge rubrics, runner,
 reporter), `backend/tests/test_evals.py`, `README.md`, `docs/EVALS.md`, `docs/PRD.md`,
