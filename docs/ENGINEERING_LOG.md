@@ -25,6 +25,57 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Slides that are arranged rather than listed, without letting the agent and the screen diverge · uncommitted
+**Scope:** `app/decks/models.py`, `app/decks/anatomy_of_a_voice_agent.json`,
+`frontend/src/protocol.ts`, `frontend/src/components/Slide.{tsx,module.css}`, `docs/PRD.md`,
+`docs/TRD.md` (TR-087)
+
+**Asked for:** a deck that looks better than a bulleted list, with the system adapted to match.
+
+**The design problem is not CSS.** A deck of rich layouts is easy; a deck of rich layouts that an
+agent can talk about accurately is not. The model is given each slide's title and bullets and
+nothing else, so the moment a layout carries text the bullets do not, the agent can assert things
+nobody can see, and the room can read things the agent does not know about. That is a worse product
+than plain bullets, not a better one.
+
+**So a figure references bullets rather than carrying text.** Each item in an arrangement names the
+bullet indices it presents, and a model validator rejects any figure that does not cover every
+bullet exactly once. Three consequences fall out of that one rule:
+
+- the screen and the prompt cannot drift apart, because the same list produces both;
+- `highlight_bullet(n)` keeps working in every arrangement, because the frontend emphasises
+  whichever item claims bullet `n`;
+- the prompt builder, the keyword fallback and the walkthrough notes needed **no changes at all** --
+  they all read `bullets`, which is untouched.
+
+**Three arrangements, chosen by what the content is.** `metrics` for a slide whose points are
+measurements, `split` for one with two or three sides, `flow` for a sequence. The latency slide
+becomes six value cards; barge-in becomes two columns, browser and server; tool calling becomes
+three numbered steps. An unknown kind, or no figure at all, renders as the old list, so a deck
+authored against a newer schema renders less prettily rather than not at all.
+
+**What the screenshots changed.** Three things looked wrong only once drawn:
+
+- A metric card printed its caption *and* its bullet, so the room read "600 ms", "of silence ends
+  your turn", and "Endpointing: 600 ms of silence ends your turn". The card is a compression of the
+  bullet, so the bullet is now in the document for a screen reader and out of the way visually.
+- Column headings echoed the bullets under them -- "Tier one" above "Tier one: the browser flushes
+  playback at once". The headings changed rather than the bullets, because the bullets are the
+  agent's ground truth and read correctly on their own. They are "In the browser" and "On the
+  server" now.
+- Centring the body clipped the densest slide at *both* ends. Flow starts at the top and its step
+  captions share a line with their headings, which was three lines of the six-bullet slide.
+
+**And a mistake worth recording.** After editing the deck JSON I rebuilt the frontend and could not
+understand why the new headings were not on screen. The deck is loaded once at startup; the
+backend was still serving the copy it read minutes earlier. Rebuilding the client is not restarting
+the server, and nothing in the output said so.
+
+**Verification:** four backend cases on the covering rule, six frontend cases on the arrangements,
+including one that drives `highlight_bullet` through all three and asserts exactly one element is
+emphasised. 563 backend, 183 frontend, five end-to-end. A live turn against the real providers
+routed to slide 4 and rendered the split arrangement with no console errors.
+
 ### 2026-09-11 · Degrade instead of dying: a local model answers when the free tier cannot · uncommitted
 **Scope:** `app/providers/{openai_compat.py,groq_llm.py,ollama_llm.py,fallback.py,registry.py}`,
 `app/providers/base.py`, `app/protocol.py`, `app/pipeline/turn.py`, `app/config.py`,

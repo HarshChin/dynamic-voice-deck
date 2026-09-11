@@ -29,6 +29,7 @@ from app.decks.models import (
 )
 from app.decks.repository import DeckRepository, DeckSummary
 from app.errors import DeckError
+from pydantic import ValidationError
 
 SHIPPED_DECK_ID = "anatomy_of_a_voice_agent"
 """Id of the deck shipped inside the package (PRD §4)."""
@@ -402,3 +403,78 @@ def test_decks_are_read_once_at_construction_and_never_re_read(tmp_path: Path) -
     assert repository.list_decks() == [
         DeckSummary(id="test_deck", title="Test Deck", slide_count=5)
     ]
+
+
+def test_a_figure_must_show_every_bullet_exactly_once() -> None:
+    """TC-BE-330: PRD F1 -- the screen and the agent's view of a slide are the same list.
+
+    The model is given a slide's bullets and nothing else. A bullet the figure
+    omits is therefore something the agent can assert that nobody can see, and a
+    bullet shown twice is a point the room hears once and reads twice. Neither
+    is visible without this check, and both make a slide lie about itself.
+    """
+    base = {
+        "index": 1,
+        "title": "A slide",
+        "bullets": ["first", "second"],
+        "notes": "Notes.",
+        "aliases": ["a slide", "the slide"],
+    }
+
+    with pytest.raises(ValidationError, match="every bullet exactly once"):
+        Slide(**base, figure={"kind": "metrics", "items": [{"bullets": [0], "heading": "one"}]})
+
+    with pytest.raises(ValidationError, match="every bullet exactly once"):
+        Slide(
+            **base,
+            figure={
+                "kind": "metrics",
+                "items": [{"bullets": [0, 0, 1], "heading": "one"}],
+            },
+        )
+
+    with pytest.raises(ValidationError, match="every bullet exactly once"):
+        Slide(**base, figure={"kind": "metrics", "items": [{"bullets": [0, 5], "heading": "one"}]})
+
+
+def test_a_figure_may_group_bullets_across_its_items() -> None:
+    """TC-BE-331: PRD F1 -- a column or a step presents several points at once."""
+    slide = Slide(
+        index=1,
+        title="A slide",
+        bullets=["first", "second", "third"],
+        notes="Notes.",
+        aliases=["a slide", "the slide"],
+        figure={
+            "kind": "split",
+            "items": [
+                {"bullets": [0], "heading": "Left"},
+                {"bullets": [1, 2], "heading": "Right"},
+            ],
+        },
+    )
+
+    assert slide.figure is not None
+    assert [item.heading for item in slide.figure.items] == ["Left", "Right"]
+
+
+def test_a_slide_without_a_figure_is_still_valid() -> None:
+    """TC-BE-332: PRD F1 -- the arrangement is optional; a plain list is a slide."""
+    slide = Slide(
+        index=1,
+        title="A slide",
+        bullets=["first"],
+        notes="Notes.",
+        aliases=["a slide", "the slide"],
+    )
+
+    assert slide.figure is None
+
+
+def test_every_slide_in_the_shipped_deck_declares_an_arrangement() -> None:
+    """TC-BE-333: PRD F1 -- the deck this product presents is not a wall of bullets."""
+    deck = DeckRepository().get("anatomy_of_a_voice_agent")
+
+    for slide in deck.slides:
+        assert slide.figure is not None, f"slide {slide.index} has no arrangement"
+        assert slide.figure.items, f"slide {slide.index} has an empty arrangement"

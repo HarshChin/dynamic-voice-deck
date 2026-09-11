@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 559 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 175 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 563 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 183 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -265,6 +265,25 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
+
+### Slide arrangements (added 2026-09-11)
+
+A slide may declare how its points are laid out. The rule that makes it safe is that a figure item
+references the bullets it presents rather than carrying its own copy of them, so the agent's view
+of a slide and the room's view of it cannot diverge.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-330 | TR-087 | Given a figure that omits, repeats or invents a bullet, then the deck is rejected at load | `tests/test_decks.py::test_a_figure_must_show_every_bullet_exactly_once` | passing |
+| TC-BE-331 | TR-087 | Given an item naming several bullets, then it is accepted: a column presents more than one point | `::test_a_figure_may_group_bullets_across_its_items` | passing |
+| TC-BE-332 | TR-087 | Given no figure, then the slide is still valid and renders as a list | `::test_a_slide_without_a_figure_is_still_valid` | passing |
+| TC-BE-333 | PRD F1 | Then every slide in the shipped deck declares an arrangement | `::test_every_slide_in_the_shipped_deck_declares_an_arrangement` | passing |
+| TC-FE-230 | PRD F1 | Given no figure, then the plain list is rendered | `src/components/Slide.test.tsx::TC-FE-230` | passing |
+| TC-FE-231 | TR-087 | Given a metrics figure, then the value and caption are shown and the bullet stays in the document for a screen reader | `::TC-FE-231` | passing |
+| TC-FE-232 | TR-087 | Given a split figure, then each column carries only its own bullets | `::TC-FE-232` | passing |
+| TC-FE-233 | TR-087 | Given a flow figure, then steps are numbered in the figure's order | `::TC-FE-233` | passing |
+| TC-FE-234 | TR-087 / F5 | Given `highlight_bullet(2)`, then exactly one item is emphasised, in every arrangement | `::TC-FE-234` | passing |
+| TC-FE-235 | TR-087 | Given an arrangement this build does not know, then it degrades to a list rather than rendering nothing | `::TC-FE-235` | passing |
 
 ### Answering on a local model when the hosted one is rate limited (added 2026-09-11)
 

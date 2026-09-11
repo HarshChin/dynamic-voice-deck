@@ -23,7 +23,29 @@
         "title slide",
         "first slide",
         "demo"
-      ]
+      ],
+      "figure": {
+        "kind": "split",
+        "items": [
+          {
+            "bullets": [
+              0,
+              4
+            ],
+            "heading": "What this is",
+            "caption": ""
+          },
+          {
+            "bullets": [
+              1,
+              2,
+              3
+            ],
+            "heading": "How to use it",
+            "caption": ""
+          }
+        ]
+      }
     },
     {
       "index": 2,
@@ -49,7 +71,54 @@
         "how fast are you",
         "lag",
         "time to first audio"
-      ]
+      ],
+      "figure": {
+        "kind": "metrics",
+        "items": [
+          {
+            "bullets": [
+              0
+            ],
+            "heading": "600 ms",
+            "caption": "of silence ends your turn"
+          },
+          {
+            "bullets": [
+              1
+            ],
+            "heading": "300 ms",
+            "caption": "speech to text"
+          },
+          {
+            "bullets": [
+              2
+            ],
+            "heading": "250 ms",
+            "caption": "first token, budgeted"
+          },
+          {
+            "bullets": [
+              3
+            ],
+            "heading": "250 ms",
+            "caption": "first audio from Kokoro"
+          },
+          {
+            "bullets": [
+              4
+            ],
+            "heading": "1.5 s",
+            "caption": "to first sound; 2.5 s at p95"
+          },
+          {
+            "bullets": [
+              5
+            ],
+            "heading": "0.7-2.3 s",
+            "caption": "first token, measured"
+          }
+        ]
+      }
     },
     {
       "index": 3,
@@ -75,7 +144,47 @@
         "endpointing",
         "voice activity detection",
         "energy threshold"
-      ]
+      ],
+      "figure": {
+        "kind": "metrics",
+        "items": [
+          {
+            "bullets": [
+              0
+            ],
+            "heading": "in-browser",
+            "caption": "detection, not on a server"
+          },
+          {
+            "bullets": [
+              1
+            ],
+            "heading": "600 ms",
+            "caption": "of quiet means you are done"
+          },
+          {
+            "bullets": [
+              2
+            ],
+            "heading": "250 ms",
+            "caption": "below this is a misfire"
+          },
+          {
+            "bullets": [
+              3
+            ],
+            "heading": "300 ms",
+            "caption": "of pre-roll saves your first syllable"
+          },
+          {
+            "bullets": [
+              4
+            ],
+            "heading": "one call",
+            "caption": "per finished turn"
+          }
+        ]
+      }
     },
     {
       "index": 4,
@@ -98,7 +207,29 @@
         "cancel",
         "interrupting",
         "can i interrupt you"
-      ]
+      ],
+      "figure": {
+        "kind": "split",
+        "items": [
+          {
+            "bullets": [
+              0,
+              4
+            ],
+            "heading": "In the browser",
+            "caption": "tier one, and the only tier you feel"
+          },
+          {
+            "bullets": [
+              1,
+              2,
+              3
+            ],
+            "heading": "On the server",
+            "caption": "tier two, and what I remember of it"
+          }
+        ]
+      }
     },
     {
       "index": 5,
@@ -123,7 +254,36 @@
         "go to slide",
         "reasoning",
         "thinking"
-      ]
+      ],
+      "figure": {
+        "kind": "flow",
+        "items": [
+          {
+            "bullets": [
+              0
+            ],
+            "heading": "I read the deck",
+            "caption": "titles, bullets, and this slide's notes"
+          },
+          {
+            "bullets": [
+              1,
+              2
+            ],
+            "heading": "I call a function",
+            "caption": "which is what moves the deck"
+          },
+          {
+            "bullets": [
+              3,
+              4,
+              5
+            ],
+            "heading": "The server checks",
+            "caption": "and routes anyway if I forget"
+          }
+        ]
+      }
     },
     {
       "index": 6,
@@ -149,7 +309,29 @@
         "end",
         "limitations",
         "what would you do differently"
-      ]
+      ],
+      "figure": {
+        "kind": "split",
+        "items": [
+          {
+            "bullets": [
+              0,
+              1
+            ],
+            "heading": "The alternative",
+            "caption": "faster, and it hides the interesting part"
+          },
+          {
+            "bullets": [
+              2,
+              3,
+              4
+            ],
+            "heading": "This pipeline",
+            "caption": "slower, and every millisecond is ours"
+          }
+        ]
+      }
     }
   ]
 }

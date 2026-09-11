@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from "react";
 
-import type { Slide as SlideModel } from "../protocol";
+import type { Figure, FigureItem, Slide as SlideModel } from "../protocol";
 
 import styles from "./Slide.module.css";
 
@@ -21,7 +21,196 @@ export interface SlideProps {
 }
 
 /**
- * One slide: a title and its bullets, with an optional emphasised bullet.
+ * The points an item presents, in the order the item asked for them.
+ *
+ * @param slide - The slide being rendered.
+ * @param item - The card, column or step.
+ * @returns The bullet texts paired with their indices, so a highlight can still find them.
+ */
+function pointsOf(slide: SlideModel, item: FigureItem): { index: number; text: string }[] {
+  return item.bullets
+    .map((index) => ({ index, text: slide.bullets[index] ?? "" }))
+    .filter((point) => point.text !== "");
+}
+
+/**
+ * The plain list, used when a slide declares no arrangement.
+ *
+ * @param props - The slide and the bullet to emphasise.
+ * @returns The list element.
+ */
+function BulletList({ slide, active }: { slide: SlideModel; active: number | null }): JSX.Element {
+  return (
+    <ul className={styles.bullets}>
+      {slide.bullets.map((bullet, index) => (
+        <li
+          className={styles.bullet}
+          key={`${String(slide.index)}-${String(index)}`}
+          data-highlighted={index === active ? "true" : undefined}
+        >
+          <span className={styles.marker} aria-hidden="true" />
+          <span className={styles.text}>{bullet}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Value cards, for a slide whose points are mostly measurements.
+ *
+ * @param props - The slide, its figure, and the bullet to emphasise.
+ * @returns The grid element.
+ */
+function MetricCards({
+  slide,
+  figure,
+  active,
+}: {
+  slide: SlideModel;
+  figure: Figure;
+  active: number | null;
+}): JSX.Element {
+  return (
+    <ul className={styles.metrics} data-count={figure.items.length}>
+      {figure.items.map((item, position) => {
+        const points = pointsOf(slide, item);
+        return (
+          <li
+            className={styles.metric}
+            key={`${String(slide.index)}-m-${String(position)}`}
+            data-highlighted={points.some((p) => p.index === active) ? "true" : undefined}
+          >
+            <p className={styles.metricValue}>{item.heading}</p>
+            <p className={styles.metricCaption}>{item.caption}</p>
+            {/* The bullet itself stays in the DOM: it is what the agent is talking about, and a
+                caption is a label rather than a replacement for it. */}
+            <p className={styles.metricPoint}>{points.map((p) => p.text).join(" ")}</p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Labelled columns, for a slide with two or three sides to it.
+ *
+ * @param props - The slide, its figure, and the bullet to emphasise.
+ * @returns The columns element.
+ */
+function SplitColumns({
+  slide,
+  figure,
+  active,
+}: {
+  slide: SlideModel;
+  figure: Figure;
+  active: number | null;
+}): JSX.Element {
+  return (
+    <div className={styles.split} data-count={figure.items.length}>
+      {figure.items.map((item, position) => (
+        <section className={styles.column} key={`${String(slide.index)}-c-${String(position)}`}>
+          <header className={styles.columnHeader}>
+            <h3 className={styles.columnHeading}>{item.heading}</h3>
+            {item.caption ? <p className={styles.columnCaption}>{item.caption}</p> : null}
+          </header>
+          <ul className={styles.columnPoints}>
+            {pointsOf(slide, item).map((point) => (
+              <li
+                className={styles.bullet}
+                key={`${String(slide.index)}-${String(point.index)}`}
+                data-highlighted={point.index === active ? "true" : undefined}
+              >
+                <span className={styles.marker} aria-hidden="true" />
+                <span className={styles.text}>{point.text}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Numbered steps, for a slide describing a sequence.
+ *
+ * @param props - The slide, its figure, and the bullet to emphasise.
+ * @returns The steps element.
+ */
+function FlowSteps({
+  slide,
+  figure,
+  active,
+}: {
+  slide: SlideModel;
+  figure: Figure;
+  active: number | null;
+}): JSX.Element {
+  return (
+    <ol className={styles.flow}>
+      {figure.items.map((item, position) => (
+        <li className={styles.step} key={`${String(slide.index)}-s-${String(position)}`}>
+          <span className={styles.stepNumber} aria-hidden="true">
+            {position + 1}
+          </span>
+          <div className={styles.stepBody}>
+            {/* Heading and caption share a line. A step is a label for the bullets under it, and
+                giving the label two lines of its own pushed the last bullet off the slide. */}
+            <p className={styles.stepLabel}>
+              <span className={styles.stepHeading}>{item.heading}</span>
+              {item.caption ? <span className={styles.stepCaption}>{item.caption}</span> : null}
+            </p>
+            <ul className={styles.columnPoints}>
+              {pointsOf(slide, item).map((point) => (
+                <li
+                  className={styles.bullet}
+                  key={`${String(slide.index)}-${String(point.index)}`}
+                  data-highlighted={point.index === active ? "true" : undefined}
+                >
+                  <span className={styles.marker} aria-hidden="true" />
+                  <span className={styles.text}>{point.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Draw a slide's points in whichever arrangement it asked for.
+ *
+ * A slide with no figure, or one whose kind this build does not know, falls back to the plain
+ * list. That is deliberate: a deck authored against a newer schema should render less prettily
+ * rather than not at all.
+ *
+ * @param props - The slide and the bullet to emphasise.
+ * @returns The body element.
+ */
+function SlideBody({ slide, active }: { slide: SlideModel; active: number | null }): JSX.Element {
+  const figure = slide.figure;
+  if (figure == null) {
+    return <BulletList slide={slide} active={active} />;
+  }
+  switch (figure.kind) {
+    case "metrics":
+      return <MetricCards slide={slide} figure={figure} active={active} />;
+    case "split":
+      return <SplitColumns slide={slide} figure={figure} active={active} />;
+    case "flow":
+      return <FlowSteps slide={slide} figure={figure} active={active} />;
+    default:
+      return <BulletList slide={slide} active={active} />;
+  }
+}
+
+/**
+ * One slide: a title and its points, arranged as the slide asks, with an optional emphasis.
  *
  * The highlight is owned here rather than in the store because it is a piece of presentation
  * timing, not session state: the server says *which* bullet matters, and this component decides
@@ -76,18 +265,7 @@ export function Slide({ slide, highlight }: SlideProps): JSX.Element {
           {slide.title}
         </h2>
       </header>
-      <ul className={styles.bullets}>
-        {slide.bullets.map((bullet, index) => (
-          <li
-            className={styles.bullet}
-            key={`${String(slide.index)}-${String(index)}`}
-            data-highlighted={index === active ? "true" : undefined}
-          >
-            <span className={styles.marker} aria-hidden="true" />
-            <span className={styles.text}>{bullet}</span>
-          </li>
-        ))}
-      </ul>
+      <SlideBody slide={slide} active={active} />
     </article>
   );
 }

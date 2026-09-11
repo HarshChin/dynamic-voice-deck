@@ -85,12 +85,37 @@ export type ControlAction = (typeof CONTROL_ACTIONS)[number];
 // --------------------------------------------------------------------------- //
 
 /** One slide, with the notes and aliases the agent reasons over. */
+/** How a slide arranges its points on screen (PRD F1). */
+export type FigureKind = "metrics" | "split" | "flow";
+
+/**
+ * One card, column or step, and the bullets it presents.
+ *
+ * `bullets` is the whole point of the design: an item does not carry its own text, it points at
+ * the slide's bullets by index. Those same bullets are what the agent is given, so the screen and
+ * the agent's view of the slide cannot drift apart, and `highlight_bullet(n)` finds its target in
+ * any layout by looking for the item that claims bullet `n`.
+ */
+export interface FigureItem {
+  readonly bullets: readonly number[];
+  readonly heading: string;
+  readonly caption: string;
+}
+
+/** The arrangement of a slide's points. Presentation only; the agent never sees it. */
+export interface Figure {
+  readonly kind: FigureKind;
+  readonly items: readonly FigureItem[];
+}
+
 export interface Slide {
   readonly index: number;
   readonly title: string;
   readonly bullets: readonly string[];
   readonly notes: string;
   readonly aliases: readonly string[];
+  /** How to arrange the bullets, or absent for a plain list. */
+  readonly figure?: Figure | null;
 }
 
 /** A presentable deck; `voice` overrides the configured default when set. */

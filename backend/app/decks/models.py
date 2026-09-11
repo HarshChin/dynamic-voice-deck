@@ -9,6 +9,7 @@ configuration error, not something to tolerate at runtime.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -43,6 +44,54 @@ MIN_ALIASES = 2
 """Fewest routing aliases a slide must declare, so fallback routing has signal."""
 
 
+class FigureKind(StrEnum):
+    """How a slide arranges its points on screen (PRD F1).
+
+    The kind changes the arrangement, never the content: every layout renders
+    the same bullets, which is what keeps the agent's view of a slide and the
+    audience's view of it the same thing.
+    """
+
+    METRICS = "metrics"
+    """Value cards. For a slide whose points are mostly numbers."""
+
+    SPLIT = "split"
+    """Labelled columns. For a slide with two or three sides to it."""
+
+    FLOW = "flow"
+    """Numbered steps with connectors. For a slide describing a sequence."""
+
+
+class FigureItem(BaseModel):
+    """One card, column or step, and the bullets it presents.
+
+    Attributes:
+        bullets: Indices into :attr:`Slide.bullets`, in the order they should
+            appear. The reference is what stops the screen and the prompt from
+            drifting apart: a point the model can talk about is a point the room
+            can see, because the same list produces both.
+        heading: The large text. A measurement for a metric card, a side for a
+            column, the name of a step for a flow.
+        caption: A supporting line under the heading, or empty.
+    """
+
+    bullets: list[int] = Field(min_length=1)
+    heading: str = Field(min_length=1, max_length=40)
+    caption: str = Field(default="", max_length=80)
+
+
+class Figure(BaseModel):
+    """The arrangement of a slide's points.
+
+    Attributes:
+        kind: Which arrangement to draw.
+        items: The cards, columns or steps, in order.
+    """
+
+    kind: FigureKind
+    items: list[FigureItem] = Field(min_length=1, max_length=6)
+
+
 class Slide(BaseModel):
     """One slide, with the notes and aliases the agent reasons over.
 
@@ -54,6 +103,9 @@ class Slide(BaseModel):
             only assert what these support.
         aliases: Phrases a user might say to mean this slide. Used by the
             keyword fallback when the model does not call the navigation tool.
+        figure: How the bullets are arranged on screen, or ``None`` for a plain
+            list. Presentation only: the agent never sees it, because every
+            point it could mention is in ``bullets`` either way.
     """
 
     index: int = Field(ge=1, le=MAX_SLIDES)
@@ -61,6 +113,35 @@ class Slide(BaseModel):
     bullets: list[str] = Field(min_length=1, max_length=6)
     notes: str = Field(min_length=1, max_length=MAX_NOTES_CHARS)
     aliases: list[str] = Field(min_length=MIN_ALIASES)
+    figure: Figure | None = None
+
+    @model_validator(mode="after")
+    def _figure_shows_every_bullet_once(self) -> Self:
+        """Check the figure presents each bullet exactly once.
+
+        This is the rule the whole design rests on. The model is given the
+        bullets and nothing else, so a bullet the figure omits is something the
+        agent can assert that nobody can see, and a bullet shown twice is a
+        point the room hears about once and reads twice. Either is a slide that
+        lies about itself, and neither is visible without this check.
+
+        Returns:
+            The validated slide.
+
+        Raises:
+            ValueError: If the figure omits, repeats, or invents a bullet.
+        """
+        if self.figure is None:
+            return self
+        shown = [index for item in self.figure.items for index in item.bullets]
+        expected = list(range(len(self.bullets)))
+        if sorted(shown) != expected:
+            msg = (
+                f"slide {self.index}: the figure must show every bullet exactly once; "
+                f"it references {sorted(shown)} of {expected}"
+            )
+            raise ValueError(msg)
+        return self
 
     @field_validator("bullets", "aliases")
     @classmethod

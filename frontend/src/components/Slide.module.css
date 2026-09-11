@@ -87,3 +87,241 @@
   background-color: var(--dvd-accent);
   box-shadow: 0 0 10px rgb(122 162 255 / 60%);
 }
+
+/* ---------------------------------------------------------------------------
+   Arrangements (PRD F1).
+
+   Three ways of laying out the same bullets. Every one of them keeps the bullet
+   text on screen: the caption on a card is a label, not a replacement, because
+   the bullets are exactly what the agent is given and the room has to be able
+   to read what it is hearing about.
+
+   The highlight rule is shared. Each arrangement marks its own container with
+   `data-highlighted`, and the emphasis is a wash plus a brighter marker, so it
+   survives a colour-blind reader and a projector's poor contrast alike.
+   --------------------------------------------------------------------------- */
+
+/* Metrics: value cards. Auto-fit rather than a fixed column count so five cards
+   and six cards both fill the row instead of leaving a ragged gap. */
+.metrics {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  /* auto-fit leaves a sixth card alone on its own row; three columns make 3x2. */
+  gap: clamp(var(--dvd-space-2), 1.4vh, var(--dvd-space-4));
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metrics[data-count="6"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: clamp(var(--dvd-space-3), 1.8vh, var(--dvd-space-4));
+  border: 1px solid var(--dvd-line);
+  border-radius: var(--dvd-radius-lg);
+  background-color: var(--dvd-surface);
+  transition:
+    background-color var(--dvd-transition-slide) var(--dvd-ease),
+    border-color var(--dvd-transition-slide) var(--dvd-ease);
+}
+
+.metricValue {
+  margin: 0;
+  color: var(--dvd-text);
+  font-family: var(--dvd-font-mono);
+  font-size: clamp(1.375rem, 2.3vw, 1.875rem);
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.metricCaption {
+  margin: 0;
+  color: var(--dvd-text-dim);
+  font-size: clamp(0.8125rem, 1.05vw, 0.9375rem);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+/* The bullet itself, kept in the document but not on screen. A metric card is a
+   compression of its bullet -- "600 ms" over "of silence ends your turn" says
+   what "Endpointing: 600 ms of silence ends your turn" says -- so printing both
+   makes the room read the same sentence twice. It stays in the DOM because a
+   screen reader gets the slide's points in full, and because the card is a
+   presentation of a bullet rather than a replacement for one. */
+.metricPoint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.metric[data-highlighted="true"] {
+  border-color: var(--dvd-accent-dim);
+  background-color: var(--dvd-accent-wash);
+}
+
+.metric[data-highlighted="true"] .metricValue,
+.metric[data-highlighted="true"] .metricCaption {
+  color: var(--dvd-text);
+}
+
+/* Split: two or three labelled columns, each carrying its own bullets. */
+.split {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  gap: clamp(var(--dvd-space-3), 2vw, var(--dvd-space-6));
+  grid-template-columns: repeat(var(--columns, 2), 1fr);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.split[data-count="3"] {
+  --columns: 3;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dvd-space-3);
+  padding-left: clamp(var(--dvd-space-3), 1.4vw, var(--dvd-space-4));
+  border-left: 2px solid var(--dvd-line-strong);
+}
+
+.columnHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.columnHeading {
+  margin: 0;
+  color: var(--dvd-text);
+  font-size: clamp(1.0625rem, 1.5vw, 1.3125rem);
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+
+.columnCaption {
+  margin: 0;
+  color: var(--dvd-faint);
+  font-size: clamp(0.8125rem, 1vw, 0.9375rem);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.columnPoints {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--dvd-space-1), 0.8vh, var(--dvd-space-2));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Flow: numbered steps. The connector is drawn on the number rather than
+   between the rows, so a step that wraps to three lines keeps its line. */
+/* Not centred: this is the densest arrangement, and centring content taller than
+   its frame clips it at both ends rather than only the bottom. */
+.flow {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: clamp(var(--dvd-space-2), 1.2vh, var(--dvd-space-3));
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.step {
+  display: grid;
+  gap: clamp(var(--dvd-space-3), 1.4vw, var(--dvd-space-4));
+  grid-template-columns: 2rem 1fr;
+}
+
+.stepNumber {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--dvd-line-strong);
+  border-radius: 50%;
+  background-color: var(--dvd-surface);
+  color: var(--dvd-text-dim);
+  font-family: var(--dvd-font-mono);
+  font-size: var(--dvd-text-sm);
+}
+
+/* The line to the next step. Absolute so it cannot affect the row's height, and
+   suppressed on the last step, which has nothing to point at. */
+.step:not(:last-child) .stepNumber::after {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 50%;
+  width: 1px;
+  height: calc(100% + 1.25rem);
+  background: linear-gradient(var(--dvd-line-strong), transparent);
+  content: "";
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dvd-space-1);
+  min-width: 0;
+}
+
+.stepLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--dvd-space-2);
+  margin: 0;
+}
+
+.stepHeading {
+  color: var(--dvd-text);
+  font-size: clamp(1.0625rem, 1.5vw, 1.25rem);
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+
+.stepCaption {
+  color: var(--dvd-faint);
+  font-size: clamp(0.8125rem, 1vw, 0.9375rem);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+/* One narrow-screen rule for all three: columns and cards stack rather than
+   shrinking past readability. */
+@media (max-width: 60rem) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+}

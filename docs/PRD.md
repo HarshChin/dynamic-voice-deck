@@ -153,7 +153,9 @@ Each feature lists: description, user actions, expected behaviour, edge cases, a
 
 ### F1. Slide deck rendering — P0
 
-**Description.** Renders the active deck as full-width slides with title, bullets, optional highlighted bullet, and a slide counter.
+**Description.** Renders the active deck as full-width slides with title, points, optional highlight, and a slide counter.
+
+**Changed 2026-09-11.** A slide may declare how its points are arranged rather than always listing them: `metrics` for a slide whose points are measurements, `split` for one with two or three sides, `flow` for a sequence. The arrangement is presentation only, and it is bound to the points by construction — every item in a figure references the bullets it presents, by index, and validation rejects a figure that omits, repeats or invents one. That is what keeps the screen and the agent's view of a slide the same thing: the model is given the bullets, so a point it can mention is a point the room can see, and `highlight_bullet(n)` finds its target in any arrangement by looking for the item that claims bullet `n`. A slide with no figure, or one whose arrangement a build does not recognise, renders as a plain list.
 
 **User actions and expected behaviour.**
 
