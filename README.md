@@ -44,7 +44,7 @@ interrupt it and ask.
 | A Groq API key | Free, no card required — sign up at [console.groq.com](https://console.groq.com) and create a key.       |
 
 ```bash
-git clone https://github.com/<owner>/dynamic-voice-deck.git
+git clone https://github.com/HarshChin/dynamic-voice-deck.git
 cd dynamic-voice-deck
 cp .env.example .env     # then open .env and paste your key into GROQ_API_KEY=
 make setup               # uv sync (backend) + npm install (frontend)
