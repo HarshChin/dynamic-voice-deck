@@ -39,6 +39,7 @@ from app.pipeline.turn import (
     provider_error_message,
     run_turn,
     strip_scaffolding,
+    strip_tool_syntax,
 )
 from app.protocol import (
     ErrorCode,
@@ -1101,3 +1102,41 @@ def test_an_answer_about_the_marker_is_still_spoken(spoken: str) -> None:
     answer that *begins* by reciting it is an echo.
     """
     assert strip_scaffolding(spoken) == spoken
+
+
+@pytest.mark.parametrize(
+    ("spoken", "expected"),
+    [
+        # Seen in a live session: the call appended to the end of a perfectly good sentence, and
+        # spoken, because the earlier guard wanted a bracket.
+        (
+            "Just talk to me the way you would to a person, ask anything, in any order. "
+            "highlight bullet 2",
+            "Just talk to me the way you would to a person, ask anything, in any order.",
+        ),
+        ("Two layers, actually. highlight_bullet 3", "Two layers, actually."),
+        ('Go to slide(4, "User asked about interruption handling")', ""),
+        ("highlightbullet(1)", ""),
+        ("The browser flushes first. go_to_slide 4", "The browser flushes first."),
+    ],
+)
+def test_a_typed_tool_call_is_cut_off_and_the_sentence_before_it_kept(
+    spoken: str, expected: str
+) -> None:
+    """TC-BE-342: TR-086 -- the words before a typed call are the answer; the call is not."""
+    assert strip_tool_syntax(spoken) == expected
+
+
+@pytest.mark.parametrize(
+    "spoken",
+    [
+        "Let's go to slide four for that.",
+        "Let me go to slide 4.",
+        "Highlight bullet emphasises one line.",
+        "I call a function called go_to_slide to move the deck.",
+        "Two layers, actually.",
+    ],
+)
+def test_natural_speech_about_slides_and_tools_is_left_alone(spoken: str) -> None:
+    """TC-BE-343: TR-086 -- "go to slide four" is real speech, and slide 5 names both tools."""
+    assert strip_tool_syntax(spoken) == spoken

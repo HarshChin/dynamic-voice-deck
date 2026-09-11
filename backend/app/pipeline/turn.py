@@ -630,16 +630,45 @@ keeps the sentence the echo was prefixed to, which is usually the real answer.
 """
 
 TOOL_SYNTAX = re.compile(
-    r"\b(go[\s_-]?to[\s_-]?slide|highlight[\s_-]?bullet)\s*\(",
+    r"\b(?:"
+    # Any call written with a bracket: `go to slide(4, "...")`, `highlightbullet(1)`.
+    r"(?:go[\s_-]?to[\s_-]?slide|highlight[\s_-]?bullet)\s*\("
+    # The code-style name with a bare argument: underscores never occur in speech.
+    r"|(?:go_to_slide|highlight_bullet)\s*\d"
+    # `highlight bullet 2` with no bracket at all. Nobody presenting a slide says that; a model
+    # wanting the tool and typing it does. `go to slide 4` is deliberately *not* here: "let's go
+    # to slide four" is something a presenter genuinely says.
+    r"|highlight[\s_-]?bullet\s*\d"
+    r")",
     re.IGNORECASE,
 )
 """A tool call written out as prose rather than made as a call (TR-086).
 
-The opening bracket is what makes this safe: an answer may legitimately *name* a
-tool -- "I call a function called go_to_slide" -- and only a call has arguments
-after it. Matching the name alone would silence the slide that explains how
-navigation works.
+Three shapes, each observed from a real model: the bracketed form from gpt-oss-120b
+and from the local fallback, and the bare `highlight bullet 2` form the fallback
+appended to the end of an otherwise good sentence. The rule is tuned against
+slide 5, which explains both tools by name: "highlight bullet emphasises one line"
+has neither a bracket nor a number after the name and stays speakable.
 """
+
+
+def strip_tool_syntax(sentence: str) -> str:
+    """Cut a segment at the point where the model started typing a tool call.
+
+    The typed call is almost always a suffix -- the model finishes its sentence
+    and then writes the call it meant to make -- so what precedes it is the real
+    answer and is kept. A segment that *is* the call comes back empty.
+
+    Args:
+        sentence: A segment about to be spoken.
+
+    Returns:
+        The segment up to the call, which may be empty.
+    """
+    match = TOOL_SYNTAX.search(sentence)
+    if match is None:
+        return sentence
+    return sentence[: match.start()].rstrip()
 
 
 def strip_scaffolding(sentence: str) -> str:
@@ -770,13 +799,17 @@ class SpeechSender:
             if not spoken:
                 return
             sentence = spoken
-        if looks_like_tool_syntax(sentence):
+        without_call = strip_tool_syntax(sentence)
+        if without_call != sentence:
             # TR-086. Smaller models sometimes write the call instead of making it, and the
-            # listener then hears `go to slide(4, "User asked about interruptions")` read aloud.
-            # Observed from the local fallback model, and previously from gpt-oss-120b. The
-            # prompt asks them not to; this is what makes it true.
-            logger.info("speech.tool_syntax_dropped", turn_id=self._turn_id, sentence=sentence)
-            return
+            # listener then hears `highlight bullet 2` read aloud at the end of a good sentence.
+            # Observed from the local fallback model, and previously from gpt-oss-120b. The prompt
+            # asks them not to; this is what makes it true. Cut rather than dropped, because the
+            # words before the call are the answer.
+            logger.info("speech.tool_syntax_stripped", turn_id=self._turn_id, sentence=sentence)
+            if not without_call:
+                return
+            sentence = without_call
         key = _speech_key(sentence)
         if key and key in self._said:
             logger.info("speech.duplicate_dropped", turn_id=self._turn_id, sentence=sentence)

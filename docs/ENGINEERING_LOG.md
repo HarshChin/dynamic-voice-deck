@@ -74,7 +74,17 @@ with one skip (the weights digest, which needs weights the clone did not yet hav
 files downloaded and verified in 33 seconds; then the path-length exit above, at a depth no
 evaluator will use.
 
-**Verification:** 578 backend, 187 frontend, five end-to-end, and 28 of 28 browser checks once the
+**And one the owner's own screenshot caught minutes later.** The last spoken line in their log read
+`"...ask anything, in any order. highlight bullet 2"`. The fallback model had typed the tool call it
+meant to make, with no bracket, on the end of a perfectly good sentence -- and the chunker had not
+split there, because it does not treat a full stop followed by a lowercase word as a sentence end.
+My guard wanted a bracket, so it was spoken. Widened to the three shapes now actually observed:
+bracketed, code-style name with a bare argument, and `highlight bullet N`, which no presenter says.
+`go to slide four` as words is deliberately still speech. And the segment is *cut* at the call
+rather than dropped, because the model types the call after finishing its sentence, and the
+sentence is the answer.
+
+**Verification:** 588 backend, 187 frontend, five end-to-end, and 28 of 28 browser checks once the
 selector was corrected.
 
 ### 2026-09-11 · The interruption that registered as nothing at all · uncommitted
