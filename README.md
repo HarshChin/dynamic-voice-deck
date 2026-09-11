@@ -39,7 +39,7 @@ interrupt it and ask.
 
 | Requirement    | Notes                                                                                                    |
 | -------------- | -------------------------------------------------------------------------------------------------------- |
-| Python 3.12    | Installed and managed by [`uv`](https://docs.astral.sh/uv/); `backend/.python-version` pins the version. |
+| Python 3.12    | Installed and managed by [`uv`](https://docs.astral.sh/uv/); `backend/.python-version` pins the version. Install uv with `curl -LsSf https://astral.sh/uv/install.sh \| sh` or `brew install uv`. |
 | Node.js 20+    | With npm 10+.                                                                                            |
 | A Groq API key | Free, no card required — sign up at [console.groq.com](https://console.groq.com) and create a key.       |
 
