@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import gc
 import hashlib
+import sys
 from pathlib import Path
 from typing import Any
 
+import espeakng_loader
 import numpy as np
 import pytest
 from app.errors import ProviderError
 from app.providers.kokoro_tts import (
+    ESPEAK_DATA_PATH_MAX_CHARS,
     EXPECTED_SHA256,
     FRAME_BYTES,
     FRAME_SAMPLES,
@@ -231,3 +234,43 @@ async def test_real_synthesis_produces_audible_speech() -> None:
     # Destroy the ONNX session while the interpreter is still healthy rather than at shutdown,
     # where its native destructor races the runtime's own teardown.
     gc.collect()
+
+
+def test_a_checkout_too_deep_for_espeak_is_refused_with_a_sentence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """TC-BE-340: a path espeak-ng cannot hold ends the process silently; say so instead.
+
+    Found by cloning the repository into a deep scratch directory: warm-up
+    printed one line to stderr and the server was gone, with no traceback. The
+    same clone at a short path worked. This is the difference between an
+    evaluator giving up and an evaluator moving a folder.
+    """
+    deep = "/" + "/".join(["a-directory-with-a-long-name"] * 8) + "/espeak-ng-data"
+    assert len(deep) > ESPEAK_DATA_PATH_MAX_CHARS
+    monkeypatch.setattr(espeakng_loader, "get_data_path", lambda: deep)
+    # Kokoro itself must never be reached: importing it would load the model.
+    monkeypatch.setitem(sys.modules, "kokoro_onnx", None)
+    provider = KokoroTTS(models_dir=tmp_path, download=False)
+
+    with pytest.raises(ProviderError) as raised:
+        provider._load()
+
+    message = str(raised.value)
+    assert "shorter path" in message
+    assert str(len(deep)) in message
+    assert "could not load Kokoro" not in message
+
+
+def test_a_normal_checkout_is_not_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """TC-BE-341: the guard is about one failure, and must not invent another."""
+    monkeypatch.setattr(espeakng_loader, "get_data_path", lambda: "/Users/me/dvd/espeak-ng-data")
+
+    class Loaded:
+        def __init__(self, *_args: object) -> None:
+            self.loaded = True
+
+    monkeypatch.setitem(sys.modules, "kokoro_onnx", type("M", (), {"Kokoro": Loaded}))
+    provider = KokoroTTS(models_dir=tmp_path, download=False)
+
+    assert isinstance(provider._load(), Loaded)

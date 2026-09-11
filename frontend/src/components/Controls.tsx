@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type JSX } from "react";
+import { useState, type FormEvent, type JSX, type MouseEvent } from "react";
 
 import { MAX_TEXT_INPUT_CHARS, type SessionState } from "../protocol";
 import type { DeckSummary } from "../session/useSession";
@@ -90,6 +90,22 @@ export interface ControlsProps {
  * @param props - Session state and the callbacks that change it.
  * @returns The control bar element.
  */
+/**
+ * Release a button after a pointer click, so the space bar is free to talk.
+ *
+ * A clicked button keeps focus, and a focused button is operated by the space bar -- which is the
+ * key push-to-talk claims. Without this, "click Walk me through it, then hold space to interrupt"
+ * did nothing: the held space went to the button. `detail` is 0 for a keyboard activation, and
+ * that user keeps focus, because the same key has to be able to press the button again (TR-115).
+ *
+ * @param event - The click.
+ */
+function releaseAfterPointerClick(event: MouseEvent<HTMLButtonElement>): void {
+  if (event.detail > 0) {
+    event.currentTarget.blur();
+  }
+}
+
 export function Controls({
   orbState,
   outputLevel = 0,
@@ -187,7 +203,10 @@ export function Controls({
             <button
               className={styles.secondary}
               type="button"
-              onClick={onPresent}
+              onClick={(event) => {
+                releaseAfterPointerClick(event);
+                onPresent();
+              }}
               title="Present the whole deck, reading its own notes. Talk over it to interrupt."
             >
               Walk me through it
@@ -197,7 +216,8 @@ export function Controls({
               type="button"
               data-active={muted ? "true" : undefined}
               aria-pressed={muted}
-              onClick={() => {
+              onClick={(event) => {
+                releaseAfterPointerClick(event);
                 onToggleMute(!muted);
               }}
               title="Stop listening without ending the session"
@@ -210,14 +230,7 @@ export function Controls({
               data-active={pushToTalk ? "true" : undefined}
               aria-pressed={pushToTalk}
               onClick={(event) => {
-                // A button keeps focus after a click, and a focused button is operated by the
-                // space bar -- the very key this mode is about to claim. Releasing focus is what
-                // makes "hold space to talk" work for someone who turned it on with the mouse.
-                // `detail` is 0 when the click came from the keyboard, and that user needs focus
-                // kept: the same key has to be able to turn the mode off again.
-                if (event.detail > 0) {
-                  event.currentTarget.blur();
-                }
+                releaseAfterPointerClick(event);
                 onTogglePushToTalk(!pushToTalk);
               }}
               title="Hold the space bar to talk instead of letting the microphone decide. Useful in a noisy room."
@@ -230,7 +243,10 @@ export function Controls({
           className={styles.primary}
           type="button"
           data-active={isActive ? "true" : undefined}
-          onClick={isActive ? onStop : onStart}
+          onClick={(event) => {
+            releaseAfterPointerClick(event);
+            (isActive ? onStop : onStart)();
+          }}
         >
           {isActive ? "End session" : "Start session"}
         </button>

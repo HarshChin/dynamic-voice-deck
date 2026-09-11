@@ -164,6 +164,7 @@ strict = true
 [[tool.mypy.overrides]]
 module = [
   "kokoro_onnx.*",
+  "espeakng_loader.*",
   "onnxruntime.*",
   "soundfile.*",
   "faster_whisper.*",

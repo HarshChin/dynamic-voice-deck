@@ -13,7 +13,7 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 576 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 183 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 578 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 187 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
 Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
@@ -265,6 +265,18 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-168 | TR-085 | Given a hung upstream, then the owned client's connect/write/read/pool budgets fail the request on their own, not only via the 20 s turn watchdog | `::test_the_owned_client_bounds_every_phase_of_a_request` | passing |
 | TC-BE-178 | TR-013 | Then `aclose` closes a provider that holds something and steps over those that do not — only the Groq provider owns an httpx pool | `tests/test_registry.py::test_closing_the_providers_releases_the_ones_that_hold_something` | passing|
 | TC-BE-179 | TR-013 | Given application shutdown, then the lifespan closes the providers it built and gives back the LLM's connection pool | `::test_the_lifespan_closes_the_providers_it_built` | passing|
+
+### Found by stress-testing before submission (added 2026-09-11)
+
+A fresh clone from GitHub run the way an evaluator would, and a browser run of every flow against
+the real providers. Two product defects, both fixed.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-340 | TR-091 | Given a phonemiser data path longer than espeak-ng can hold, then startup refuses with a sentence naming the path and the fix, and never reaches the model | `tests/test_kokoro_tts.py::test_a_checkout_too_deep_for_espeak_is_refused_with_a_sentence` | passing |
+| TC-BE-341 | TR-091 | Given an ordinary path, then the guard changes nothing | `::test_a_normal_checkout_is_not_refused` | passing |
+| TC-FE-236 | TR-115 | Given any control-bar button clicked with a pointer, then it releases focus, so a held space bar talks rather than re-pressing the button | `src/components/Controls.test.tsx::TC-FE-236` | passing |
+| TC-FE-237 | TR-115 | Given a keyboard activation, then focus is kept so the same key can press it again | `::TC-FE-237` | passing |
 
 ### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
 

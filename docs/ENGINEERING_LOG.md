@@ -25,6 +25,58 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · Pre-submission stress test: two defects, one false alarm, one real scare · uncommitted
+**Scope:** `frontend/src/components/Controls.tsx`, `app/providers/kokoro_tts.py`, `docs/TRD.md`
+(TR-091)
+
+**What was run.** Two tracks. A fresh clone from GitHub, driven exactly as the README tells an
+evaluator to: copy `.env.example`, paste a key, `make setup`, `make lint`, `make test`, first
+backend start with the 350 MB weight download, one real turn. And a browser run of every flow
+against the real providers: cold load and all six arrangements, routing, push-to-talk interruption
+mid-answer, typing while it speaks, walkthrough then interrupt then "carry on", manual navigation,
+an off-topic question, two interrupts 150 ms apart, mute, five start/stop cycles, and the fallback.
+
+**Defect one: after clicking a button, the space bar pressed the button.** "Click *Walk me through
+it*, then hold space to interrupt" did nothing, because the clicked button kept focus and a
+focused button is operated by space -- the exact key push-to-talk claims. The push-to-talk toggle
+already released focus after a pointer click (TR-115); the other three bar buttons did not. They
+all do now, keyboard activations excepted, since that user needs the same key to press the button
+again. This is the mouse user's primary path into interrupting a walkthrough, and it was broken.
+
+**Defect two, from the clone: the server vanished at warm-up with one stderr line and no
+traceback.** `Error processing file '.../espeak-ng-data/phontab'`, then `exit(1)` from inside the
+espeak-ng C library. Identical packages, identical data files, identical environment to the working
+install. The one difference was where the clone lived: a scratch directory that made the
+phonemiser's data path 193 characters long, against 105 on the working install. espeak-ng holds
+that path in a fixed-size buffer. A second clone at 82 characters synthesised on the first try.
+
+So the product was never broken -- an evaluator cloning into a home directory is fine -- but the
+failure mode is the worst kind: a process that disappears without saying why. `KokoroTTS._load` now
+refuses a path over 150 characters with a sentence naming the path and the fix, before the model is
+ever touched.
+
+**The false alarm.** One of twenty-eight browser checks failed: "every slide has an arrangement",
+reporting blanks for slides 1, 4 and 6. Those are the `split` slides, whose container is a `div`
+rather than a list, and the check read the first list's class. A second probe with the right
+selector: `split, metrics, metrics, split, flow, split`. Test defect, recorded so nobody chases it.
+
+**What the routing numbers mean in this run.** Every model call fell back to `qwen2.5:7b`: the
+day's Qwen budget was at 197,011 of 200,000 tokens, releasing about one turn a minute. So the
+routing observed is the fallback's, measured earlier at 57.5 % -- and in this run it routed
+correctly on every question asked, which is luck, not evidence. The mechanics under test do not
+depend on which model answered: interruption cut a turn at sentence 0 and a walkthrough at
+sentence 2, "carry on" resumed at slide 4 after a cut on slide 1, two rapid interrupts produced one
+cancellation and no error, five sessions opened five sockets and left the orb idle, and four
+fallbacks fired with zero rate-limit errors reaching the user.
+
+**The fresh clone, for the record.** `make setup` clean; `make lint` clean; `make test` 575 passing
+with one skip (the weights digest, which needs weights the clone did not yet have); both weight
+files downloaded and verified in 33 seconds; then the path-length exit above, at a depth no
+evaluator will use.
+
+**Verification:** 578 backend, 187 frontend, five end-to-end, and 28 of 28 browser checks once the
+selector was corrected.
+
 ### 2026-09-11 · The interruption that registered as nothing at all · uncommitted
 **Scope:** `app/session.py`, `tests/test_session.py`, `docs/TRD.md` (TR-090)
 

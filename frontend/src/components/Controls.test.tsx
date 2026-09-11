@@ -234,3 +234,30 @@ describe("push-to-talk focus (TR-115)", () => {
     expect(toggle).toHaveFocus();
   });
 });
+
+describe("every bar button releases focus after a pointer click (TR-115)", () => {
+  it.each(["Walk me through it", "Mute", "End session"])(
+    "TC-FE-236: clicking %s with the mouse leaves the space bar free to talk",
+    (name) => {
+      renderControls();
+      const button = screen.getByRole("button", { name });
+      button.focus();
+
+      fireEvent.click(button, { detail: 1 });
+
+      // The bug: "click Walk me through it, then hold space to interrupt" did nothing, because
+      // the held space went to the still-focused button.
+      expect(button).not.toHaveFocus();
+    },
+  );
+
+  it("TC-FE-237: a keyboard activation keeps focus, so the same key can press it again", () => {
+    renderControls();
+    const button = screen.getByRole("button", { name: "Walk me through it" });
+    button.focus();
+
+    fireEvent.click(button, { detail: 0 });
+
+    expect(button).toHaveFocus();
+  });
+});

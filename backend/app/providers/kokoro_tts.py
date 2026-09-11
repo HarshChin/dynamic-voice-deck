@@ -45,6 +45,17 @@ PROVIDER_NAME: Final = "kokoro"
 SAMPLE_RATE: Final = 24_000
 """Kokoro's output rate in hertz, confirmed against the model itself."""
 
+ESPEAK_DATA_PATH_MAX_CHARS: Final = 150
+"""Longest phonemiser data path this provider will accept.
+
+espeak-ng stores its data path in a fixed-size buffer and exits the process --
+no exception, one stderr line -- when the path does not fit. A checkout whose
+path made that string 193 characters long died at warm-up; one at 105 did not.
+The bound sits under the observed failure with room for the platform's own
+buffer size to vary. The check is here rather than left to the library because
+the failure mode is a server that vanishes with no traceback.
+"""
+
 FRAME_SAMPLES: Final = 2_400
 """Samples per wire frame: 100 ms at :data:`SAMPLE_RATE` (TR-141).
 
@@ -220,12 +231,33 @@ class KokoroTTS:
     def _load(self) -> Any:
         """Load the ONNX model. Blocking; called in a worker thread.
 
+        Checks the phonemiser's data path first. espeak-ng keeps that path in a
+        fixed-size buffer, and when the path does not fit it does not raise: it
+        prints one line to stderr and calls ``exit(1)``, taking the whole server
+        with it and leaving no Python traceback. Observed on a checkout 193
+        characters deep, and not on one at 105. Refusing here turns a silent
+        process death into a sentence naming the fix.
+
         Returns:
             The Kokoro instance.
 
         Raises:
             ProviderError: If the library or the weights cannot be loaded.
         """
+        import espeakng_loader  # noqa: PLC0415 - vendor import, deferred to startup
+
+        # Before the `try`, so the message reaches the operator as written rather than wrapped in
+        # "could not load Kokoro": the model was never the problem here, the path was.
+        data_path = str(espeakng_loader.get_data_path())
+        if len(data_path) > ESPEAK_DATA_PATH_MAX_CHARS:
+            msg = (
+                f"the phonemiser's data path is {len(data_path)} characters long, and espeak-ng "
+                f"exits the process when it is longer than about {ESPEAK_DATA_PATH_MAX_CHARS}. "
+                f"Move this checkout to a shorter path (for example ~/dynamic-voice-deck). "
+                f"Path: {data_path}"
+            )
+            raise ProviderError(PROVIDER_NAME, msg)
+
         try:
             from kokoro_onnx import Kokoro  # noqa: PLC0415 - heavy import, deferred to startup
 
