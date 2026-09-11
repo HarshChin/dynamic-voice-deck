@@ -111,7 +111,12 @@ def to_markdown(
 
 
 def write(
-    results: list[SuiteResult], *, model: str, judge_model: str, out: Path | None = None
+    results: list[SuiteResult],
+    *,
+    model: str,
+    judge_model: str,
+    out: Path | None = None,
+    sha: str | None = None,
 ) -> tuple[Path, Path]:
     """Write both files for one run.
 
@@ -120,12 +125,16 @@ def write(
         model: The model under evaluation.
         judge_model: The model that graded.
         out: Path for the JSON; defaults to a timestamped file under ``results/``.
+        sha: The commit the run describes. The runner reads it when the run starts; read
+            here, at the end, a commit made during a forty-minute run would be recorded as
+            the code that ran, which is how the 2026-09-11 judged run came to be stamped
+            with a fix it never contained.
 
     Returns:
         The JSON path and the Markdown path.
     """
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
-    sha = git_sha()
+    sha = sha or git_sha()
     RESULTS.mkdir(parents=True, exist_ok=True)
     json_path = out or RESULTS / f"{stamp}.json"
     markdown_path = json_path.with_suffix(".md")

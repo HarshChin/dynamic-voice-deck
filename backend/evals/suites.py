@@ -61,6 +61,15 @@ FULLY_GROUNDED = 2
 CALIBRATION_THRESHOLD = 0.9
 """Agreement with the hand-labelled set below which a run's judged suites are not believed."""
 
+E5_QUIET_S: float = 61.0
+"""Seconds the latency suite lets pass before each of its turns when the account is paced.
+
+The pacer cannot be used for E5: it waits inside the provider's ``stream``, after the turn has
+started its clock, so its wait is recorded as the model's time to first token -- the 2026-09-11
+judged run reported a p50 of 29.9 s that way. Instead each turn first lets a whole minute pass, so
+that its one or two calls fit the per-minute allowance on their own and are timed unpaced.
+"""
+
 
 @dataclass(slots=True)
 class Context:
@@ -461,12 +470,15 @@ def e6_tools(routing: SuiteResult) -> SuiteResult:
     )
 
 
-async def e5_latency(context: Context, runs: int = 3) -> SuiteResult:
+async def e5_latency(context: Context, runs: int = 3, *, quiet_s: float = 0.0) -> SuiteResult:
     """E5: are the stage latencies within the budget, with real synthesis?
 
     Args:
-        context: Providers and deck. Its ``tts`` must be the real one.
+        context: Providers and deck. Its ``tts`` must be the real one, and its ``llm`` must not
+            be paced, or the pacing is what gets measured.
         runs: How many questions to time.
+        quiet_s: Seconds to let pass before each turn so that a paced account's per-minute
+            allowance is clear when the turn's calls are made; zero for a local model.
 
     Returns:
         p50 and p95 of each stage, in milliseconds.
@@ -478,6 +490,8 @@ async def e5_latency(context: Context, runs: int = 3) -> SuiteResult:
     ][:runs]
     traces: list[TurnTrace] = []
     for question in questions:
+        if quiet_s > 0:
+            await asyncio.sleep(quiet_s)
         traces.append(
             await run_one(
                 utterance=question,

@@ -25,7 +25,7 @@ from . import harness, suites
 from .budget import BUDGET
 from .harness import build_llm, build_tts, load_deck
 from .pacing import PacedLLM, Pacer
-from .report import write
+from .report import git_sha, write
 from .suites import Context, SuiteResult
 
 SUITES = ("E1", "E2", "E3", "E4", "E5", "E6")
@@ -112,6 +112,21 @@ def _apply_run_options(args: argparse.Namespace) -> None:
         suites.MAX_CONCURRENCY = args.concurrency
 
 
+def _min_interval(args: argparse.Namespace) -> float:
+    """Seconds between hosted-model calls for this run.
+
+    Args:
+        args: Parsed command line.
+
+    Returns:
+        The interval asked for, else the default for the provider: paced for Groq, not for a
+        local model.
+    """
+    if args.min_interval is not None:
+        return float(args.min_interval)
+    return DEFAULT_MIN_INTERVAL_S if args.provider == "groq" else 0.0
+
+
 def _build_models(
     args: argparse.Namespace, settings: Settings, model: str, judge_model: str
 ) -> tuple[LLMProvider, LLMProvider]:
@@ -129,9 +144,7 @@ def _build_models(
     llm = build_llm(settings, model, provider=args.provider)
     # Zero, because a rubric graded differently on two runs is not a measurement (TR-201).
     judge_llm = build_llm(settings, judge_model, provider=args.provider, temperature=0.0)
-    interval = args.min_interval
-    if interval is None:
-        interval = DEFAULT_MIN_INTERVAL_S if args.provider == "groq" else 0.0
+    interval = _min_interval(args)
     if interval > 0:
         # One pacer for both: they draw on the same account, and the account's minute is shared.
         pacer = Pacer(interval)
@@ -174,6 +187,9 @@ async def run(args: argparse.Namespace) -> int:
     """
     settings = get_settings()
     _apply_run_options(args)
+    # Read now, not when the file is written: a commit made during a forty-minute run would
+    # otherwise be recorded as the code that ran.
+    sha = git_sha()
     model = args.model or (
         settings.ollama_model if args.provider == "ollama" else settings.groq_llm_model
     )
@@ -234,17 +250,22 @@ async def run(args: argparse.Namespace) -> int:
     if "E5" in wanted:
         real_context = Context(
             deck=deck,
-            llm=llm,
+            # Unpaced: the pacer waits inside `stream`, after the turn's clock has started, and
+            # would be timed as the model. The suite waits out the minute before each turn instead.
+            llm=build_llm(settings, model, provider=args.provider),
             judge_llm=judge_llm,
             tts=build_tts(settings, real=True),
             prompts=prompts,
         )
         await real_context.tts.warm_up()
-        results.append(await suites.e5_latency(real_context))
+        quiet = suites.E5_QUIET_S if _min_interval(args) > 0 else 0.0
+        results.append(await suites.e5_latency(real_context, quiet_s=quiet))
     if "E6" in wanted and routing is not None:
         results.append(suites.e6_tools(routing))
 
-    json_path, markdown_path = write(results, model=model, judge_model=judge_model, out=args.out)
+    json_path, markdown_path = write(
+        results, model=model, judge_model=judge_model, out=args.out, sha=sha
+    )
     print(markdown_path.read_text(encoding="utf-8"))
     print(f"wrote {json_path}\n      {markdown_path}")
     return _exit_status(results)

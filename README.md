@@ -212,16 +212,17 @@ full run is now about 75 calls and 170,000 tokens, and E1 with E4 and E6 about 3
 paced 31 s apart so the per-minute limiter never refuses one, and the runner stops the moment the
 daily bucket does, rather than being refused once per remaining item.
 
-**What has been run so far.** `openai/gpt-oss-120b` scored **58.3 %** on routing (24 of the
-original forty items answered; the rest were refused by the free tier and excluded rather than
-counted wrong), with zero
-false navigation and two invalid tool calls. Seven of the eight paraphrased questions it answered
-produced no visible text at all — the reasoning-model failure mode, where the token allowance goes
-on hidden reasoning before anything is said. That is the numeric version of why the default is
-Qwen. The default model's own run is still pending: two attempts on release day both ran into the
-daily budget, the second after 45 paced calls without a single per-minute refusal, which is what
-forced the resizing. All of it, including the runs that measured nothing, is recorded in
-[`docs/EVALS.md`](docs/EVALS.md).
+**What has been run so far.** The default model, `qwen/qwen3.8-27b`, has its release run
+recorded (2026-09-11, eighteen routing items, no refusals): routing **83.3 %** with **zero** false
+navigation, groundedness **2.00 / 2** with every unanswerable question declined, spoken style
+**88.9 %**, no invalid tool calls, model first token 670 ms and synthesis first chunk 341 ms at
+p95, and one judged phantom reference in six interruptions. It misses the routing bar by two items: "next slide" from slide 2
+chained three moves and overshot, and one paraphrase was answered correctly without moving the
+deck. The two alternatives were measured earlier on the forty-item set: `openai/gpt-oss-120b`
+scored 58.3 % and produced no visible answer on seven of eight paraphrases, the reasoning-model
+failure mode, and the local fallback `qwen2.5:7b` scored 57.5 % by answering well and leaving the
+deck where it was. All of it, including two attempts that measured nothing and the measuring
+mistakes found along the way, is in [`docs/EVALS.md`](docs/EVALS.md).
 
 ---
 

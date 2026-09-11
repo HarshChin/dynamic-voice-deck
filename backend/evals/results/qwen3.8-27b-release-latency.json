@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-09-11T14-39-17Z",
+  "git_sha": "435f074",
+  "model": "qwen/qwen3.8-27b",
+  "judge_model": "qwen/qwen3.8-27b",
+  "suites": [
+    {
+      "suite": "E5",
+      "title": "Latency",
+      "metrics": {
+        "llm_ttft_ms_p50": 540.0,
+        "llm_ttft_ms_p95": 670.0,
+        "llm_total_ms_p50": 2256.0,
+        "llm_total_ms_p95": 3046.0,
+        "tts_ttfb_ms_p50": 272.0,
+        "tts_ttfb_ms_p95": 341.0
+      },
+      "thresholds": {
+        "llm_ttft_ms_p95": [
+          "<=",
+          2500.0
+        ],
+        "tts_ttfb_ms_p95": [
+          "<=",
+          600.0
+        ]
+      },
+      "items": [
+        {
+          "id": "What is this deck about?",
+          "answer": "It's me, explaining myself. This deck walks through the voice agent you're talking to right now, from the moment you stop speaking to the moment you hear my reply. I'll cover the latency budget, how I detect that your turn is over, how I handle you interrupting me, and how I pick which slide to jump to. And every part of that chain is open weights, so there's nothing proprietary hiding in it.",
+          "sentences": [
+            "It's me, explaining myself.",
+            "This deck walks through the voice agent you're talking to right now,",
+            "from the moment you stop speaking to the moment you hear my reply.",
+            "I'll cover the latency budget,",
+            "how I detect that your turn is over,",
+            "how I handle you interrupting me,",
+            "and how I pick which slide to jump to.",
+            "And every part of that chain is open weights,",
+            "so there's nothing proprietary hiding in it."
+          ],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": 670,
+            "llm_total_ms": 3046,
+            "tts_ttfb_ms": 341,
+            "sentences": 9
+          },
+          "error": null
+        },
+        {
+          "id": "How does barge-in work?",
+          "answer": "Two layers, actually. The browser flushes playback the instant it hears you, so sound stops in under one hundred and fifty milliseconds. Then the server cancels the pipeline and trims my history to what you actually heard, marked as interrupted. That trim is what stops me from repeating myself.",
+          "sentences": [
+            "Two layers, actually.",
+            "The browser flushes playback the instant it hears you,",
+            "so sound stops in under one hundred and fifty milliseconds.",
+            "Then the server cancels the pipeline and trims my history to what you actually heard,",
+            "marked as interrupted.",
+            "That trim is what stops me from repeating myself."
+          ],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": 540,
+            "llm_total_ms": 2256,
+            "tts_ttfb_ms": 263,
+            "sentences": 6
+          },
+          "error": null
+        },
+        {
+          "id": "Tell me about the latency budget.",
+          "answer": "It's the second slide. Here is where the milliseconds go, measured from the end of your speech to the first sound of mine. Endpointing costs six hundred, because that is how long I wait in silence before deciding you have finished. Transcription takes about three hundred.",
+          "sentences": [
+            "It's the second slide.",
+            "Here is where the milliseconds go,",
+            "measured from the end of your speech to the first sound of mine.",
+            "Endpointing costs six hundred,",
+            "because that is how long I wait in silence before deciding you have finished.",
+            "Transcription takes about three hundred."
+          ],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": 486,
+            "llm_total_ms": 2098,
+            "tts_ttfb_ms": 272,
+            "sentences": 6
+          },
+          "error": null
+        }
+      ],
+      "note": "3 live turns with real synthesis; p95 of three runs is the maximum.",
+      "passed": true
+    }
+  ]
+}

@@ -286,6 +286,8 @@ the real providers. Two product defects, both fixed.
 | TC-BE-348 | TR-205 | Then a suite's note separates items never attempted from items the provider refused | `::test_the_note_separates_items_never_attempted_from_items_refused` | passing |
 | TC-BE-349 | E4 | Then E4 counts the listener's sentences, not the chunker's clause splits: a three-sentence answer the chunker cut six ways passes, and "e.g." does not end a sentence | `::test_style_counts_sentences_not_the_chunkers_clause_splits` | passing |
 | TC-BE-350 | TR-088 | Given a segment opening with a label leaked from the model's own chat template ("assistant reasoning", "assistant turn N", the JSON wrapper, the failure string), then the label is stripped, and a sentence that merely begins with those words is not | `tests/test_turn.py::test_labels_leaked_from_the_models_own_template_are_stripped` | passing |
+| TC-BE-351 | TR-202 | Given a SHA read when the run started, then the JSON and the summary record that SHA rather than the commit current when the file is written | `tests/test_evals.py::test_a_run_records_the_commit_it_started_under` | passing |
+| TC-BE-352 | E5 | Then the latency suite lets the quiet period pass before each turn, outside the turn's clock, instead of being paced inside the stream | `::test_the_latency_suite_waits_before_each_turn_rather_than_being_paced` | passing |
 
 ### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
 

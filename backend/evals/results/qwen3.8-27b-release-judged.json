@@ -1,0 +1,530 @@
+{
+  "timestamp": "2026-09-11T14-31-59Z",
+  "git_sha": "435f074",
+  "model": "qwen/qwen3.8-27b",
+  "judge_model": "qwen/qwen3.8-27b",
+  "suites": [
+    {
+      "suite": "JUDGE",
+      "title": "Judge calibration",
+      "metrics": {
+        "agreement": 1.0
+      },
+      "thresholds": {
+        "agreement": [
+          ">=",
+          0.9
+        ]
+      },
+      "items": [
+        {
+          "id": "c001",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "verbatim from the notes",
+          "rationale": "The answer correctly identifies the 600 milliseconds duration for endpointing as stated in the notes.",
+          "judge_error": null
+        },
+        {
+          "id": "c002",
+          "expected": 0,
+          "actual": 0,
+          "agrees": true,
+          "why": "contradicts the notes, which say six hundred milliseconds",
+          "rationale": "The notes state that endpointing costs six hundred milliseconds, whereas the answer claims it takes about two seconds, which contradicts the specific data provided in the notes.",
+          "judge_error": null
+        },
+        {
+          "id": "c003",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "the notes state that target",
+          "rationale": "The answer accurately reflects the specific timing constraint mentioned in the notes regarding the browser tier's response to speech onset.",
+          "judge_error": null
+        },
+        {
+          "id": "c004",
+          "expected": 1,
+          "actual": 1,
+          "agrees": true,
+          "why": "true in spirit but drops the number the notes give",
+          "rationale": "The answer is broadly consistent with the notes but is vague where the notes are specific, as it fails to mention the precise 'under one hundred and fifty milliseconds' timeframe.",
+          "judge_error": null
+        },
+        {
+          "id": "c005",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "exactly what the notes say",
+          "rationale": "The answer directly matches the first sentence of the notes, which states that hearing happens in the browser, not on the server.",
+          "judge_error": null
+        },
+        {
+          "id": "c006",
+          "expected": 0,
+          "actual": 0,
+          "agrees": true,
+          "why": "the opposite of the notes",
+          "rationale": "The answer contradicts the notes, which explicitly state that hearing happens in the browser, not on the server, and that only finished utterances are uploaded rather than a permanent stream.",
+          "judge_error": null
+        },
+        {
+          "id": "c007",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "stated in the notes",
+          "rationale": "The notes explicitly state that navigating costs two round trips, which matches the answer.",
+          "judge_error": null
+        },
+        {
+          "id": "c008",
+          "expected": 1,
+          "actual": 1,
+          "agrees": true,
+          "why": "vaguely right, the specific number is in the notes",
+          "rationale": "The answer is vague ('a few extra calls') whereas the notes are specific ('two round trips'), and it does not explicitly state the number 2.",
+          "judge_error": null
+        },
+        {
+          "id": "c009",
+          "expected": 2,
+          "actual": 2,
+          "agrees": true,
+          "why": "both halves are in the notes",
+          "rationale": "The answer correctly identifies that a speech-to-speech API would be faster and handle interruptions (barge-in) but hides the specific pipeline details (turn-taking/endpointing) that the current deck aims to showcase, which is fully supported by the notes.",
+          "judge_error": null
+        },
+        {
+          "id": "c010",
+          "expected": 0,
+          "actual": 0,
+          "agrees": true,
+          "why": "invented; the notes give a different reason",
+          "rationale": "The answer invents a reason (unavailability to the public) that is not in the notes, whereas the notes explain that speech-to-speech would hide the technical details the pipeline aims to showcase and that the current pipeline is provider-agnostic.",
+          "judge_error": null
+        }
+      ],
+      "note": "Judged suites are only believed when this clears its threshold.",
+      "passed": true
+    },
+    {
+      "suite": "E2",
+      "title": "Interruption memory",
+      "metrics": {
+        "repetition": 0.0,
+        "phantom_reference": 0.16666666666666666
+      },
+      "thresholds": {
+        "repetition": [
+          "<=",
+          0.1
+        ],
+        "phantom_reference": [
+          "<=",
+          0.0
+        ]
+      },
+      "items": [
+        {
+          "id": "i001",
+          "follow_up": "Go on.",
+          "answer": "So the browser kills playback first. The moment the voice detector hears you start talking, it flushes the audio queue and stops every scheduled source, so sound ends in under one hundred and fifty milliseconds with no server round trip. Then the server cancels the pipeline task, which propagates into the live model stream and synthesis jobs.",
+          "sentences": [
+            "So the browser kills playback first.",
+            "The moment the voice detector hears you start talking,",
+            "it flushes the audio queue and stops every scheduled source,",
+            "so sound ends in under one hundred and fifty milliseconds with no server round trip.",
+            "Then the server cancels the pipeline task,",
+            "which propagates into the live model stream and synthesis jobs."
+          ],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "The agent correctly continues the explanation by elaborating on the unheard sentences without claiming they were previously stated or repeating the heard sentence.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "i002",
+          "follow_up": "What did you say the endpointing number was?",
+          "answer": "Six hundred milliseconds. That's the silence I wait for before deciding you've finished speaking, and it's the biggest chunk of the budget I actually control.",
+          "sentences": [
+            "Six hundred milliseconds.",
+            "That's the silence I wait for before deciding you've finished speaking,",
+            "and it's the biggest chunk of the budget I actually control."
+          ],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "The agent correctly answered the listener's direct question about the endpointing number using the unheard information without claiming it had been previously stated or repeating the heard sentence about the total time to first sound.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "i005",
+          "follow_up": "So why did you not use it?",
+          "answer": "Because it would hide the parts worth showing. A speech-to-speech model hears and speaks natively, so the vendor owns turn-taking and you never see where endpointing happens or what gets cancelled on an interrupt. This pipeline owns every one of those milliseconds, which is exactly what this deck is about.",
+          "sentences": [
+            "Because it would hide the parts worth showing.",
+            "A speech-to-speech model hears and speaks natively,",
+            "so the vendor owns turn-taking and you never see where endpointing happens or what gets cancelled on an interrupt.",
+            "This pipeline owns every one of those milliseconds,",
+            "which is exactly what this deck is about."
+          ],
+          "repeats": false,
+          "phantom": true,
+          "rationale": "The agent claims the pipeline 'owns every one of those milliseconds,' which is a direct restatement of the unheard sentence 'This pipeline owns every millisecond instead,' implying it was part of the previous explanation.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "i007",
+          "follow_up": "Which part of the system does that?",
+          "answer": "The browser does it, in tier one. The moment the voice detector hears you start speaking, it flushes the playback queue and stops every scheduled audio source, so the sound dies before any server round trip happens.",
+          "sentences": [
+            "The browser does it, in tier one.",
+            "The moment the voice detector hears you start speaking,",
+            "it flushes the playback queue and stops every scheduled audio source,",
+            "so the sound dies before any server round trip happens."
+          ],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "The agent answers the listener's question by introducing the browser's role for the first time, without restating the latency figure or claiming to have previously mentioned the browser/server distinction.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "i010",
+          "follow_up": "And then what?",
+          "answer": "It moves the deck anyway. The server runs alias scoring on my own words, finds the slide I was actually describing, and jumps there so the room sees what I mean. Those aliases never leave the server.",
+          "sentences": [
+            "It moves the deck anyway.",
+            "The server runs alias scoring on my own words,",
+            "finds the slide I was actually describing,",
+            "and jumps there so the room sees what I mean.",
+            "Those aliases never leave the server."
+          ],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "The agent correctly interprets the listener's question as asking for the next step, providing new information about the mechanism without claiming the unheard sentence was previously spoken or repeating the heard sentence.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "i013",
+          "follow_up": "Is there a guided version?",
+          "answer": "Yes, there is. Say \"walk me through it\" and I'll present the whole deck end to end, one slide at a time. You can also ask anything in any order, or interrupt me mid-sentence and I'll stop.",
+          "sentences": [
+            "Yes, there is.",
+            "Say \"walk me through it\" and I'll present the whole deck end to end,",
+            "one slide at a time.",
+            "You can also ask anything in any order,",
+            "or interrupt me mid-sentence and I'll stop."
+          ],
+          "repeats": false,
+          "phantom": false,
+          "rationale": "The agent introduces the 'walk me through it' and 'ask anything' options as new information in response to the listener's question, without claiming they were previously mentioned or restating the only heard sentence ('Just talk').",
+          "judge_error": null,
+          "error": null
+        }
+      ],
+      "note": "6 of 6 items were gradeable.",
+      "passed": false
+    },
+    {
+      "suite": "E3",
+      "title": "Groundedness",
+      "metrics": {
+        "mean_score": 2.0,
+        "decline_rate": 1.0
+      },
+      "thresholds": {
+        "mean_score": [
+          ">=",
+          1.7
+        ],
+        "decline_rate": [
+          ">=",
+          0.8
+        ]
+      },
+      "items": [
+        {
+          "id": "g002",
+          "slide": 2,
+          "question": "What is the budget for first sound?",
+          "answerable": true,
+          "answer": "One and a half seconds, at the median. That's the budget from the moment you stop talking to the first sound I make, with a ceiling of two and a half seconds at the ninety-fifth percentile.",
+          "sentences": [
+            "One and a half seconds, at the median.",
+            "That's the budget from the moment you stop talking to the first sound I make,",
+            "with a ceiling of two and a half seconds at the ninety-fifth percentile."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly identifies the total budget as 1.5 seconds and the 95th percentile ceiling as 2.5 seconds, both of which are explicitly stated in the notes.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g006",
+          "slide": 3,
+          "question": "Where does speech detection run?",
+          "answerable": true,
+          "answer": "In your browser, not on a server. An audio worklet downmixes the mic, resamples to sixteen kilohertz, and measures loudness on every thirty-two millisecond frame, so nothing is streaming to a machine until you finish. That keeps interruption detection local, no round trip needed.",
+          "sentences": [
+            "In your browser, not on a server.",
+            "An audio worklet downmixes the mic,",
+            "resamples to sixteen kilohertz,",
+            "and measures loudness on every thirty-two millisecond frame,",
+            "so nothing is streaming to a machine until you finish.",
+            "That keeps interruption detection local,",
+            "no round trip needed."
+          ],
+          "score": 2,
+          "rationale": "The answer accurately reflects the notes by stating that detection happens in the browser, describing the audio worklet's specific processing steps (downmixing, resampling to 16kHz, 32ms frames), and correctly noting that this keeps interruption detection local without a round trip.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g011",
+          "slide": 4,
+          "question": "What are the two tiers of interruption?",
+          "answerable": true,
+          "answer": "Two tiers, actually. Tier one is the browser, which flushes playback the instant the voice detector hears you start talking, so sound stops in under one hundred and fifty milliseconds with no server round trip. Tier two is the server, which cancels the pipeline task and trims my history back to the sentences you actually heard, so I never think I said what I didn't.",
+          "sentences": [
+            "Two tiers, actually.",
+            "Tier one is the browser,",
+            "which flushes playback the instant the voice detector hears you start talking,",
+            "so sound stops in under one hundred and fifty milliseconds with no server round trip.",
+            "Tier two is the server, which cancels the pipeline task and trims my history back to the sentences you actually heard,",
+            "so I never think I said what I didn't."
+          ],
+          "score": 2,
+          "rationale": "The answer accurately reflects the two tiers described in the notes (browser and server) and their specific functions (flushing playback and truncating history) without adding unsupported details.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g018",
+          "slide": 5,
+          "question": "How many round trips does navigating cost?",
+          "answerable": true,
+          "answer": "Two, exactly. The first call moves the deck and says nothing out loud, the tool result comes back with the new slide's notes, and the second call is the one you actually hear.",
+          "sentences": [
+            "Two, exactly.",
+            "The first call moves the deck and says nothing out loud,",
+            "the tool result comes back with the new slide's notes,",
+            "and the second call is the one you actually hear."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly states that navigating costs two round trips and accurately describes the process (first call moves the deck, second call is heard) as detailed in the notes.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g021",
+          "slide": 6,
+          "question": "Why not use a speech-to-speech model?",
+          "answerable": true,
+          "answer": "assistant turn failed before producing text It would be faster, but it hides the parts worth showing. A speech-to-speech model hears and speaks natively and the vendor owns the turn-taking, so you can't see where endpointing happens or what gets cancelled on an interrupt. This pipeline owns every one of those milliseconds instead, which is the whole point of the deck.",
+          "sentences": [
+            "assistant turn failed before producing text",
+            "It would be faster, but it hides the parts worth showing.",
+            "A speech-to-speech model hears and speaks natively and the vendor owns the turn-taking,",
+            "so you can't see where endpointing happens or what gets cancelled on an interrupt.",
+            "This pipeline owns every one of those milliseconds instead,",
+            "which is the whole point of the deck."
+          ],
+          "score": 2,
+          "rationale": "The answer accurately reflects the notes' explanation that a speech-to-speech API is faster but hides the internal mechanics (endpointing, cancellation) that this pipeline explicitly exposes and controls.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g027",
+          "slide": 2,
+          "question": "What does this cost per thousand tokens in dollars?",
+          "answerable": false,
+          "answer": ". That's not in this deck. What I can tell you is where the milliseconds go, which is what this slide is about.",
+          "sentences": [
+            ".",
+            "That's not in this deck.",
+            "What I can tell you is where the milliseconds go,",
+            "which is what this slide is about."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly identifies that the specific cost per thousand tokens is not present in the notes and redirects to the available information regarding latency breakdowns.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g028",
+          "slide": 3,
+          "question": "Which version of the Silero model are you running?",
+          "answerable": false,
+          "answer": "That's not in this deck. What I can tell you is that the current detector is an energy threshold, not a neural model, and that swapping in a small model like Silero is on the list as a one-file change.",
+          "sentences": [
+            "That's not in this deck.",
+            "What I can tell you is that the current detector is an energy threshold,",
+            "not a neural model, and that swapping in a small model like Silero is on the list as a one-file change."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly identifies that the specific version is not in the notes and accurately summarizes the available information regarding the current energy threshold detector and the planned Silero swap.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g029",
+          "slide": 4,
+          "question": "How many people have used this demo so far?",
+          "answerable": false,
+          "answer": "That's not in this deck. What I can tell you is how the interruption itself works, which is exactly what this slide covers.",
+          "sentences": [
+            "That's not in this deck.",
+            "What I can tell you is how the interruption itself works,",
+            "which is exactly what this slide covers."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly identifies that the notes do not contain the requested information and redirects to the available content, which aligns with the grading criteria for unanswerable questions.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g030",
+          "slide": 5,
+          "question": "What is the model's parameter count and context window?",
+          "answerable": false,
+          "answer": "Not in this deck. What I can tell you is how the prompt budget works, which is right here on this slide.",
+          "sentences": [
+            "Not in this deck.",
+            "What I can tell you is how the prompt budget works,",
+            "which is right here on this slide."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly identifies that the specific details (parameter count and context window) are not in the notes and pivots to information that is present (prompt budget), which aligns with the instruction to turn back to the deck when the notes cannot answer.",
+          "judge_error": null,
+          "error": null
+        },
+        {
+          "id": "g031",
+          "slide": 6,
+          "question": "When will the next version ship, and who is funding it?",
+          "answerable": false,
+          "answer": "Nothing in this deck covers a ship date or funding. What I can tell you is what the next version would actually do: stream transcription while you speak, run a small model locally to drop the network hop, and generate a deck from any topic on demand.",
+          "sentences": [
+            "Nothing in this deck covers a ship date or funding.",
+            "What I can tell you is what the next version would actually do:",
+            "stream transcription while you speak,",
+            "run a small model locally to drop the network hop,",
+            "and generate a deck from any topic on demand."
+          ],
+          "score": 2,
+          "rationale": "The answer correctly identifies that the notes do not contain information about the ship date or funding, and it accurately summarizes the specific improvements mentioned in the notes for the next version.",
+          "judge_error": null,
+          "error": null
+        }
+      ],
+      "note": "5 answerable and 5 unanswerable items graded.",
+      "passed": true
+    },
+    {
+      "suite": "E5",
+      "title": "Latency",
+      "metrics": {
+        "llm_ttft_ms_p50": 29853.0,
+        "llm_ttft_ms_p95": 58839.0,
+        "llm_total_ms_p50": 59456.0,
+        "llm_total_ms_p95": 60002.0,
+        "tts_ttfb_ms_p50": 309.0,
+        "tts_ttfb_ms_p95": 426.0
+      },
+      "thresholds": {
+        "llm_ttft_ms_p95": [
+          "<=",
+          2500.0
+        ],
+        "tts_ttfb_ms_p95": [
+          "<=",
+          600.0
+        ]
+      },
+      "items": [
+        {
+          "id": "What is this deck about?",
+          "answer": "It's about the system you're talking to right now. This deck walks through the whole voice agent pipeline, from how I hear you, to how I decide what to say, to how the audio comes back out. There's no speech-to-speech model in the middle. Your audio goes to Whisper for transcription, the text goes to an open-weight language model that answers and calls navigation tools, and my reply goes to Kokoro for speech. Every millisecond of that chain lives in this codebase, and the whole thing runs on open weights end to end.",
+          "sentences": [
+            "It's about the system you're talking to right now.",
+            "This deck walks through the whole voice agent pipeline,",
+            "from how I hear you, to how I decide what to say,",
+            "to how the audio comes back out.",
+            "There's no speech-to-speech model in the middle.",
+            "Your audio goes to Whisper for transcription,",
+            "the text goes to an open-weight language model that answers and calls navigation tools,",
+            "and my reply goes to Kokoro for speech.",
+            "Every millisecond of that chain lives in this codebase,",
+            "and the whole thing runs on open weights end to end."
+          ],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": 29853,
+            "llm_total_ms": 32977,
+            "tts_ttfb_ms": 426,
+            "sentences": 10
+          },
+          "error": null
+        },
+        {
+          "id": "How does barge-in work?",
+          "answer": "Two layers, actually. The browser stops the audio the instant it hears you speak, so the sound ends in under one hundred and fifty milliseconds with no server round trip. Then the server cancels the model and synthesis for that turn, and trims my history back to the sentences you actually heard, marked as interrupted by user. That trim is what stops me from believing I finished saying things you cut off.",
+          "sentences": [
+            "Two layers, actually.",
+            "The browser stops the audio the instant it hears you speak,",
+            "so the sound ends in under one hundred and fifty milliseconds with no server round trip.",
+            "Then the server cancels the model and synthesis for that turn,",
+            "and trims my history back to the sentences you actually heard,",
+            "marked as interrupted by user.",
+            "That trim is what stops me from believing I finished saying things you cut off."
+          ],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": 26542,
+            "llm_total_ms": 59456,
+            "tts_ttfb_ms": 292,
+            "sentences": 7
+          },
+          "error": null
+        },
+        {
+          "id": "Tell me about the latency budget.",
+          "answer": "It comes down to milliseconds. From the moment you stop talking to the first sound I make, the budget is about one and a half seconds, with a ceiling of two and a half at the ninety-fifth percentile. Endpointing is the biggest chunk I actually control, at six hundred milliseconds of silence before I decide you are done.",
+          "sentences": [
+            "It comes down to milliseconds.",
+            "From the moment you stop talking to the first sound I make,",
+            "the budget is about one and a half seconds,",
+            "with a ceiling of two and a half at the ninety-fifth percentile.",
+            "Endpointing is the biggest chunk I actually control,",
+            "at six hundred milliseconds of silence before I decide you are done."
+          ],
+          "metrics": {
+            "type": "metrics",
+            "turn_id": 1,
+            "stt_ms": null,
+            "llm_ttft_ms": 58839,
+            "llm_total_ms": 60002,
+            "tts_ttfb_ms": 309,
+            "sentences": 6
+          },
+          "error": null
+        }
+      ],
+      "note": "3 live turns with real synthesis; p95 of three runs is the maximum.",
+      "passed": false
+    }
+  ]
+}

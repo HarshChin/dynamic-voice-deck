@@ -17,14 +17,15 @@ import pytest
 from app.errors import ProviderError
 from app.pipeline.prompt import PromptBuilder
 from app.providers.base import Message, TokenDelta, ToolSpec
-from evals import harness, pacing
+from evals import harness, pacing, suites
 from evals.budget import BUDGET, NOT_ATTEMPTED
 from evals.judge import judge
 from evals.pacing import PacedLLM, Pacer
-from evals.report import to_markdown
+from evals.report import to_markdown, write
 from evals.suites import (
     STYLE_MAX_SENTENCES,
     STYLE_MAX_WORDS,
+    Context,
     SuiteResult,
     _exclusions,
     _ratio,
@@ -34,7 +35,7 @@ from evals.suites import (
     e6_tools,
 )
 
-from tests.fakes import FakeTTS
+from tests.fakes import FakeLLM, FakeTTS
 
 
 @pytest.fixture(autouse=True)
@@ -329,6 +330,49 @@ def test_the_summary_names_each_metric_with_its_units() -> None:
     assert "| E3 Groundedness | mean_score | 1.84 / 2 | >= 1.70 / 2 | yes |" in table
     assert "| E5 Latency | llm_ttft_ms_p50 | 712 ms | — | — |" in table
     assert "40 of 40 items answered." in table
+
+
+def test_a_run_records_the_commit_it_started_under(tmp_path: Path) -> None:
+    """TC-BE-351: TR-202 -- the SHA is read when the run starts, not when the file is written."""
+    out = tmp_path / "run.json"
+
+    write(
+        [SuiteResult(suite="E1", title="Slide routing")],
+        model="m",
+        judge_model="m",
+        out=out,
+        sha="abc1234",
+    )
+
+    assert json.loads(out.read_text(encoding="utf-8"))["git_sha"] == "abc1234"
+    assert "abc1234" in out.with_suffix(".md").read_text(encoding="utf-8")
+
+
+async def test_the_latency_suite_waits_before_each_turn_rather_than_being_paced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-BE-352: E5 -- a pacer waits inside the stream and is timed as the model; wait first."""
+    real_sleep = suites.asyncio.sleep
+    slept: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        await real_sleep(0)
+
+    monkeypatch.setattr(suites.asyncio, "sleep", fake_sleep)
+    context = Context(
+        deck=harness.load_deck(),
+        llm=FakeLLM(),
+        judge_llm=FakeLLM(),
+        tts=FakeTTS(),
+        prompts=PromptBuilder(),
+    )
+
+    result = await suites.e5_latency(context, runs=2, quiet_s=61.0)
+
+    assert [seconds for seconds in slept if seconds > 0] == [61.0, 61.0]
+    assert len(result.items) == 2
+    assert all(row["error"] is None for row in result.items)
 
 
 def test_tool_hygiene_ignores_items_the_provider_refused() -> None:

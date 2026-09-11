@@ -138,14 +138,15 @@ answer as fully grounded, and vagueness is the failure mode a presenter actually
 
 | Model | E1 accuracy | E1 false nav | E4 style | E6 invalid | Notes |
 |---|---|---|---|---|---|
-| **qwen/qwen3.8-27b (Groq)** | pending | pending | pending | pending | **current default.** Chosen on the smoke comparison below and on latency. Its own run hit the daily budget twice on release day (both entries below); it runs on the eighteen-item set the next time a bucket is full. |
+| **qwen/qwen3.8-27b (Groq)** | **83.3 %** (18 of 18 answered) | **0.0 %** | 88.9 % | 0 | **current default.** Eighteen-item set, 2026-09-11, no refusals. Misses the routing bar by two items and the style bar by two answers; every stay and off-topic item was handled in place and no tool call was invalid. Also: E2 0 % repetition with one judged phantom reference, E3 2.00 / 2 and 100 % declined, judge calibration 10 of 10. The release run, below. |
 | openai/gpt-oss-120b (Groq) | **58.3 %** (24 of 40 answered) | 0.0 % | 87.5 % | 2 | rejected. Forty-item set. Seven of eight paraphrased questions produced no visible answer at all. |
 | openai/gpt-oss-20b (Groq) | — | — | — | — | untested; same reasoning-model family as the 120b. |
 | **qwen2.5:7b (Ollama, local)** | **57.5 %** (40 of 40 answered) | 8.3 % | 77.5 % | 0 | **the fallback** (TR-085). Forty-item set. Not a candidate for primary; see the run below for why it is a good fallback anyway. |
 
-The two measured rows were made on the forty-item routing set, before it was cut to eighteen
-(*Sizing*, above). The categories are the same and the smaller set is balanced across them, but a
-number from one set is not directly comparable with a number from the other.
+The `gpt-oss-120b` and `qwen2.5:7b` rows were made on the forty-item routing set, before it was cut
+to eighteen (*Sizing*, above); the default model's row is on the eighteen-item set. The categories
+are the same and the smaller set is balanced across them, but a number from one set is not directly
+comparable with a number from the other.
 
 Note: `llama-3.3-70b-versatile` is no longer offered on this account; the models actually available
 are `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`,
@@ -182,6 +183,117 @@ Models: STT=<id> LLM=<id> TTS=<id>
 Notes: <what changed since the last run, failures investigated, dataset additions>
 ```
 
+### 2026-09-11 — 435f074, working tree — `qwen/qwen3.8-27b` — **E5 re-run, unpaced**
+
+Full record: `backend/evals/results/qwen3.8-27b-release-latency.json`. Three typed questions through
+the real pipeline with real Kokoro synthesis, the model unpaced, and a quiet minute before each turn
+so the per-minute allowance was clear. Stamped with the commit it started under; the E5 change it
+exercises was uncommitted in that tree and lands in the commit that records this entry.
+
+| Stage | Turn 1 | Turn 2 | Turn 3 | p50 | p95 | Threshold | Pass |
+|---|---|---|---|---|---|---|---|
+| model first token | 670 ms | 540 ms | 486 ms | 540 ms | 670 ms | ≤ 2,500 ms | yes |
+| model whole answer | 3,046 ms | 2,256 ms | 2,098 ms | 2,256 ms | 3,046 ms | — | — |
+| synthesis first chunk | 341 ms | 263 ms | 272 ms | 272 ms | 341 ms | ≤ 600 ms | yes |
+
+Server-side first audio is first token plus first chunk: roughly 0.8 to 1.0 s here, inside the
+1.5 s median budget of TRD §8.1 before endpointing and transcription are added on top. Against the
+judged file's 26 to 59 seconds for the same stage, this is the measurement; that was the pacer.
+
+### 2026-09-11 — c7d858e — `qwen/qwen3.8-27b` — **the release run**
+
+Full records: `backend/evals/results/qwen3.8-27b-release.json` (E1, E4, E6; 19:20–19:35) and
+`backend/evals/results/qwen3.8-27b-release-judged.json` (judge calibration, E2, E3, E5; 19:36–20:02),
+both on a fresh account's daily budget, paced at one call per 31 seconds, with **no refusal of any
+kind**. The judged file is stamped `435f074` because the runner read the SHA when it wrote the file
+and that commit landed mid-run; the code that ran was `c7d858e`. The runner now reads the SHA when
+it starts (TC-BE-351); the stamp is left as written, with this correction beside it.
+
+| Suite | Metric | Value | Threshold | Pass |
+|---|---|---|---|---|
+| JUDGE | agreement with hand labels | 100 % (10 of 10) | ≥ 90 % | yes |
+| E1 Slide routing | accuracy | 83.3 % (15 of 18) | ≥ 90 % | **no** |
+| E1 Slide routing | false navigation | 0.0 % (0 of 6) | ≤ 5 % | yes |
+| E2 Interruption memory | repetition | 0.0 % (0 of 6) | ≤ 10 % | yes |
+| E2 Interruption memory | phantom reference | 16.7 % (1 of 6) | 0 % | **no** |
+| E3 Groundedness | mean score, answerable | 2.00 / 2 (5 of 5 scored 2) | ≥ 1.70 | yes |
+| E3 Groundedness | decline rate, unanswerable | 100 % (5 of 5) | ≥ 80 % | yes |
+| E4 Spoken style | pass rate | 88.9 % (16 of 18) re-derived; 55.6 % as first recorded | ≥ 95 % | **no** |
+| E5 Latency | synthesis first chunk, p95 | 426 ms | ≤ 600 ms | yes |
+| E5 Latency | model first token, p95 | 670 ms, in the unpaced re-run above | ≤ 2,500 ms | yes |
+| E6 Tool-call hygiene | invalid calls | 0 | 0 | yes |
+| E6 Tool-call hygiene | off-topic navigation | 0.0 % (0 of 3) | ≤ 5 % | yes |
+
+**Routing: three misses, three different causes.** By category: direct 2 of 3, paraphrase 2 of 3,
+relative 2 of 3; cross-reference, stay and off-topic 3 of 3 each.
+
+- `r020`, "Next slide please." from slide 2, landed on **5**. The model called `go_to_slide` on all
+  three round trips the turn allows: after each move the tool result showed a new current slide, the
+  instruction "next" still stood, and it moved again. A relative command has to be resolved once.
+  This is the run's one real routing defect, and a follow-up rather than a fix tonight: the tool
+  loop's own comment records three cheaper variants of that exchange each failing against the live
+  API, so the change needs a live test the budget does not have left.
+- `r010`, "Why does it take a moment before you answer?", answered the question -- correctly, and
+  about slide 2 -- while leaving the deck on slide 1, saying "the next slide breaks it down" instead
+  of going there. The keyword fallback stood down, as designed, because the answer named several
+  stages and no slide won clearly.
+- `r004`, "What are the trade-offs?", got back the provider's own failure string, "assistant turn
+  failed before producing text", and nothing else: no tool call, no words. That string exists
+  nowhere in this repository.
+
+**Style: the instrument was wrong first.** As recorded, 8 of 18 answers failed, six of them for
+"too many sentences". E4 was counting the chunker's output, and the chunker splits a long sentence
+at a clause so that speech can start early: a three-sentence, 46-word answer arrived as six pieces.
+Fixed in `435f074`. Re-derived from the same recorded answers, E4 is 88.9 %, with two real failures:
+a 99-word answer to "Go back one.", and the `r010` answer, which arrived wrapped as
+`assistant turn 2 {"content":"..."}` and now counts as markup. To reproduce the re-derivation from
+the record:
+
+```bash
+cd backend && uv run python -c '
+import json; from evals.suites import SuiteResult, e4_style
+d = json.load(open("evals/results/qwen3.8-27b-release.json"))
+e1 = next(s for s in d["suites"] if s["suite"] == "E1")
+r = e4_style([SuiteResult(suite="E1", title="Slide routing", items=e1["items"])])
+print(r.metrics, [(i["id"], i["problems"]) for i in r.items if not i["ok"]])'
+```
+
+**The model leaks its own chat template.** Across the two files, four answers opened with labels
+that are not in this codebase: "assistant reasoning", `assistant turn 2 {"content":"`, and twice
+the failure string above -- once as the whole answer (`r004`) and once, on E3's slide-6 question,
+followed by a perfect answer. Since `435f074` the stripper that removes our own two markers
+(TR-088) removes these too, so a listener never hears them; the eval keeps the model's raw text, so
+the record still shows them.
+
+**Interruption memory: one strict verdict.** No answer repeated what had been heard. One was judged
+a phantom reference: asked "So why did you not use it?" after being cut off on slide 6, the agent
+said "This pipeline owns every one of those milliseconds", which restates an unheard sentence
+("This pipeline owns every millisecond instead") without claiming to have said it. The rubric asks
+whether the reply refers to unheard content *as though it had been said*; the judge read a
+restatement as a reference. At a 0 % threshold on six items, one such verdict fails the suite. The
+verdict stands as recorded. The rubric's wording is a follow-up, and so is the question underneath
+it: restating a true fact from the notes that the listener did not hear is arguably the right thing
+to do.
+
+**Groundedness is the clean result.** Every answerable question scored 2 of 2, and every
+unanswerable one was declined with the deck's own formula -- "That's not in this deck. What I can
+tell you is..." -- including the two that invite a confident guess, the model's parameter count and
+the Silero version. The judge agreed with all ten hand labels first, so these numbers are believed.
+
+**Latency, and the fourth instrument fault.** Synthesis first chunk 292–426 ms across three turns,
+p95 426 ms against a 600 ms bar. The model's time to first token as recorded in the judged file --
+26.5 s, 29.9 s, 58.8 s -- is not the model: it is the pacer's wait, which happens inside the
+provider's `stream`, after the turn has started its clock. The suite now runs unpaced and lets a
+minute pass before each turn so its calls fit the per-minute allowance on their own (TC-BE-352).
+The re-run is the entry above this one.
+
+**What this changes.** The default stays `qwen/qwen3.8-27b`. It answered every item, navigated
+correctly on 15 of 18 with zero false moves, declined everything it should, and its failures are
+specific and fixable. Against the two alternatives measured earlier on the larger set it is not
+close: `gpt-oss-120b` produced no visible answer on seven of eight paraphrases, and the local
+fallback answered well but left the deck where it was on thirteen items. The release bar is not met
+on E1, E2 and E4, and the README says so.
+
 ### 2026-09-11 — a8f1e88 — `qwen/qwen3.8-27b` — attempt 2, paced: **no record, and the reason the suites shrank**
 
 No result file: the runner wrote results only at the end of a run, and this run did not end.
@@ -204,8 +316,8 @@ now stops attempting items on the first daily refusal instead of crawling, and s
 note how many it never attempted (TR-205); and pacing is its default rather than a flag.
 
 **What it does not establish.** Nothing about the agent: 45 calls whose results were never written
-are not a measurement. The default model's row above stays *pending* until an eighteen-item run
-completes on a full bucket.
+are not a measurement. The default model's row above stayed *pending* until the eighteen-item run
+completed on a fresh bucket later the same evening -- the release-run entry above this one.
 
 ### 2026-09-11 — 8baa145 — `qwen2.5:7b` on Ollama, as the local fallback
 

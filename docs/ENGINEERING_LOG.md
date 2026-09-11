@@ -25,6 +25,46 @@ Rules:
 
 ## 2026-09-11
 
+### 2026-09-11 · The release run is recorded, and two more instrument faults with it · uncommitted
+**Scope:** `docs/EVALS.md`, `README.md`, `evals/results/` (three records), `evals/run_evals.py`,
+`evals/report.py`, `evals/suites.py`, `tests/test_evals.py`, `docs/TRD.md` §13, `docs/TEST_CASES.md`
+
+**Recorded.** Both halves of the release run for `qwen/qwen3.8-27b` on the eighteen-item sets, one
+call per 31 seconds, not a single refusal in 80-odd calls: routing 83.3 % with zero false
+navigation, groundedness 2.00 / 2 with every unanswerable question declined, judge calibration 10 of
+10, style 88.9 % re-derived, one judged phantom reference in six, tool hygiene clean. The reading of
+each number, item by item, is in `EVALS.md`; the README states the numbers and says plainly that E1,
+E2 and E4 miss their bars. The default model is now the only one with a full record, and it keeps
+the default.
+
+**Instrument fault three: E5 measured the pacer.** The pacer waits inside the provider's `stream`,
+after `run_turn` has started the model's clock, so the judged run reported a time to first token of
+26 to 59 seconds for a model that answers in under a second. The suite now takes an unpaced provider
+and lets a minute pass before each turn, outside the clock, so its one or two calls fit the
+per-minute allowance on their own. Re-run separately; the number is in `EVALS.md`.
+
+**Instrument fault four: the SHA was read at the end.** The judged file is stamped `435f074`, a
+commit that landed twenty-five minutes into its run; the code that ran was `c7d858e`. The runner
+now reads the SHA when it starts. The stamp on that file is left as written, with the correction
+beside it in both `EVALS.md` and the results index: annotating a record is honest, editing one is
+not.
+
+**Two findings about the model are logged as follow-ups, not fixed.** "Next slide please." resolved
+"next" three times, once per round trip, because the tool result showed a new current slide each
+time and the instruction still stood; a relative command should be resolved once, and the fix
+needs a live test of the tool exchange the budget no longer has. And the judge counted a restated
+unheard fact as a phantom reference; the rubric's wording, and whether that is a fault at all, is
+open.
+
+**Also.** TRD §13.1's E5 row described a replay of recorded WAVs, which is not what was built; it
+now describes what runs.
+
+**Verification:** 603 backend tests, lint clean. TC-BE-351 pins the SHA-at-start, TC-BE-352 the
+quiet minute before each latency turn.
+
+**Follow-ups:** the relative-navigation loop; the phantom-reference rubric; a hard cap on answer
+length in the chunker; rotate every Groq key that passed through the chat today.
+
 ### 2026-09-11 · The release eval ran, and found two bugs in the instrument and one in the product · uncommitted
 **Scope:** `evals/suites.py`, `app/pipeline/turn.py` (TR-088), `tests/test_evals.py`, `tests/test_turn.py`,
 `docs/TRD.md`, `docs/TEST_CASES.md`

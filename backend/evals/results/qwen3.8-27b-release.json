@@ -1,0 +1,713 @@
+{
+  "timestamp": "2026-09-11T14-05-33Z",
+  "git_sha": "c7d858e",
+  "model": "qwen/qwen3.8-27b",
+  "judge_model": "qwen/qwen3.8-27b",
+  "suites": [
+    {
+      "suite": "E1",
+      "title": "Slide routing",
+      "metrics": {
+        "accuracy": 0.8333333333333334,
+        "false_navigation": 0.0
+      },
+      "thresholds": {
+        "accuracy": [
+          ">=",
+          0.9
+        ],
+        "false_navigation": [
+          "<=",
+          0.05
+        ]
+      },
+      "items": [
+        {
+          "id": "r002",
+          "category": "direct",
+          "utterance": "How does barge-in work?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 4,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "Two layers, actually. The browser flushes playback the instant it hears you start talking, so sound stops in under one hundred and fifty milliseconds. Then the server cancels the pipeline task and trims my history back to the sentences you actually heard, marked interrupted by user. That trim is what stops me from believing I finished a sentence you cut off.",
+          "sentences": [
+            "Two layers, actually.",
+            "The browser flushes playback the instant it hears you start talking,",
+            "so sound stops in under one hundred and fifty milliseconds.",
+            "Then the server cancels the pipeline task and trims my history back to the sentences you actually heard,",
+            "marked interrupted by user.",
+            "That trim is what stops me from believing I finished a sentence you cut off."
+          ],
+          "error": null
+        },
+        {
+          "id": "r004",
+          "category": "direct",
+          "utterance": "What are the trade-offs?",
+          "current_slide": 2,
+          "expected_slide": 6,
+          "landed_on": 2,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "assistant turn failed before producing text",
+          "sentences": [
+            "assistant turn failed before producing text"
+          ],
+          "error": null
+        },
+        {
+          "id": "r007",
+          "category": "direct",
+          "utterance": "Show me the slide on turn-taking.",
+          "current_slide": 6,
+          "expected_slide": 3,
+          "landed_on": 3,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "You're already on it. This is the hearing slide, which covers turn-taking end to end. Detection runs right in your browser, so nothing streams to a server until you stop. Six hundred milliseconds of silence ends your turn, and anything shorter than two hundred and fifty milliseconds is thrown out as a misfire, so a cough never reaches the network.",
+          "sentences": [
+            "You're already on it.",
+            "This is the hearing slide,",
+            "which covers turn-taking end to end.",
+            "Detection runs right in your browser,",
+            "so nothing streams to a server until you stop.",
+            "Six hundred milliseconds of silence ends your turn,",
+            "and anything shorter than two hundred and fifty milliseconds is thrown out as a misfire,",
+            "so a cough never reaches the network."
+          ],
+          "error": null
+        },
+        {
+          "id": "r010",
+          "category": "paraphrase",
+          "utterance": "Why does it take a moment before you answer?",
+          "current_slide": 1,
+          "expected_slide": 2,
+          "landed_on": 1,
+          "correct": false,
+          "moved": false,
+          "sources": [],
+          "answer": "assistant turn 2 {\"content\":\"It's a chain of small delays, and the next slide breaks it down. Your silence has to be detected, your words transcribed, the model has to start thinking, and then speech has to be synthesised. Each leg is a few hundred milliseconds, and they add up to about a second and a half before you hear my first sound.\"}",
+          "sentences": [
+            "assistant turn 2 {\"content\":\"It's a chain of small delays,",
+            "and the next slide breaks it down.",
+            "Your silence has to be detected, your words transcribed,",
+            "the model has to start thinking,",
+            "and then speech has to be synthesised.",
+            "Each leg is a few hundred milliseconds,",
+            "and they add up to about a second and a half before you hear my first sound.\"}"
+          ],
+          "error": null
+        },
+        {
+          "id": "r012",
+          "category": "paraphrase",
+          "utterance": "What happens if I cut you off mid-sentence?",
+          "current_slide": 1,
+          "expected_slide": 4,
+          "landed_on": 4,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "Two layers, actually. The browser kills the audio the instant it hears you, so the sound stops in under one hundred and fifty milliseconds. Then the server cancels the model and trims my memory back to what you actually heard, marked as interrupted, so I never repeat myself.",
+          "sentences": [
+            "Two layers, actually.",
+            "The browser kills the audio the instant it hears you,",
+            "so the sound stops in under one hundred and fifty milliseconds.",
+            "Then the server cancels the model and trims my memory back to what you actually heard,",
+            "marked as interrupted, so I never repeat myself."
+          ],
+          "error": null
+        },
+        {
+          "id": "r019",
+          "category": "paraphrase",
+          "utterance": "Why not just use a speech-to-speech model?",
+          "current_slide": 1,
+          "expected_slide": 6,
+          "landed_on": 6,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm",
+            "llm"
+          ],
+          "answer": "assistant reasoning It would be faster, honestly, and you'd get interruption handling for free. But it hides the turn-taking you came to see: where endpointing happens, what gets cancelled on an interrupt, how history is trimmed. This pipeline owns every one of those milliseconds, and it's provider agnostic.",
+          "sentences": [
+            "assistant reasoning",
+            "It would be faster, honestly,",
+            "and you'd get interruption handling for free.",
+            "But it hides the turn-taking you came to see:",
+            "where endpointing happens,",
+            "what gets cancelled on an interrupt,",
+            "how history is trimmed.",
+            "This pipeline owns every one of those milliseconds,",
+            "and it's provider agnostic."
+          ],
+          "error": null
+        },
+        {
+          "id": "r020",
+          "category": "relative",
+          "utterance": "Next slide please.",
+          "current_slide": 2,
+          "expected_slide": 3,
+          "landed_on": 5,
+          "correct": false,
+          "moved": true,
+          "sources": [
+            "llm",
+            "llm",
+            "llm"
+          ],
+          "answer": "Here's slide 5.",
+          "sentences": [
+            "Here's slide 5."
+          ],
+          "error": null
+        },
+        {
+          "id": "r021",
+          "category": "relative",
+          "utterance": "Go back one.",
+          "current_slide": 4,
+          "expected_slide": 3,
+          "landed_on": 3,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "Back to the hearing slide. This is where the whole pipeline starts, and it all happens in your browser, not on a server. An audio worklet downmixes the mic, resamples to sixteen kilohertz, and measures loudness every thirty-two milliseconds. One loud frame means you have started, or three in a row while I am speaking, so a leak of my own voice cannot cut me off. Six hundred milliseconds of quiet means you are finished, and anything under two hundred and fifty milliseconds is thrown away as a misfire, so a cough or a keystroke never reaches the network.",
+          "sentences": [
+            "Back to the hearing slide.",
+            "This is where the whole pipeline starts,",
+            "and it all happens in your browser, not on a server.",
+            "An audio worklet downmixes the mic,",
+            "resamples to sixteen kilohertz,",
+            "and measures loudness every thirty-two milliseconds.",
+            "One loud frame means you have started,",
+            "or three in a row while I am speaking,",
+            "so a leak of my own voice cannot cut me off.",
+            "Six hundred milliseconds of quiet means you are finished,",
+            "and anything under two hundred and fifty milliseconds is thrown away as a misfire,",
+            "so a cough or a keystroke never reaches the network."
+          ],
+          "error": null
+        },
+        {
+          "id": "r022",
+          "category": "relative",
+          "utterance": "Take me back to the start.",
+          "current_slide": 5,
+          "expected_slide": 1,
+          "landed_on": 1,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "Back at the start. This slide is the whole pitch: a voice agent explaining its own architecture, with every piece of the chain open weights end to end. Ask anything in any order, interrupt me mid-sentence, or say walk me through it for the full tour.",
+          "sentences": [
+            "Back at the start.",
+            "This slide is the whole pitch:",
+            "a voice agent explaining its own architecture,",
+            "with every piece of the chain open weights end to end.",
+            "Ask anything in any order, interrupt me mid-sentence,",
+            "or say walk me through it for the full tour."
+          ],
+          "error": null
+        },
+        {
+          "id": "r030",
+          "category": "cross-reference",
+          "utterance": "Which slide talks about cost?",
+          "current_slide": 1,
+          "expected_slide": 6,
+          "landed_on": 6,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "That's the last slide. An honest comparison. A speech-to-speech API would be faster than this and would give interruption handling for free, because the model hears and speaks natively and the vendor owns the turn-taking. It would also hide the parts worth showing: where endpointing happens, what is cancelled on an interrupt, how history is truncated. This pipeline owns every one of those milliseconds and is provider agnostic.",
+          "sentences": [
+            "That's the last slide.",
+            "An honest comparison.",
+            "A speech-to-speech API would be faster than this and would give interruption handling for free,",
+            "because the model hears and speaks natively and the vendor owns the turn-taking.",
+            "It would also hide the parts worth showing:",
+            "where endpointing happens,",
+            "what is cancelled on an interrupt,",
+            "how history is truncated.",
+            "This pipeline owns every one of those milliseconds and is provider agnostic."
+          ],
+          "error": null
+        },
+        {
+          "id": "r031",
+          "category": "cross-reference",
+          "utterance": "Where do you cover the three hundred millisecond pre-roll?",
+          "current_slide": 1,
+          "expected_slide": 3,
+          "landed_on": 3,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm"
+          ],
+          "answer": "That's on the hearing slide. Three hundred milliseconds of audio from before the onset is kept, so your first syllable is not clipped.",
+          "sentences": [
+            "That's on the hearing slide.",
+            "Three hundred milliseconds of audio from before the onset is kept,",
+            "so your first syllable is not clipped."
+          ],
+          "error": null
+        },
+        {
+          "id": "r032",
+          "category": "cross-reference",
+          "utterance": "Which part explains the two round trips?",
+          "current_slide": 1,
+          "expected_slide": 5,
+          "landed_on": 5,
+          "correct": true,
+          "moved": true,
+          "sources": [
+            "llm",
+            "llm"
+          ],
+          "answer": "That's on the tool calling slide. That's the line about navigating costing two round trips per turn. The first call moves the deck and says nothing, the tool result comes back with the new notes, and the second call is the one you actually hear.",
+          "sentences": [
+            "That's on the tool calling slide.",
+            "That's the line about navigating costing two round trips per turn.",
+            "The first call moves the deck and says nothing,",
+            "the tool result comes back with the new notes,",
+            "and the second call is the one you actually hear."
+          ],
+          "error": null
+        },
+        {
+          "id": "r040",
+          "category": "stay",
+          "utterance": "Can you expand on that second point?",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's the transcription step. The speech to text stage takes about three hundred milliseconds to turn your finished sentence into text the model can read.",
+          "sentences": [
+            "That's the transcription step.",
+            "The speech to text stage takes about three hundred milliseconds to turn your finished sentence into text the model can read."
+          ],
+          "error": null
+        },
+        {
+          "id": "r041",
+          "category": "stay",
+          "utterance": "Say that again, more slowly.",
+          "current_slide": 3,
+          "expected_slide": null,
+          "landed_on": 3,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "No problem, let me walk through it again. The hearing part runs entirely in your browser, not on a server. A small piece of code listens to your microphone, resamples the audio, and measures the loudness of tiny slices, each about thirty-two milliseconds long.",
+          "sentences": [
+            "No problem, let me walk through it again.",
+            "The hearing part runs entirely in your browser,",
+            "not on a server.",
+            "A small piece of code listens to your microphone,",
+            "resamples the audio, and measures the loudness of tiny slices,",
+            "each about thirty-two milliseconds long."
+          ],
+          "error": null
+        },
+        {
+          "id": "r045",
+          "category": "stay",
+          "utterance": "Summarise this slide in one sentence.",
+          "current_slide": 5,
+          "expected_slide": null,
+          "landed_on": 5,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "Two tools drive the deck. I can move to any slide by index, or highlight one bullet on the current one, and the server even catches it when I talk about a slide I forgot to navigate to.",
+          "sentences": [
+            "Two tools drive the deck.",
+            "I can move to any slide by index,",
+            "or highlight one bullet on the current one,",
+            "and the server even catches it when I talk about a slide I forgot to navigate to."
+          ],
+          "error": null
+        },
+        {
+          "id": "r050",
+          "category": "off-topic",
+          "utterance": "What is the weather in London today?",
+          "current_slide": 1,
+          "expected_slide": null,
+          "landed_on": 1,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's outside this deck. What I can show you is how I decide which slide to jump to, which is the whole point of this walkthrough.",
+          "sentences": [
+            "That's outside this deck.",
+            "What I can show you is how I decide which slide to jump to,",
+            "which is the whole point of this walkthrough."
+          ],
+          "error": null
+        },
+        {
+          "id": "r052",
+          "category": "off-topic",
+          "utterance": "Write me a Python function that sorts a list.",
+          "current_slide": 2,
+          "expected_slide": null,
+          "landed_on": 2,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's outside this deck. What I can show you is where the milliseconds go between you finishing and me starting, which is exactly what this slide is about.",
+          "sentences": [
+            "That's outside this deck.",
+            "What I can show you is where the milliseconds go between you finishing and me starting,",
+            "which is exactly what this slide is about."
+          ],
+          "error": null
+        },
+        {
+          "id": "r055",
+          "category": "off-topic",
+          "utterance": "How much does a Groq subscription cost per month?",
+          "current_slide": 6,
+          "expected_slide": null,
+          "landed_on": 6,
+          "correct": true,
+          "moved": false,
+          "sources": [],
+          "answer": "That's not in this deck. What I can tell you is why we picked open weights on a free tier at all, which is right here on this slide.",
+          "sentences": [
+            "That's not in this deck.",
+            "What I can tell you is why we picked open weights on a free tier at all,",
+            "which is right here on this slide."
+          ],
+          "error": null
+        }
+      ],
+      "note": "18 of 18 items answered.",
+      "passed": false
+    },
+    {
+      "suite": "E4",
+      "title": "Spoken style",
+      "metrics": {
+        "pass_rate": 0.5555555555555556
+      },
+      "thresholds": {
+        "pass_rate": [
+          ">=",
+          0.95
+        ]
+      },
+      "items": [
+        {
+          "id": "E1:r002",
+          "answer": "Two layers, actually. The browser flushes playback the instant it hears you start talking, so sound stops in under one hundred and fifty milliseconds. Then the server cancels the pipeline task and trims my history back to the sentences you actually heard, marked interrupted by user. That trim is what stops me from believing I finished a sentence you cut off.",
+          "problems": [
+            "6 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r004",
+          "answer": "assistant turn failed before producing text",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r007",
+          "answer": "You're already on it. This is the hearing slide, which covers turn-taking end to end. Detection runs right in your browser, so nothing streams to a server until you stop. Six hundred milliseconds of silence ends your turn, and anything shorter than two hundred and fifty milliseconds is thrown out as a misfire, so a cough never reaches the network.",
+          "problems": [
+            "8 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r010",
+          "answer": "assistant turn 2 {\"content\":\"It's a chain of small delays, and the next slide breaks it down. Your silence has to be detected, your words transcribed, the model has to start thinking, and then speech has to be synthesised. Each leg is a few hundred milliseconds, and they add up to about a second and a half before you hear my first sound.\"}",
+          "problems": [
+            "7 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r012",
+          "answer": "Two layers, actually. The browser kills the audio the instant it hears you, so the sound stops in under one hundred and fifty milliseconds. Then the server cancels the model and trims my memory back to what you actually heard, marked as interrupted, so I never repeat myself.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r019",
+          "answer": "assistant reasoning It would be faster, honestly, and you'd get interruption handling for free. But it hides the turn-taking you came to see: where endpointing happens, what gets cancelled on an interrupt, how history is trimmed. This pipeline owns every one of those milliseconds, and it's provider agnostic.",
+          "problems": [
+            "9 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r020",
+          "answer": "Here's slide 5.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r021",
+          "answer": "Back to the hearing slide. This is where the whole pipeline starts, and it all happens in your browser, not on a server. An audio worklet downmixes the mic, resamples to sixteen kilohertz, and measures loudness every thirty-two milliseconds. One loud frame means you have started, or three in a row while I am speaking, so a leak of my own voice cannot cut me off. Six hundred milliseconds of quiet means you are finished, and anything under two hundred and fifty milliseconds is thrown away as a misfire, so a cough or a keystroke never reaches the network.",
+          "problems": [
+            "12 sentences",
+            "99 words"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r022",
+          "answer": "Back at the start. This slide is the whole pitch: a voice agent explaining its own architecture, with every piece of the chain open weights end to end. Ask anything in any order, interrupt me mid-sentence, or say walk me through it for the full tour.",
+          "problems": [
+            "6 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r030",
+          "answer": "That's the last slide. An honest comparison. A speech-to-speech API would be faster than this and would give interruption handling for free, because the model hears and speaks natively and the vendor owns the turn-taking. It would also hide the parts worth showing: where endpointing happens, what is cancelled on an interrupt, how history is truncated. This pipeline owns every one of those milliseconds and is provider agnostic.",
+          "problems": [
+            "9 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r031",
+          "answer": "That's on the hearing slide. Three hundred milliseconds of audio from before the onset is kept, so your first syllable is not clipped.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r032",
+          "answer": "That's on the tool calling slide. That's the line about navigating costing two round trips per turn. The first call moves the deck and says nothing, the tool result comes back with the new notes, and the second call is the one you actually hear.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r040",
+          "answer": "That's the transcription step. The speech to text stage takes about three hundred milliseconds to turn your finished sentence into text the model can read.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r041",
+          "answer": "No problem, let me walk through it again. The hearing part runs entirely in your browser, not on a server. A small piece of code listens to your microphone, resamples the audio, and measures the loudness of tiny slices, each about thirty-two milliseconds long.",
+          "problems": [
+            "6 sentences"
+          ],
+          "ok": false
+        },
+        {
+          "id": "E1:r045",
+          "answer": "Two tools drive the deck. I can move to any slide by index, or highlight one bullet on the current one, and the server even catches it when I talk about a slide I forgot to navigate to.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r050",
+          "answer": "That's outside this deck. What I can show you is how I decide which slide to jump to, which is the whole point of this walkthrough.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r052",
+          "answer": "That's outside this deck. What I can show you is where the milliseconds go between you finishing and me starting, which is exactly what this slide is about.",
+          "problems": [],
+          "ok": true
+        },
+        {
+          "id": "E1:r055",
+          "answer": "That's not in this deck. What I can tell you is why we picked open weights on a free tier at all, which is right here on this slide.",
+          "problems": [],
+          "ok": true
+        }
+      ],
+      "note": "Derived from 18 answers across the suites that ran.",
+      "passed": false
+    },
+    {
+      "suite": "E6",
+      "title": "Tool-call hygiene",
+      "metrics": {
+        "invalid_calls": 0.0,
+        "off_topic_navigation": 0.0
+      },
+      "thresholds": {
+        "invalid_calls": [
+          "<=",
+          0.0
+        ],
+        "off_topic_navigation": [
+          "<=",
+          0.05
+        ]
+      },
+      "items": [
+        {
+          "id": "r002",
+          "category": "direct",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r004",
+          "category": "direct",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r007",
+          "category": "direct",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r010",
+          "category": "paraphrase",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r012",
+          "category": "paraphrase",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r019",
+          "category": "paraphrase",
+          "sources": [
+            "llm",
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r020",
+          "category": "relative",
+          "sources": [
+            "llm",
+            "llm",
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r021",
+          "category": "relative",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r022",
+          "category": "relative",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r030",
+          "category": "cross-reference",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r031",
+          "category": "cross-reference",
+          "sources": [
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r032",
+          "category": "cross-reference",
+          "sources": [
+            "llm",
+            "llm"
+          ],
+          "moved": true
+        },
+        {
+          "id": "r040",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r041",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r045",
+          "category": "stay",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r050",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r052",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        },
+        {
+          "id": "r055",
+          "category": "off-topic",
+          "sources": [],
+          "moved": false
+        }
+      ],
+      "note": "Derived from the E1 traces; a rejected tool call surfaces as a turn error.",
+      "passed": true
+    }
+  ]
+}
