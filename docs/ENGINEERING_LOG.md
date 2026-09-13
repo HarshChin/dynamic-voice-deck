@@ -25,6 +25,30 @@ Rules:
 
 ## 2026-09-13
 
+### 2026-09-13 · The local fallback ships on · uncommitted
+**Scope:** `.env.example`, `README.md`, `docs/TRD.md` (TR-085)
+
+**Why.** A live demo hit the per-minute ceiling twice in four turns and the listener got a countdown
+both times, because the fallback is a setting and the setting was never in the owner's `.env`. The
+feature worked; nobody had switched it on. `.env.example` now ships `LLM_FALLBACK_PROVIDER=ollama`,
+so a clone that follows the quick start gets the understudy rather than the countdown.
+
+**The cost, stated where a cloner will read it.** Without `ollama serve` and the model pulled, a
+rate-limited turn now reports a failed turn instead of counting down, because the wrapper announces
+the switch before it knows the local model is unreachable. The comment in `.env.example` says so and
+says how to get back to the old behaviour in one word. A guard that re-raises the original rate
+limit when the fallback cannot be reached would remove that edge; it is deliberately not in this
+change, which touches no application code.
+
+**Verification:** 608 backend tests, lint clean. TC-BE-136 boots from a copy of `.env.example`, so
+the shipped file is still a working configuration. Measured on this machine with the primary stubbed
+as rate-limited: the switch is announced, `qwen2.5:7b` answers in 6.6 s, and the keyword fallback
+still moves the deck.
+
+**Follow-ups:** the graceful-degradation guard above, if the edge is ever worth closing.
+
+## 2026-09-13
+
 ### 2026-09-13 · Auditing the rest of the documents, and making the catalogue check itself · uncommitted
 **Scope:** `docs/PRD.md`, `docs/TRD.md`, `docs/TEST_CASES.md`, `backend/tests/test_catalogue.py`
 (new), `backend/app/decks/anatomy_of_a_voice_agent.json`, `backend/app/pipeline/prompt.py`,
