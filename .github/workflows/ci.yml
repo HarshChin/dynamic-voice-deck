@@ -52,7 +52,7 @@ jobs:
       # recipes expect.
       - name: Install backend dependencies
         working-directory: backend
-        run: uv sync --all-extras --frozen
+        run: uv sync --frozen
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -94,7 +94,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: backend
-        run: uv sync --all-extras --frozen
+        run: uv sync --frozen
 
       - name: Install frontend dependencies
         working-directory: frontend

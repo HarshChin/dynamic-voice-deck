@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     kokoro_speed: float = Field(default=1.0, gt=0.0, le=3.0)
     kokoro_models_dir: Path = MODELS_DIR
     kokoro_download: bool = True
-    """Fetch missing Kokoro weights on first start (about 340 MB, once)."""
+    """Fetch missing Kokoro weights on first start (two files, about 350 MB, once)."""
 
     # --- Server -------------------------------------------------------------
     backend_host: str = "0.0.0.0"  # noqa: S104 - local development server

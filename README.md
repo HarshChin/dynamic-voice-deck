@@ -19,7 +19,7 @@ interrupt it and ask.
 
 - **Talk to it.** Speech detection runs in the browser; 600 ms of silence ends your turn and the
   finished utterance is transcribed in one request.
-- **It moves the deck itself.** The model calls `go_to_slide(index, reason)`; the reason appears in
+- **It moves the deck itself.** The model calls `go_to_slide(slide_index, reason)`; the reason appears in
   the event log, so every move is attributable. A server-side keyword fallback catches the turns
   where the model answers correctly but forgets to call the tool.
 - **Interrupt it.** Start talking and the sound stops in under 150 ms. The agent's memory is then
@@ -69,7 +69,7 @@ Open the page, click **Start session**, and allow the microphone. Ask it somethi
 the agent can hear itself and stop mid-sentence. Onset needs three consecutive loud frames while
 the agent is speaking for exactly this reason, but headphones remove the problem entirely.
 
-The first run downloads the Kokoro voice (about 330 MB) into `backend/models/`. It is checked
+The first run downloads the Kokoro voice (two files, about 350 MB) into `backend/models/`. It is checked
 against a known SHA-256 and never committed.
 
 ---
@@ -113,14 +113,14 @@ flowchart LR
 
     GROQ[(Groq API<br/>Whisper large-v3-turbo, qwen3.8-27b)]
     KOK[Kokoro-82M<br/>in-process ONNX TTS]
-    LOCAL[(faster-whisper and Ollama<br/>fully local, behind the same interface)]
+    LOCAL[(Ollama qwen2.5:7b<br/>local model behind the same interface, opt-in)]
 
     U --> CAP --> MIC
     MIC -->|speech.start, speech.end, utterance| SESS
     SESS --> PIPE
     PIPE -->|transcribe, stream tokens and tool calls| GROQ
     PIPE -->|synthesise sentence by sentence| KOK
-    PIPE -.->|swapped by env var| LOCAL
+    PIPE -.->|LLM_FALLBACK_PROVIDER=ollama, on a rate limit| LOCAL
     PIPE --> SLIDE -->|slide.goto| UI
     PIPE -->|binary audio frames| PQ --> U
     SESS -->|state, transcript, metrics| UI
@@ -140,7 +140,8 @@ Barge-in is two tiers, because the tier the listener feels must never wait for t
 **Tier one is the browser.** When speech onset is detected while the agent is speaking, the
 playback queue is flushed immediately — every scheduled buffer is stopped and dropped — and only
 then is an `interrupt` message sent, carrying the id of the last sentence that actually finished
-playing. Measured locally, the flush takes under a millisecond.
+playing. The flush is synchronous: every scheduled source is stopped in the same call, before the
+message goes out; the HUD shows the onset-to-silence time as `interrupt_stop_ms`.
 
 **Tier two is the server.** The session cancels the in-flight pipeline task. `CancelledError`
 propagates into the open model stream and the synthesis queue, and the conversation history for
@@ -164,22 +165,23 @@ turn is a single cancellable task rather than a chain of independent coroutines.
 Every number below came from the metrics pipeline on this machine, against the real providers
 (`qwen/qwen3.8-27b` on Groq, Whisper large-v3-turbo, Kokoro-82M on CPU). Nothing here is a budget.
 
-| Path                               | Measured       | Budget       | Where it comes from                   |
-| ---------------------------------- | -------------- | ------------ | ------------------------------------- |
-| Question asked → first audio frame | **777 ms**     | ≤ 1,500 ms   | `TC-INT-005`, `make test-integration` |
-| Model time to first token          | 700 ms – 2.3 s | ≤ 600 ms p95 | `llm_ttft_ms`, the dominant cost      |
-| Synthesis, first chunk             | ~340 ms        | ≤ 500 ms     | `tts_ttfb_ms`                         |
-| Transcription, one utterance       | ~265 ms        | ≤ 700 ms     | `stt_ms`                              |
-| Interrupt → `agent.cancelled`      | **1.9 ms**     | ≤ 50 ms      | live WebSocket probe                  |
-| Interrupt → audio stops            | < 1 ms         | ≤ 150 ms     | `PlaybackQueue.flush`, client-side    |
-| Walkthrough → first audio          | **202 ms**     | —            | no model call is involved             |
+| Path                               | Measured                     | Budget       | Where it comes from                                              |
+| ---------------------------------- | ---------------------------- | ------------ | ---------------------------------------------------------------- |
+| Question asked → first audio frame | **777 ms**                   | ≤ 1,500 ms   | `TC-INT-005` live run, engineering log 2026-09-11                |
+| Model time to first token          | **540 ms** p50, **670 ms** p95 | ≤ 600 ms p95 | E5 release run, `docs/EVALS.md`                                  |
+| Synthesis, first chunk             | **272 ms** p50, **341 ms** p95 | ≤ 500 ms     | E5 release run, `docs/EVALS.md`                                  |
+| Transcription, one utterance       | ~265 ms                      | ≤ 700 ms     | one live probe, engineering log 2026-09-11                       |
+| Interrupt → `agent.cancelled`      | **1.9 ms**                   | ≤ 50 ms      | live WebSocket probe, engineering log 2026-09-11                 |
+| Interrupt → audio stops            | not recorded                 | ≤ 150 ms     | shown live in the HUD as `interrupt_stop_ms`; checked by ear in `TC-MAN-003` |
+| Walkthrough → first audio          | **202 ms**                   | —            | no model call is involved; engineering log 2026-09-11            |
 
 The honest reading: the product is comfortably inside its first-audio budget, and the only stage
 that ever exceeds its own budget is the model's first token on a free tier. Everything this
 repository controls is fast; the variable is the hosted model.
 
-For comparison, the same question through `openai/gpt-oss-120b` takes **2,066 ms** to first audio,
-because it is a reasoning model and spends its token allowance thinking before it says anything.
+For comparison, the same question through `openai/gpt-oss-120b` took **2,066 ms** to first audio
+in the same live run, because it is a reasoning model and spends its token allowance thinking
+before it says anything.
 That is why the default is Qwen. See `docs/EVALS.md`.
 
 ---
@@ -197,7 +199,7 @@ describe.
 | E2 Interruption memory | After being cut off, does it avoid repeating what was heard and avoid referring to what was never said? Six scripted interruptions.                                           | repetition ≤ 10 %, phantom reference 0 % |
 | E3 Groundedness        | Are answers faithful to the speaker notes, and are unanswerable questions declined? Ten questions, five of them unanswerable.                                                 | mean ≥ 1.7 / 2, decline ≥ 80 %           |
 | E4 Spoken style        | Is the output speakable: short, no markdown, no URLs, no emoji? Derived from every answer E1–E3 produced.                                     | pass ≥ 95 %                              |
-| E5 Latency             | Stage latencies with real synthesis, three live turns.                                                                                        | within the budgets above                 |
+| E5 Latency             | Stage latencies with real synthesis, three live turns.                                                                                        | first token p95 ≤ 2.5 s, first chunk p95 ≤ 600 ms (looser than the per-stage budgets above) |
 | E6 Tool-call hygiene   | Are tool calls valid, and kept away from off-topic input? Derived from the E1 traces.                                                         | 0 invalid, ≤ 5 % on off-topic            |
 
 E2 and E3 are graded by the same model family at `temperature=0` against written rubrics in
@@ -216,9 +218,9 @@ daily bucket does, rather than being refused once per remaining item.
 recorded (2026-09-11, eighteen routing items, no refusals): routing **83.3 %** with **zero** false
 navigation, groundedness **2.00 / 2** with every unanswerable question declined, spoken style
 **88.9 %**, no invalid tool calls, model first token 670 ms and synthesis first chunk 341 ms at
-p95, and one judged phantom reference in six interruptions. It misses the routing bar by two items: "next slide" from slide 2
-chained three moves and overshot, and one paraphrase was answered correctly without moving the
-deck. The two alternatives were measured earlier on the forty-item set: `openai/gpt-oss-120b`
+p95, and one judged phantom reference in six interruptions. It misses the routing bar by three items: "next slide" from
+slide 2 chained three moves and overshot, one paraphrase was answered correctly without moving the
+deck, and one direct question came back as the provider's own failure string with no answer at all. The two alternatives were measured earlier on the forty-item set: `openai/gpt-oss-120b`
 scored 58.3 % and produced no visible answer on seven of eight paraphrases, the reasoning-model
 failure mode, and the local fallback `qwen2.5:7b` scored 57.5 % by answering well and leaving the
 deck where it was. All of it, including two attempts that measured nothing and the measuring
@@ -235,7 +237,8 @@ allowed to remember after being interrupted — is a line of code here rather th
 endpoint. The cost is latency: roughly 800 ms to first sound instead of a few hundred.
 
 **Open weights on hosted inference, not local-only.** Whisper, Qwen and Kokoro are all open-weight,
-and each provider slot has a local implementation behind the same `Protocol`. The default runs
+and the model slot has a local implementation behind the same `Protocol` (Ollama); Kokoro is
+already in-process, and a local speech-to-text is designed but not built. The default runs
 Whisper and Qwen on Groq because it is fast and free, and Kokoro in-process because it is small
 enough to be. The cost is that the model is the slowest stage and the free tier's ceiling is
 reachable in normal use — four questions in two minutes is enough.
@@ -277,23 +280,27 @@ dynamic-voice-deck/
 ├── Makefile                   # every development command
 ├── .env.example               # every environment variable, documented
 ├── CLAUDE.md                  # engineering standards
+├── .github/workflows/ci.yml   # CI: make lint, make test, Playwright
 ├── docs/                      # PRD, TRD, test cases, evals, engineering log
 ├── backend/
 │   ├── app/
 │   │   ├── main.py            # FastAPI app, routes, lifespan, static mount
 │   │   ├── config.py          # pydantic-settings Settings
+│   │   ├── errors.py          # AppError hierarchy and error codes
+│   │   ├── logging_setup.py   # structlog configuration
 │   │   ├── protocol.py        # WebSocket message models (source of truth)
 │   │   ├── session.py         # Session, state machine, orchestration
-│   │   ├── pipeline/          # turn, chunker, history, slides, prompt, metrics
-│   │   ├── providers/         # STT / LLM / TTS protocols and implementations
+│   │   ├── pipeline/          # turn, chunker, history, slides, prompt, tools, metrics
+│   │   ├── providers/         # STT / LLM / TTS protocols; Groq, Ollama, Kokoro, the fallback
 │   │   ├── decks/             # Deck and Slide models, the deck itself
 │   │   └── prompts/           # presenter system prompt
 │   ├── tests/                 # pytest: unit, contract, integration
-│   ├── evals/                 # eval suites, datasets, judges, runner
+│   ├── evals/                 # eval suites, datasets, judges, runner, recorded results
 │   └── scripts/               # fixture generation
 └── frontend/
     ├── src/
     │   ├── protocol.ts        # mirror of backend/app/protocol.py
+    │   ├── config.ts          # detector timings, sample rates, endpoints
     │   ├── audio/             # microphone, playback queue
     │   ├── session/           # SessionClient, useSession, push-to-talk
     │   ├── components/        # SlideDeck, Orb, EventLog, LatencyHUD, Controls

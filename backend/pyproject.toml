@@ -23,14 +23,12 @@ dependencies = [
   # Async HTTP: Groq SSE streaming (used directly for cancellation control) and Ollama.
   "httpx>=0.27",
   # Official Groq SDK, used for Whisper transcription.
-  "groq>=0.11",
   # TTS: Kokoro-82M via onnxruntime. Known-good in this environment:
   # kokoro-onnx 0.6.1, onnxruntime 1.29.0, numpy 2.5.3.
   "kokoro-onnx>=0.6.1",
   "onnxruntime>=1.20",
   "numpy>=2.0",
   # In-memory WAV encoding for the STT upload. Known-good: soundfile 0.14.0.
-  "soundfile>=0.13",
   # Structured logging.
   "structlog>=24.1",
 ]
@@ -130,7 +128,7 @@ markers = [
   "slow: takes more than a couple of seconds to run",
 ]
 # NOTE: `filterwarnings = ["error"]` is deliberately not set yet. Several runtime
-# dependencies (onnxruntime, groq, faster-whisper) emit DeprecationWarnings at
+# dependencies (onnxruntime, faster-whisper) emit DeprecationWarnings at
 # import time on Python 3.12, which would fail collection. Enable it together
 # with a targeted ignore list once the dependency set is exercised in CI.
 
@@ -141,10 +139,10 @@ source = ["app"]
 
 [tool.coverage.report]
 show_missing = true
-# `fail_under` is intentionally unset in Phase 0: there is almost no code yet, so
-# any threshold would be noise. TRD section 12.3 requires >= 80 % overall and
-# >= 90 % on the pipeline modules (chunker, history, slides, turn, session);
-# fail_under is enabled in a later phase once those modules exist.
+# TRD section 12.3 requires >= 80 % overall and >= 90 % on the pipeline modules;
+# the overall floor is enforced here (96 % at v0.1.0), the per-module one is read
+# off the report.
+fail_under = 80
 exclude_lines = [
   "pragma: no cover",
   "if TYPE_CHECKING:",
@@ -166,8 +164,6 @@ module = [
   "kokoro_onnx.*",
   "espeakng_loader.*",
   "onnxruntime.*",
-  "soundfile.*",
   "faster_whisper.*",
-  "groq.*",
 ]
 ignore_missing_imports = true

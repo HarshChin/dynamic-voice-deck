@@ -15,7 +15,7 @@ Engineering guide for anyone (human or AI) working in this repository. This file
 Dynamic Voice Deck is a voice-first slide presenter. An open-weight STT → LLM → TTS pipeline lets a user talk to a presenter agent that navigates a six-slide deck by tool calls and can be interrupted mid-sentence.
 
 - **Backend:** Python 3.12, FastAPI, asyncio, WebSockets. Providers: Groq Whisper large-v3-turbo (STT), Groq `qwen/qwen3.8-27b` (LLM, with `qwen2.5:7b` on Ollama as an opt-in fallback), Kokoro-82M via `kokoro-onnx` (TTS).
-- **Frontend:** React 19, Vite 8, TypeScript 6 (strict). Speech detection is an energy threshold with hysteresis in an in-browser AudioWorklet (`frontend/src/audio/microphone.ts`); Silero VAD was the design and could not be loaded under Vite (TR-110).
+- **Frontend:** React 19, Vite 8, TypeScript 6 (strict). Speech detection is an energy threshold with hysteresis on the main thread (`frontend/src/audio/microphone.ts`), fed per-frame loudness by an AudioWorklet (`frontend/public/worklets/capture.js`); Silero VAD was the design and could not be loaded under Vite (TR-110).
 - **Distribution:** public GitHub repository that runs locally. No cloud deployment in v0.1.0.
 - **Release target:** v0.1.0 on Friday 11 September 2026.
 
@@ -25,9 +25,9 @@ Dynamic Voice Deck is a voice-first slide presenter. An open-weight STT → LLM 
 make setup      # uv sync (backend) + npm install (frontend)
 make backend    # uvicorn app.main:app --reload --port 8000  (cwd backend/)
 make frontend   # vite dev server on :5173                     (cwd frontend/)
-make lint       # ruff check + ruff format --check + eslint + tsc --noEmit
-make format     # ruff format + ruff check --fix + prettier
-make test       # pytest unit + contract tests; coverage report
+make lint       # ruff check + ruff format --check + mypy; eslint + tsc --noEmit + prettier --check
+make format     # ruff format + ruff check --fix; prettier + eslint --fix
+make test       # pytest unit + contract tests with coverage; vitest
 make test-integration   # real Groq/Kokoro; needs GROQ_API_KEY
 make test-e2e   # Playwright against a fake-provider backend
 make evals      # agent evals (TRD §13); consumes free-tier quota
@@ -43,7 +43,7 @@ Environment variables live in `.env` at the repo root (git-ignored). `.env.examp
 2. **Always-runnable main.** Every commit on `main` starts and serves the deck. Feature work happens on short-lived branches merged when green.
 3. **Small, reviewable changes.** One concern per commit. Conventional Commits: `feat(backend): ...`, `fix(frontend): ...`, `docs: ...`, `test: ...`, `chore: ...`, `refactor: ...`.
 4. **Measure, do not guess.** Latency claims in the README must come from the metrics pipeline, not intuition.
-5. **No vendor code outside `providers/`.** Groq, Kokoro, Ollama imports are allowed only in `backend/app/providers/`. Everything else depends on the `STTProvider` / `LLMProvider` / `TTSProvider` protocols in `providers/base.py`.
+5. **No vendor code outside `providers/`.** Groq, Kokoro and Ollama clients are imported only in `backend/app/providers/`. Everything else depends on the `STTProvider` / `LLMProvider` / `TTSProvider` protocols in `providers/base.py`. The one permitted exception is a provider's `PROVIDER_NAME` constant, which `pipeline/turn.py` imports to map a failure to its stage's error code; nothing else about a vendor leaves `providers/`.
 6. **Protocol is defined once.** WebSocket message types live in `backend/app/protocol.py` (Pydantic) and `frontend/src/protocol.ts`. Change both in the same commit; `tests/test_protocol_parity.py` enforces the match.
 7. **Audio never touches disk.** Utterances and synthesized audio are held in memory only.
 
@@ -118,6 +118,8 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "S101", "PLR2004", "ARG"]
+"scripts/**" = ["T201"]            # developer scripts report on stdout; that is their purpose
+"evals/**" = ["T201", "S607"]      # the runner's output is the result; `git` is called by name
 
 [tool.ruff.format]
 quote-style = "double"
@@ -133,7 +135,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 - One pipeline `asyncio.Task` per session. Store it on the `Session`; cancel and `await` it (swallowing `CancelledError`) before starting another.
 - Never `except Exception` around an `await` without re-raising `asyncio.CancelledError`. Prefer `except (ProviderError, httpx.HTTPError)` with explicit types.
 - Provider streams must be async generators or return `AsyncIterator`s so cancellation propagates into the HTTP stream.
-- Blocking CPU work (Kokoro synthesis, WAV encoding) runs in `asyncio.to_thread` or a dedicated `ThreadPoolExecutor`. Never block the event loop for more than a few milliseconds.
+- Blocking CPU work (Kokoro synthesis) runs in `asyncio.to_thread` or a dedicated `ThreadPoolExecutor`. Never block the event loop for more than a few milliseconds.
 - Use `asyncio.timeout()` for the 20 s pipeline watchdog.
 - Bounded `asyncio.Queue(maxsize=2)` between chunker → TTS → socket so cancellation is fast and memory is flat.
 
@@ -141,7 +143,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 
 - `structlog` via `app/logging_setup.py`: module-level `logger = get_logger(__name__)`. Log events as a short dotted name plus key-value pairs, e.g. `logger.info("tts.first_audio", turn_id=n, ms=123)`, never a preformatted sentence. Standard-library records are bridged into the same chain, so third-party logs match. No `print`.
 - Log every state transition, tool call, and provider latency at `INFO`; payload contents at `DEBUG`; never log audio bytes or API keys.
-- Custom exception hierarchy in `app/errors.py`: `AppError` → `ProviderError`, `ProtocolError`, `DeckError`. Unhandled errors inside a pipeline task are converted to a single `error` protocol message and the session returns to `LISTENING`.
+- Custom exception hierarchy in `app/errors.py`: `AppError` → `ProviderError`, `ProtocolError`, `DeckError`, `ConfigError`. Unhandled errors inside a pipeline task are converted to a single `error` protocol message and the session returns to `LISTENING`.
 
 ### 4.6 Configuration
 
@@ -152,7 +154,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 - `pytest` + `pytest-asyncio` (`asyncio_mode = "auto"`).
 - Unit tests must not need network or API keys. Providers are faked via the protocol interfaces (`FakeLLM` yields a scripted token/tool stream).
 - Integration tests are marked `@pytest.mark.integration` and skipped unless `GROQ_API_KEY` is set.
-- Minimum unit coverage: `SentenceChunker`, `ConversationHistory.truncate`, `SlideController` (tool validation + keyword fallback), protocol parity, session state machine transitions including interrupt in each state. Pipeline modules ≥ 90 % lines, backend overall ≥ 80 %.
+- Minimum unit coverage: `SentenceChunker`, `ConversationHistory.truncate_current`, `SlideController` (tool validation + keyword fallback), protocol parity, session state machine transitions including interrupt in each state. Pipeline modules ≥ 90 % lines, backend overall ≥ 80 %.
 - Test names read as sentences and carry their catalogue ID in the docstring: `def test_interrupt_during_speaking_truncates_history(): """TC-BE-046."""`.
 - Evals (`backend/evals/`) are separate from tests: they call real models, are opt-in, and their results are recorded in `docs/EVALS.md`. Add a dataset item whenever a real session misbehaves.
 
@@ -161,7 +163,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 - `strict: true`, `noUncheckedIndexedAccess: true`, no `any` (use `unknown` and narrow).
 - ESLint with `@typescript-eslint/recommended-type-checked` and `react-hooks`; Prettier for formatting (100 cols, double quotes, trailing commas).
 - Functional components with hooks; no class components. One component per file, named export matching the filename.
-- State: a small `zustand` store for session state (`state`, `currentSlide`, `events`, `metrics`); no Redux.
+- State: a small `zustand` store for session state (`agentState`, `currentSlide`, `events`, `metrics`); no Redux.
 - Audio code lives in `src/audio/` and has **no React imports**. It exposes plain classes (`Microphone`, `PlaybackQueue`) with explicit `start()` / `stop()` / `flush()` so they are unit-testable and leak-free.
 - Every `AudioContext`, `MediaStream`, worklet node, and WebSocket has a matching teardown in the owning hook's cleanup. Starting and stopping the session five times must not leak (check `chrome://media-internals`).
 - JSDoc on exported functions and classes; explain *why*, not *what*, in inline comments.

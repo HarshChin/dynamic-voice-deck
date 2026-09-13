@@ -22,7 +22,7 @@ SHELL := /bin/bash
         lint lint-backend lint-frontend \
         format format-backend format-frontend \
         test test-backend test-frontend \
-        test-integration test-e2e evals check clean
+        test-integration test-e2e evals check build serve clean
 
 ## ---------------------------------------------------------------------------
 ## Help
@@ -39,7 +39,7 @@ help: ## Show this help
 ## ---------------------------------------------------------------------------
 
 setup: ## Install backend (uv) and frontend (npm) dependencies
-	cd backend && uv sync --all-extras
+	cd backend && uv sync
 	cd frontend && npm install
 
 backend: ## Run the FastAPI dev server with reload on :8000

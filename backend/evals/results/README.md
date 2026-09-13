@@ -10,6 +10,7 @@ runner are deleted afterwards: they measure four items and would read like resul
 | File | What it is |
 |---|---|
 | `gpt-oss-120b-E1.json` | E1, E4 and E6 against `openai/gpt-oss-120b`. 24 of 40 items answered. |
+| `qwen2.5-7b-local-E1.json` | E1, E4 and E6 against the local fallback `qwen2.5:7b` on Ollama, forty-item set: 40 of 40 answered, 57.5 % accuracy, 8.3 % false navigation, 77.5 % style. |
 | `qwen3.8-27b-release-attempt-1.json` | The first attempted release run against the default model. Every item was refused by the free tier; kept because a run that measured nothing is a fact about the day. |
 | `qwen3.8-27b-release.json` | The release run's E1, E4 and E6 against the default model on the eighteen-item set: 18 of 18 answered, no refusals. Its E4 row reads 55.6 % because of the chunk-counting fault fixed in `435f074`; re-derived from the same answers, 88.9 %. |
 | `qwen3.8-27b-release-judged.json` | The release run's judge calibration, E2, E3 and E5. Stamped `435f074` but run on `c7d858e`: the SHA was read at write time, since fixed. Its E5 model latencies are the pacer's wait, not the model's; the re-run is `-latency.json`. |
