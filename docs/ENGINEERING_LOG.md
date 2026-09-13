@@ -23,6 +23,47 @@ Rules:
 
 ---
 
+## 2026-09-13
+
+### 2026-09-13 · The PRD still said Silero two days after Silero was gone · uncommitted
+**Scope:** `docs/PRD.md`, `docs/TRD.md` (§2.2 diagram, §2.1 providers row, §3.2 tree, §8.1, §13.3,
+risk register), `CLAUDE.md`, `.env.example`
+
+**Found by the owner, after submission**, reading the PRD: F3 described Silero VAD, its parameter
+table listed probability thresholds that no longer exist, the architecture diagram and component
+table named `@ricky0123/vad-web`, and CLAUDE.md said "Silero VAD runs in the browser". The detector
+was replaced on 2026-09-11 (that day's entry). That change carried the TRD's requirement rows, the
+README, the config comments and the deck's own slide, and missed the PRD entirely, the TRD's diagram
+and file tree, and CLAUDE.md. Sweeping for the same class of rot found more: the default model still
+written as `gpt-oss-120b` in CLAUDE.md, `.env.example` and three TRD rows; class names
+`AudioCapture` and `VadController` that never shipped (the module is `Microphone`); "React 18"; a
+local STT fallback described as though built; a risk row still proposing the workaround that failed;
+and a phase-gating note from the first day.
+
+**Why it happened.** The working agreement says the PRD and TRD are updated when behaviour changes,
+and the 2026-09-11 entry updated the rows it cited and stopped there. Nothing swept for every place
+a replaced technology is named, and nothing enforces such a sweep. The assurance given to the owner
+before submission -- that the documents were verified -- was true of the files that had been read
+that day and false of the PRD, which had not been.
+
+**Change.** Every reference now describes what runs: an energy threshold with hysteresis on
+per-frame RMS from an in-browser AudioWorklet, with the parameters as they stand in `config.ts`
+(speech 0.02 RMS, silence 0.012, redemption 600 ms, minimum speech 250 ms, pre-roll 300 ms, onset
+three frames while the agent is audible and one while idle, a 20 s cap); the default model
+`qwen/qwen3.8-27b` with the opt-in Ollama fallback; `Microphone` and `PlaybackQueue` as the audio
+classes; React 19. Where the design said something else, the text says so and points at the reason,
+rather than pretending the design was always this.
+
+**Verification:** documentation and an example file only; 603 backend tests still pass, since the
+fixtures read `.env.example`. A search for "Silero" over the living documents now finds only the
+places that deliberately explain the replacement: the README's trade-offs, TR-110 and TR-111 and the
+risk row, PRD F3 and its milestone note, `config.ts`, `microphone.ts`, the deck's own slide 3, and
+the E3 dataset item that asks which Silero version runs, which the agent correctly declines.
+
+**Follow-ups:** a documentation check that fails when a retired term (`Silero VAD` as the detector,
+`vad-web`, `VadController`, `AudioCapture`, `gpt-oss-120b` as the default) appears outside the files
+allowed to explain it, so the next replacement cannot leave the PRD behind.
+
 ## 2026-09-11
 
 ### 2026-09-11 · The release run is recorded, and two more instrument faults with it · uncommitted

@@ -14,8 +14,8 @@ Engineering guide for anyone (human or AI) working in this repository. This file
 
 Dynamic Voice Deck is a voice-first slide presenter. An open-weight STT → LLM → TTS pipeline lets a user talk to a presenter agent that navigates a six-slide deck by tool calls and can be interrupted mid-sentence.
 
-- **Backend:** Python 3.12, FastAPI, asyncio, WebSockets. Providers: Groq Whisper (STT), Groq `gpt-oss-120b` (LLM), Kokoro-82M via `kokoro-onnx` (TTS).
-- **Frontend:** React 19, Vite 8, TypeScript 6 (strict). Silero VAD runs in the browser.
+- **Backend:** Python 3.12, FastAPI, asyncio, WebSockets. Providers: Groq Whisper large-v3-turbo (STT), Groq `qwen/qwen3.8-27b` (LLM, with `qwen2.5:7b` on Ollama as an opt-in fallback), Kokoro-82M via `kokoro-onnx` (TTS).
+- **Frontend:** React 19, Vite 8, TypeScript 6 (strict). Speech detection is an energy threshold with hysteresis in an in-browser AudioWorklet (`frontend/src/audio/microphone.ts`); Silero VAD was the design and could not be loaded under Vite (TR-110).
 - **Distribution:** public GitHub repository that runs locally. No cloud deployment in v0.1.0.
 - **Release target:** v0.1.0 on Friday 11 September 2026.
 
@@ -145,7 +145,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 
 ### 4.6 Configuration
 
-`pydantic-settings` `Settings` class in `app/config.py` reads `.env`. Every setting has a type, default, and docstring. Provider selection: `STT_PROVIDER=groq|local`, `LLM_PROVIDER=groq|ollama`, `TTS_PROVIDER=kokoro`.
+`pydantic-settings` `Settings` class in `app/config.py` reads `.env`. Every setting has a type, default, and docstring. Provider selection: `STT_PROVIDER=groq|fake` (`local` is reserved and not built), `LLM_PROVIDER=groq|ollama|fake`, `TTS_PROVIDER=kokoro|fake`, `LLM_FALLBACK_PROVIDER=none|ollama|fake`. The `fake` doubles live in `tests/fakes.py` and drive the unit and end-to-end suites without a key.
 
 ### 4.7 Tests
 
@@ -162,7 +162,7 @@ Barge-in is implemented with `asyncio` cancellation, so these rules matter:
 - ESLint with `@typescript-eslint/recommended-type-checked` and `react-hooks`; Prettier for formatting (100 cols, double quotes, trailing commas).
 - Functional components with hooks; no class components. One component per file, named export matching the filename.
 - State: a small `zustand` store for session state (`state`, `currentSlide`, `events`, `metrics`); no Redux.
-- Audio code lives in `src/audio/` and has **no React imports**. It exposes plain classes (`AudioCapture`, `PlaybackQueue`, `VadController`) with explicit `start()` / `stop()` / `flush()` so they are unit-testable and leak-free.
+- Audio code lives in `src/audio/` and has **no React imports**. It exposes plain classes (`Microphone`, `PlaybackQueue`) with explicit `start()` / `stop()` / `flush()` so they are unit-testable and leak-free.
 - Every `AudioContext`, `MediaStream`, worklet node, and WebSocket has a matching teardown in the owning hook's cleanup. Starting and stopping the session five times must not leak (check `chrome://media-internals`).
 - JSDoc on exported functions and classes; explain *why*, not *what*, in inline comments.
 - No UI component library. CSS modules, CSS variables for theme, `prefers-reduced-motion` respected by the orb.

@@ -45,7 +45,7 @@ flowchart LR
 |---|---|---|
 | **Frontend** | React 19, TypeScript 6, Vite 8, Web Audio API (AudioWorklet capture and playback), zustand. No ML dependency in the browser (see TR-110). | Capture and resample mic audio; detect speech on-device; render slides; play streamed audio gaplessly; execute client tier of barge-in; display state, transcript, metrics. |
 | **Backend** | Python 3.12, FastAPI, uvicorn, asyncio, httpx, pydantic v2, pydantic-settings, `groq` SDK, `kokoro-onnx`, numpy | Own session state machine and conversation history; run the STT→LLM→TTS pipeline as a cancellable task; validate and apply slide tool calls; stream audio; emit metrics. |
-| **Providers (external)** | Groq REST API | Whisper large-v3-turbo transcription; `openai/gpt-oss-120b` chat completions with tools and streaming. |
+| **Providers (external)** | Groq REST API | Whisper large-v3-turbo transcription; `qwen/qwen3.8-27b` chat completions with tools and streaming (the default since 2026-09-10; `openai/gpt-oss-120b` was measured and rejected, `docs/EVALS.md`). |
 
 ### 2.3 Component view — backend
 
@@ -85,19 +85,18 @@ flowchart TB
     APP[App.tsx]
     STORE[(zustand store<br/>session state, slide, events, metrics)]
     SC[SessionClient<br/>WebSocket codec]
-    AC[AudioCapture<br/>AudioWorklet 16 kHz PCM16]
-    VAD[VadController<br/>Silero VAD]
+    MIC[Microphone<br/>AudioWorklet 16 kHz PCM16 + energy detector]
     PQ[PlaybackQueue<br/>24 kHz scheduler]
     subgraph components
         SD[SlideDeck] ; ORB[Orb] ; EL[EventLog] ; HUD[LatencyHUD] ; CT[Controls]
     end
     APP --> STORE
     APP --> SC
-    AC --> VAD -->|speech.start/end + utterance| SC
+    MIC -->|speech.start/end + utterance| SC
     SC -->|audio frames| PQ
     SC -->|messages| STORE
     PQ -->|playback.progress| SC
-    VAD -->|onset while playing| PQ
+    MIC -->|onset while playing| PQ
     STORE --> components
     CT --> SC
 ```
@@ -423,13 +422,11 @@ frontend/src/
 ├── protocol.ts               Message types (mirror of backend protocol.py)
 ├── store.ts                  zustand store + selectors
 ├── audio/
-│   ├── capture.ts            AudioCapture: getUserMedia → AudioWorklet → 16 kHz PCM16 frames
-│   ├── worklets/pcm16.js     AudioWorkletProcessor: downmix + resample + int16
-│   ├── vad.ts                VadController wrapping @ricky0123/vad-web
+│   ├── microphone.ts         Microphone: getUserMedia → AudioWorklet (public/worklets/capture.js) → 16 kHz PCM16 + energy detector
 │   └── playback.ts           PlaybackQueue: gapless scheduling, flush, progress callbacks
 ├── session/
 │   ├── client.ts             SessionClient: WS lifecycle, JSON/binary codec, reconnect
-│   └── useSession.ts         Hook wiring capture/VAD/playback/client to the store
+│   └── useSession.ts         Hook wiring microphone/playback/client to the store
 └── components/
     ├── SlideDeck.tsx, Slide.tsx, ProgressDots.tsx
     ├── Orb.tsx
@@ -578,7 +575,7 @@ Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tt
 | Endpointing (redemption) | 600 ms | 600 ms | fixed |
 | Upload utterance (≤ 10 s audio ≈ 320 KB) | 20 ms | 60 ms | — |
 | STT (Groq Whisper turbo) | 300 ms | 700 ms | `stt_ms` |
-| LLM TTFT (Groq gpt-oss-120b) | 250 ms | 600 ms | `llm_ttft_ms` |
+| LLM TTFT (Groq qwen/qwen3.8-27b; measured 540 ms p50, 670 ms p95 in the release eval) | 250 ms | 600 ms | `llm_ttft_ms` |
 | First sentence complete + TTS first chunk (Kokoro CPU) | 250 ms | 500 ms | `tts_ttfb_ms` |
 | Network + scheduling | 40 ms | 80 ms | derived |
 | **Total first audio** | **≈ 1.45 s** | **≤ 2.5 s** | `first_audio_ms` (client) |
@@ -686,7 +683,7 @@ Unit tests check the code; evals check the **agent's behaviour** with real model
 
 ### 13.3 Model comparison
 
-The runner accepts `--model` so E1 and E4 can be compared across `openai/gpt-oss-120b`, `llama-3.3-70b-versatile`, and a local Ollama model. The chosen default model is justified in `docs/EVALS.md` with numbers.
+The runner accepts `--model` so E1 and E4 can be compared across `qwen/qwen3.8-27b`, `openai/gpt-oss-120b` and the local `qwen2.5:7b` on Ollama (`--provider ollama`); `llama-3.3-70b-versatile` was planned and is no longer offered on the account. The chosen default model is justified in `docs/EVALS.md` with numbers.
 
 ---
 
@@ -722,7 +719,7 @@ The runner accepts `--model` so E1 and E4 can be compared across `openai/gpt-oss
 | Groq SSE tool-call fragments differ from OpenAI format | Contract tests from recorded SSE fixtures; parser handles both `tool_calls[].function.arguments` deltas and whole-object calls | backend |
 | Browser refuses 24 kHz `AudioContext` | Resample to native rate in `PlaybackQueue` | frontend |
 | Echo-driven self-interruption on speakers | TR-112 consecutive-frame rule, `echoCancellation`, headphone recommendation | frontend |
-| VAD assets path under Vite | Copy `onnxruntime-web` and `vad-web` assets to `public/vad/` in a `postinstall` script | frontend |
+| VAD assets path under Vite | Materialised: four workarounds failed in a real browser and Silero was replaced by an in-repo energy detector (TR-110, engineering log 2026-09-11) | frontend |
 
 ---
 

@@ -76,7 +76,7 @@ The default topic is the system itself. The agent explains its own architecture,
 |---|---|---|---|
 | 1 | Anatomy of a Voice Agent | What this demo is; how to talk to it; what to try (interrupt me, ask to jump around) | intro, start, overview, beginning, what is this |
 | 2 | The Latency Budget | Where the milliseconds go: VAD ~30 ms, STT ~300 ms, LLM time-to-first-token ~200 ms, TTS time-to-first-byte ~200 ms, network; why 1 s feels slow and 500 ms feels alive | latency, speed, delay, milliseconds, fast, slow, budget, response time |
-| 3 | Hearing: VAD and Turn-Taking | What Silero VAD does; endpointing (how long silence means "done"); false triggers, background noise; why VAD runs in the browser | vad, hearing, listening, turn taking, when do you start talking, silence, microphone, noise, end of speech |
+| 3 | Hearing: VAD and Turn-Taking | How speech is detected in the browser (an energy threshold with hysteresis; Silero was the design, see F3); endpointing (how long silence means "done"); false triggers, background noise; why detection runs in the browser | vad, hearing, listening, turn taking, when do you start talking, silence, microphone, noise, end of speech |
 | 4 | Barge-in: Interrupting Gracefully | Two-tier cancellation (client stops audio, server cancels LLM/TTS); truncating history to what was actually heard; resuming | interrupt, interruption, barge in, cut off, stop talking, talk over, cancel |
 | 5 | Thinking: Tool Calling and Intent Routing | How the LLM gets the deck; the `go_to_slide` tool; reason strings shown in the UI; fallback keyword routing; bidirectional sync | tools, tool calling, function calling, routing, how do you change slides, navigation, intent |
 | 6 | Trade-offs and What's Next | Speech-to-speech vs pipeline; open weights vs hosted; what we would build with a week; cost | trade offs, next steps, future, roadmap, comparison, speech to speech, cost, conclusion, summary, end |
@@ -89,7 +89,7 @@ The deck is a JSON file (`backend/app/decks/anatomy_of_a_voice_agent.json`), val
 
 ```
 ┌──────────────────────────── Browser (React + Vite + TS) ────────────────────────────┐
-│  Mic ──► AudioWorklet (16 kHz PCM16) ──► Silero VAD (onnx, in-browser)              │
+│  Mic ──► AudioWorklet (16 kHz PCM16) ──► energy detector (in-browser)               │
 │                                   │  speech.start / speech.end / audio frames       │
 │  Slide renderer ◄── slide.goto    │                                                 │
 │  Orb (state) ◄──── state          ▼                                                 │
@@ -116,8 +116,7 @@ The deck is a JSON file (`backend/app/decks/anatomy_of_a_voice_agent.json`), val
 
 | Component | Responsibility |
 |---|---|
-| **AudioCapture** (FE) | Requests mic permission, captures mono audio, resamples to 16 kHz PCM16 in an AudioWorklet, emits 20–40 ms frames. |
-| **VAD** (FE) | Silero VAD via `@ricky0123/vad-web`. Emits `speech.start`, `speech.end` (with the buffered utterance), and `misfire`. Runs continuously while the session is live. |
+| **Microphone** (FE) | Requests mic permission; an AudioWorklet downmixes, resamples to 16 kHz PCM16 and reports per-frame loudness; speech is detected from that loudness with hysteresis (`frontend/src/audio/microphone.ts`). Emits `speech.start`, `speech.end` (with the buffered utterance) and `misfire`. Runs continuously while the session is live. |
 | **PlaybackQueue** (FE) | Schedules 24 kHz PCM chunks on an AudioContext gaplessly; reports which sentence finished playing; can flush instantly. |
 | **SessionClient** (FE) | Owns the WebSocket, encodes/decodes protocol messages (§9), reconnects once on drop. |
 | **SlideDeck** (FE) | Renders the current slide, highlight state, progress dots, keyboard navigation. |
@@ -138,11 +137,11 @@ The deck is a JSON file (`backend/app/decks/anatomy_of_a_voice_agent.json`), val
 | Layer | Choice | Rationale |
 |---|---|---|
 | Backend | Python 3.12, FastAPI, uvicorn, asyncio | First-class WebSockets; asyncio cancellation maps directly to barge-in; strong audio/ML ecosystem. |
-| STT | Whisper large-v3-turbo on Groq (open weights) | ~300 ms for a short utterance; free tier 20 RPM / 2,000 RPD. Local fallback: `faster-whisper`. |
-| LLM | `openai/gpt-oss-120b` on Groq (open weights), fallback `llama-3.3-70b-versatile` | Native tool calling, streaming, ~200 ms TTFT; free tier 30 RPM. Local fallback: Ollama. |
+| STT | Whisper large-v3-turbo on Groq (open weights) | ~300 ms for a short utterance; free tier 20 RPM / 2,000 RPD. No local STT in v0.1.0. |
+| LLM | `qwen/qwen3.8-27b` on Groq (open weights); `qwen2.5:7b` on Ollama as an opt-in automatic fallback when the free tier rate-limits (TR-085) | Native tool calling and streaming; 540 ms median first token measured (`docs/EVALS.md`). Chosen over `openai/gpt-oss-120b` on measured behaviour: that model produced no visible answer on most paraphrased questions. Free tier: 7,000 input tokens a minute, 200,000 tokens a day. |
 | TTS | Kokoro-82M via `kokoro-onnx` (Apache 2.0) | Runs on CPU in ~real-time, no GPU, no account, ~1 GB RAM. |
-| VAD | Silero VAD in-browser (`@ricky0123/vad-web`) | Zero network hop for barge-in detection; frees the backend from streaming raw audio continuously. |
-| Frontend | React 18 + Vite + TypeScript, no UI framework, CSS modules | Lightweight, fast to iterate, no build-tool surprises. |
+| Speech detection | Energy threshold with hysteresis in an in-browser AudioWorklet (`frontend/src/audio/microphone.ts`) | Zero network hop for barge-in detection; no continuous audio stream to the backend. Designed as Silero VAD; replaced on 2026-09-11 when it could not be made to load under Vite (TR-110, README trade-offs). |
+| Frontend | React 19 + Vite 8 + TypeScript 6, no UI framework, CSS modules | Lightweight, fast to iterate, no build-tool surprises. |
 | Packaging | `uv` for Python, `npm` for the frontend, a root `Makefile` | Two-command start. |
 
 ---
@@ -192,17 +191,20 @@ Each feature lists: description, user actions, expected behaviour, edge cases, a
 
 ### F3. Voice activity detection and turn-taking — P0
 
-**Description.** Determines when the user starts and stops speaking, in the browser, using Silero VAD.
+**Description.** Determines when the user starts and stops speaking, in the browser. The detector is an energy threshold with hysteresis on per-frame loudness reported by an AudioWorklet. The design specified Silero VAD; it could not be made to load under Vite and was replaced on 2026-09-11 with the same timings (TR-110, engineering log). Swapping a neural detector back in is a one-file change.
 
 **Parameters (tunable in `frontend/src/config.ts`).**
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `positiveSpeechThreshold` | 0.6 | Probability above which a frame is speech |
-| `negativeSpeechThreshold` | 0.35 | Probability below which a frame is silence |
+| `speechRms` | 0.02 | Per-frame loudness (RMS) above which a frame counts as speech |
+| `silenceRms` | 0.012 | Loudness below which a frame counts as silence; the gap between the two is the hysteresis |
 | `redemptionMs` | 600 | Silence duration that ends an utterance (endpointing) |
 | `minSpeechMs` | 250 | Utterances shorter than this are discarded as misfires |
 | `preSpeechPadMs` | 300 | Audio kept from before speech onset so first syllables are not clipped |
+| `onsetFramesWhilePlaying` | 3 | Consecutive loud frames needed to declare onset while the agent is audible, so its own echo does not interrupt it |
+| `onsetFramesWhileIdle` | 1 | Consecutive loud frames needed while nothing is playing |
+| `maxUtteranceMs` | 20000 | An utterance that never ends is cut here, so barge-in is never left disabled |
 
 **Expected behaviour.**
 
@@ -549,7 +551,7 @@ Message schemas are defined once in `backend/app/protocol.py` (Pydantic) and mir
 | Memory | Backend steady state ≤ 1.5 GB with Kokoro loaded. |
 | Startup | Backend ready ≤ 10 s including Kokoro warm-up (a warm-up synthesis of "Ready." runs at boot). |
 | Privacy | Audio is processed in memory and never written to disk. `.env` is git-ignored. No analytics. |
-| Browser support | Chrome/Edge latest (primary), Safari best-effort (AudioWorklet supported; VAD wasm tested). |
+| Browser support | Chrome/Edge latest (primary), Safari best-effort (AudioWorklet supported; the detector needs no WebAssembly). |
 | Accessibility | Orb state also shown as text; all controls keyboard-reachable. |
 | Code quality | See `CLAUDE.md`: ruff (lint + format), Google docstrings, type hints, ESLint + strict TS. |
 | Tests and evals | Test catalogue in `docs/TEST_CASES.md`; agent evals in `docs/EVALS.md`. Every feature ships with its tests; every release ships with an eval run. |
@@ -651,7 +653,7 @@ This scenario is the release acceptance test. It is also mirrored as TC-E2E-001 
 |---|---|---|
 | Kokoro Python packaging on the dev machine (Python 3.14 installed) | Blocks TTS | Pin Python 3.12 via `uv`; `kokoro-onnx` has minimal deps (onnxruntime, numpy). |
 | Groq daily STT limit hit during development | Blocks testing | Text-input path for most iteration; local faster-whisper fallback. |
-| LLM does not call the tool reliably | Slides do not move | Strong prompt + keyword fallback routing + routing test set; try `llama-3.3-70b-versatile` if `gpt-oss-120b` under-calls. |
+| LLM does not call the tool reliably | Slides do not move | Strong prompt + keyword fallback routing + routing eval set. Materialised the other way round: `gpt-oss-120b` called the tool but often produced no words, and the default moved to `qwen/qwen3.8-27b` on the measured comparison (`docs/EVALS.md`). |
 | VAD false positives from agent's own audio (echo) | Self-interruption loop | Use `echoCancellation: true` in `getUserMedia`; raise the positive threshold while speaking; require ≥ 3 consecutive speech frames during playback. Headphones recommended in README. |
 | Kokoro CPU speed on a contributor's laptop | Gaps between sentences | Bounded prefetch queue of 2 segments; Kokoro-82M is faster than real time on Apple Silicon and most x86 laptops. |
 | Time | Missing P1 features | Milestones ordered so that M3 alone is a complete core product. |
