@@ -25,6 +25,44 @@ Rules:
 
 ## 2026-09-13
 
+### 2026-09-13 · "Go to slide two" was answered with a lecture · uncommitted
+**Scope:** `app/prompts/presenter.md`, `docs/PRD.md` (F5, §8.1)
+
+**Observed.** Asked "can you go to the second slide?", the agent moved the deck and then recited the
+whole latency budget: five sentences, eighty words, about four seconds of speech nobody asked for.
+The owner noticed it as latency, which is the right instinct — an answer that takes four seconds to
+deliver is four seconds of waiting, whatever the metrics say about first audio.
+
+**Cause, and it was ours.** The prompt said "**always** follow the opener with two or three more
+sentences ... never reply with only one sentence". That rule exists because an earlier model
+answered navigation requests with an opener and nothing else, leaving the room staring at a slide in
+silence. It is right for a question and wrong for a command, and the prompt did not distinguish
+them.
+
+**Change.** The rule now splits on what was asked. A question keeps the opener plus two or three
+sentences under ninety words. A request to move — "go to slide two", "next", "back one" — gets the
+navigation and one short sentence naming where the deck is, then silence. Ambiguity resolves to the
+shorter form, because a listener recovers from one sentence more easily than from a lecture. Two
+worked examples were added, including the exact utterance that prompted this.
+
+**Measured against the hosted model afterwards**, spaced to stay inside the free tier's minute:
+
+| Utterance | Before | After |
+|---|---|---|
+| "can you go to the second slide?" | 5 sentences, ~80 words | **4 words**, "Here's the latency budget." |
+| "Next." | a presentation of the slide | **3 words**, "Slide four, barge-in." |
+| "what's this slide about?" | — | 3 sentences, 74 words: unchanged, which is the point |
+| "what's the weather in London?" | — | one sentence, declined, no navigation |
+
+**Verification:** 610 backend tests, lint clean. The four turns above were run through the shipped
+pipeline against `qwen/qwen3.8-27b`. Not re-run: E1 and E4, which would cost about a third of a
+day's free-tier budget; the style metric can only improve, since every measured answer got shorter
+and none got emptier.
+
+**Follow-ups:** the hard cap on answer length is still unbuilt, and is now less urgent.
+
+## 2026-09-13
+
 ### 2026-09-13 · Announcing the substitute only once it speaks · uncommitted
 **Scope:** `app/providers/fallback.py`, `app/config.py`, `tests/test_fallback.py`, `.env.example`,
 `README.md`, `docs/TRD.md` (TR-085), `docs/TEST_CASES.md`

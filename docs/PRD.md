@@ -287,14 +287,14 @@ The two schemas above are the shape, not the literal text: `pipeline/tools.py` b
 |---|---|
 | "How do you handle interruptions?" | Calls `go_to_slide(4, "User asked about interruption handling")` → slide 4 appears → agent explains in 2–4 sentences using slide 4's notes. |
 | "Go back to the latency thing." | `go_to_slide(2, ...)` → brief recap of slide 2, not a full re-presentation. |
-| "Next." / "Go on." | `go_to_slide(current + 1)` and presents that slide. On the last slide, says so and offers a summary. |
+| "Next." / "Go on." | `go_to_slide(current + 1)`, then **one short sentence naming the slide**, not a presentation of it. On the last slide, says so. |
 | "What's on this slide?" | No navigation; explains the current slide. |
 | "What's the weather in London?" | No navigation; a one-sentence polite redirect back to the deck. No hallucinated tool call. |
 | "Which slide talks about cost?" | `go_to_slide(6, ...)` because slide 6's aliases include cost; explains the cost trade-off. |
 
 **Fallback routing.** If the LLM's answer clearly concerns a different slide but it did not call the tool (detected by the SlideController scoring the transcript against slide aliases with a confidence threshold), the controller emits `slide.goto` with reason `"Keyword match: <alias>"`. This is logged distinctly so the demo can show both paths.
 
-**Constraints on the spoken answer.** 2–4 sentences unless asked for more. No markdown, no bullet symbols, no URLs (it will be spoken). Numbers spelled naturally.
+**Constraints on the spoken answer.** Length follows what was asked, and there are two cases. A *question* gets a short opener plus two or three sentences that answer it, under ninety words. A *request to move* ("go to slide two", "next", "back one") gets the navigation and **one short sentence naming where the deck now is**, because the room can read the slide and reciting it makes the wait longer for nothing. Ambiguous input is treated as a request to move. Measured against the hosted model on 2026-09-13: "can you go to the second slide?" answers in four words, "what's this slide about?" in three sentences. No markdown, no bullet symbols, no URLs (it will be spoken). Numbers spelled naturally.
 
 **Metrics.** `llm_ttft_ms` (time to first token) and `llm_total_ms`.
 
@@ -499,7 +499,7 @@ Rules:
 1. **Role.** "You are the presenter of a slide deck. You speak; your words are converted to audio."
 2. **Deck as ground truth.** Every slide's title and bullets are embedded, with the speaker notes of the slide on screen. Only claim things supported by them; say "that's not in this deck" otherwise.
 3. **Navigate first, then speak.** When a question is best answered by another slide, call `go_to_slide` before answering. When continuing a presentation, call it for the next slide.
-4. **Spoken style.** 2–4 sentences. Plain prose, no lists, no markdown, no emojis, no URLs. Natural contractions. Numbers as words when short.
+4. **Spoken style.** A question gets two to four sentences; a bare request to move gets one. Plain prose, no lists, no markdown, no emojis, no URLs. Natural contractions. Numbers as words when short.
 5. **Interruption awareness.** History may contain `[interrupted by user]` markers. Never repeat content before the marker unless asked. Do not apologise more than once.
 6. **Stay in scope.** Off-topic questions get a one-sentence redirect.
 7. **State awareness.** The prompt includes `current_slide` and its title, `presentation_cursor` and its title, `slide_count`, and `mode`.
