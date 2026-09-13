@@ -153,7 +153,7 @@ describe("Controls", () => {
 });
 
 describe("walkthrough and mute", () => {
-  it("TC-FE-130: offers a walkthrough while a session is open", () => {
+  it("TC-FE-238: offers a walkthrough while a session is open", () => {
     const { props } = renderControls({ isActive: true });
 
     fireEvent.click(screen.getByRole("button", { name: /walk me through/i }));
@@ -161,14 +161,14 @@ describe("walkthrough and mute", () => {
     expect(props.onPresent).toHaveBeenCalledOnce();
   });
 
-  it("TC-FE-131: hides the walkthrough and mute before a session starts", () => {
+  it("TC-FE-239: hides the walkthrough and mute before a session starts", () => {
     renderControls({ isActive: false });
 
     expect(screen.queryByRole("button", { name: /walk me through/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /mute/i })).toBeNull();
   });
 
-  it("TC-FE-132: mute is a visible state, not just a toggle", () => {
+  it("TC-FE-240: mute is a visible state, not just a toggle", () => {
     const { props } = renderControls({ isActive: true, muted: false });
 
     const button = screen.getByRole("button", { name: /^mute$/i });
@@ -178,7 +178,7 @@ describe("walkthrough and mute", () => {
     expect(props.onToggleMute).toHaveBeenCalledWith(true);
   });
 
-  it("TC-FE-133: offers to unmute once muted", () => {
+  it("TC-FE-241: offers to unmute once muted", () => {
     renderControls({ isActive: true, muted: true });
 
     expect(screen.getByRole("button", { name: /unmute/i })).toHaveAttribute("aria-pressed", "true");

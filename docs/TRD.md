@@ -6,7 +6,7 @@
 | Owner | Harshvardhan |
 | Target release | v0.1.0 — 11 September 2026 |
 | Related docs | `docs/PRD.md` (what and why), `docs/TEST_CASES.md`, `docs/EVALS.md`, `docs/ENGINEERING_LOG.md` |
-| Status | Draft v1.0 — 9 September 2026 |
+| Status | v1.2 — 13 September 2026. Amendments through release day are marked in place; reconciled claim by claim against the shipped code on the 13th. |
 
 This document specifies **how** the product described in the PRD is built: architecture, component contracts, protocol, data models, performance budgets, failure handling, testing, and evaluation. Requirement IDs (`TR-xxx`) are referenced from test cases and the engineering log.
 
@@ -17,7 +17,7 @@ This document specifies **how** the product described in the PRD is built: archi
 | ID | Requirement |
 |---|---|
 | TR-001 | The system runs locally with two processes: a FastAPI backend and a Vite dev server (or static build) for the frontend. |
-| TR-002 | All ML models are open weight. Hosted inference (Groq) is used by default; each provider slot has a local implementation behind the same interface. |
+| TR-002 | All ML models are open weight. Hosted inference (Groq) is used by default. The model slot has a local implementation behind the same interface (`OllamaLLM`, primary or rate-limit fallback) and synthesis is local already; **speech-to-text has no local implementation in v0.1.0** — `STT_PROVIDER=local` is refused at startup. |
 | TR-003 | No cloud deployment, database, or authentication in v0.1.0. |
 | TR-004 | Target platforms: macOS and Linux for the backend; Chrome/Edge latest for the frontend; Safari best-effort. |
 | TR-005 | Audio is processed in memory only and is never written to disk or logged. |
@@ -34,9 +34,9 @@ flowchart LR
     U[User<br/>voice + keyboard] -->|mic, clicks| FE[Frontend<br/>React + Vite]
     FE <-->|WebSocket /ws/session<br/>JSON + binary audio| BE[Backend<br/>FastAPI]
     FE -->|REST /api/decks| BE
-    BE -->|HTTPS| GROQ[(Groq API<br/>Whisper STT, gpt-oss LLM)]
+    BE -->|HTTPS| GROQ[(Groq API<br/>Whisper STT, qwen3.8-27b LLM)]
     BE --> KOK[Kokoro-82M<br/>in-process ONNX]
-    BE -.->|optional| LOCAL[(faster-whisper / Ollama<br/>local)]
+    BE -.->|optional| LOCAL[(Ollama<br/>local model, primary or fallback)]
 ```
 
 ### 2.2 Container view
@@ -44,7 +44,7 @@ flowchart LR
 | Container | Tech | Responsibilities |
 |---|---|---|
 | **Frontend** | React 19, TypeScript 6, Vite 8, Web Audio API (AudioWorklet capture and playback), zustand. No ML dependency in the browser (see TR-110). | Capture and resample mic audio; detect speech on-device; render slides; play streamed audio gaplessly; execute client tier of barge-in; display state, transcript, metrics. |
-| **Backend** | Python 3.12, FastAPI, uvicorn, asyncio, httpx, pydantic v2, pydantic-settings, `groq` SDK, `kokoro-onnx`, numpy | Own session state machine and conversation history; run the STT→LLM→TTS pipeline as a cancellable task; validate and apply slide tool calls; stream audio; emit metrics. |
+| **Backend** | Python 3.12, FastAPI, uvicorn, asyncio, httpx, pydantic v2, pydantic-settings, `kokoro-onnx`, numpy. No vendor SDK: both Groq endpoints are called over `httpx` directly, for control of cancellation. | Own session state machine and conversation history; run the STT→LLM→TTS pipeline as a cancellable task; validate and apply slide tool calls; stream audio; emit metrics. |
 | **Providers (external)** | Groq REST API | Whisper large-v3-turbo transcription; `qwen/qwen3.8-27b` chat completions with tools and streaming (the default since 2026-09-10; `openai/gpt-oss-120b` was measured and rejected, `docs/EVALS.md`). |
 
 ### 2.3 Component view — backend
@@ -62,17 +62,17 @@ flowchart TB
         M[TurnMetrics]
         subgraph providers
             STT[STTProvider]
-            LLM[LLMProvider]
+            LLM[LLMProvider<br/>FallbackLLM wraps two]
             TTS[TTSProvider]
         end
         DECK[DeckRepository]
         PR[PromptBuilder]
     end
     MAIN --> SM --> S --> P
-    P --> STT
+    S --> STT
     P --> PR --> H
     P --> LLM
-    LLM -->|tokens| CH -->|sentences| TTS
+    LLM -->|tokens| CH -->|sentences| SS[SpeechSender<br/>bounded queue] --> TTS
     LLM -->|tool calls| SC
     P --> M
     S --> DECK
@@ -89,6 +89,7 @@ flowchart TB
     PQ[PlaybackQueue<br/>24 kHz scheduler]
     subgraph components
         SD[SlideDeck] ; ORB[Orb] ; EL[EventLog] ; HUD[LatencyHUD] ; CT[Controls]
+        FB[FallbackBanner] ; RL[RateLimitChip]
     end
     APP --> STORE
     APP --> SC
@@ -106,21 +107,22 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant VAD as VAD (browser)
+    participant MIC as Microphone (browser)
     participant FE as SessionClient
     participant S as Session (backend)
     participant STT as Groq Whisper
     participant LLM as Groq LLM
     participant TTS as Kokoro
-    U->>VAD: speaks
-    VAD->>FE: speech.start
+    U->>MIC: speaks
+    MIC->>FE: speech.start
     FE->>S: speech.start
     S-->>FE: state HEARING
-    VAD->>FE: speech.end + utterance (PCM16)
+    MIC->>FE: speech.end + utterance (PCM16)
     FE->>S: speech.end + binary frame
-    S-->>FE: state THINKING (turn_id=n)
     S->>STT: transcribe(wav)
+    Note over S: still HEARING: a filler transcript is dropped<br/>before a turn exists (TR-089)
     STT-->>S: "how do you handle interruptions"
+    S-->>FE: state THINKING (turn_id=n)
     S-->>FE: transcript.user
     S->>LLM: stream(messages, tools)
     LLM-->>S: tool_call go_to_slide(4, reason)
@@ -130,12 +132,14 @@ sequenceDiagram
     S->>S: SentenceChunker emits sentence 0
     S->>TTS: synthesize(sentence 0)
     TTS-->>S: PCM chunks
-    S-->>FE: transcript.agent(0), binary audio(0, seq...)
+    S-->>FE: transcript.agent(0)
     S-->>FE: state SPEAKING
+    S-->>FE: binary audio(0, seq...)
     Note over S,TTS: sentences 1..k synthesised while 0 plays (bounded queue)
     S-->>FE: metrics
-    FE->>S: playback.progress(k)
     S-->>FE: state LISTENING
+    Note over S,FE: generation is over; the room is still hearing it.<br/>An interrupt is honoured until the last sentence plays (TR-090)
+    FE->>S: playback.progress(k)
 ```
 
 ### 2.6 Primary sequence — barge-in
@@ -143,22 +147,23 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant VAD as VAD (browser)
+    participant MIC as Microphone (browser)
     participant PQ as PlaybackQueue
     participant FE as SessionClient
     participant S as Session
     participant T as pipeline task
     Note over PQ: playing sentence 2 of 5
-    U->>VAD: starts speaking
-    VAD->>PQ: onset → flush() (≤ 20 ms)
+    U->>MIC: starts speaking
+    MIC->>PQ: onset → flush() (≤ 20 ms)
     PQ->>FE: lastCompletedSentenceId = 1
     FE->>S: interrupt {last_completed_sentence_id: 1}
+    S-->>FE: state INTERRUPTED (turn_id=n)
     S->>T: task.cancel()
     T-->>S: CancelledError propagated (LLM stream closed, TTS jobs dropped)
-    S->>S: history.truncate(turn n, keep sentences ≤ 1) + "[interrupted by user]"
+    S->>S: history.truncate_current(turn n, keep sentences ≤ 1) + "[interrupted by user]"
     S-->>FE: agent.cancelled {truncated_at: 1}
-    S-->>FE: state HEARING (turn_id=n+1)
-    VAD->>FE: speech.end + utterance
+    S-->>FE: state HEARING (turn_id=n, the cancelled turn; the id<br/>increments when the next turn starts)
+    MIC->>FE: speech.end + utterance
     FE->>S: speech.end + binary
     Note over S: normal turn continues
 ```
@@ -181,13 +186,11 @@ sequenceDiagram
 |---|---|
 | `fastapi`, `uvicorn[standard]` | HTTP + WebSocket server (uvloop, websockets) |
 | `pydantic>=2`, `pydantic-settings` | Models, protocol, config |
-| `httpx` | Async HTTP for Groq streaming (used directly for fine control of cancellation) and Ollama |
-| `groq` | Official SDK for Whisper transcription |
+| `httpx` | Async HTTP for every provider call: Groq chat streaming and Whisper upload, and Ollama. Used directly rather than through a vendor SDK for fine control of cancellation. |
 | `kokoro-onnx`, `onnxruntime`, `numpy` | TTS |
-| `soundfile` | In-memory WAV encoding for STT upload |
 | `structlog` | Structured logging |
 | dev: `ruff`, `pytest`, `pytest-asyncio`, `pytest-cov`, `mypy`, `hypothesis` | Quality |
-| optional: `faster-whisper` | Local STT (`uv sync --extra local`) |
+| optional: `faster-whisper` | Declared as an extra for a local STT that is **not implemented in v0.1.0**; `make setup` does not install it. |
 
 ### 3.2 Frontend dependencies
 
@@ -211,9 +214,11 @@ backend/app/
 ├── errors.py          AppError hierarchy
 ├── logging_setup.py   configure_logging() + get_logger(); structlog with the stdlib bridge
 ├── protocol.py        Client/Server message models, MessageType enum, binary framing helpers
-├── session.py         Session, SessionState, SessionManager
+├── session.py         Session, SessionManager (SessionState lives in protocol.py)
 ├── pipeline/
-│   ├── turn.py        run_turn(): STT → LLM → chunker → TTS orchestration
+│   ├── turn.py        run_turn()/run_presentation(): LLM → chunker → SpeechSender → TTS;
+│   │                  speech hygiene (scaffolding and typed tool calls); error mapping
+│   ├── tools.py       build_tools(slide_count): the two tool schemas
 │   ├── chunker.py     SentenceChunker
 │   ├── history.py     ConversationHistory (messages, truncation, capping)
 │   ├── slides.py      SlideController (tool validation, keyword fallback, cursor)
@@ -222,10 +227,11 @@ backend/app/
 ├── providers/
 │   ├── base.py        STTProvider / LLMProvider / TTSProvider Protocols + shared types
 │   ├── groq_stt.py    GroqWhisperSTT
-│   ├── groq_llm.py    GroqLLM (httpx streaming SSE, tool-call assembly)
+│   ├── openai_compat.py  OpenAICompatibleLLM: httpx SSE, tool-call assembly
+│   ├── groq_llm.py    GroqLLM (OpenAICompatibleLLM + credential check)
+│   ├── ollama_llm.py  OllamaLLM (OpenAICompatibleLLM, no credential)
+│   ├── fallback.py    FallbackLLM: a second model when the first is rate limited (TR-085)
 │   ├── kokoro_tts.py  KokoroTTS (thread-pool synthesis, chunked yield)
-│   ├── local_stt.py   FasterWhisperSTT (optional extra)
-│   ├── ollama_llm.py  OllamaLLM
 │   └── registry.py    build_providers(settings) -> Providers
 ├── decks/
 │   ├── models.py      Deck, Slide (pydantic)
@@ -253,9 +259,15 @@ class ToolCallDelta(BaseModel):
     arguments: dict[str, Any]
 
 class LLMDone(BaseModel):
-    finish_reason: Literal["stop", "tool_calls", "length", "cancelled"]
+    finish_reason: Literal["stop", "tool_calls", "length", "cancelled", "error"]
 
-LLMEvent = TokenDelta | ToolCallDelta | LLMDone
+class ProviderSwitched(BaseModel):      # emitted by FallbackLLM (TR-085)
+    from_model: str
+    to_model: str
+    reason: str
+    retry_after_s: float | None = None
+
+LLMEvent = TokenDelta | ToolCallDelta | LLMDone | ProviderSwitched
 
 class STTProvider(Protocol):
     name: str
@@ -263,34 +275,29 @@ class STTProvider(Protocol):
 
 class LLMProvider(Protocol):
     name: str
-    def stream(self, messages: list[Message], tools: list[ToolSpec]) -> AsyncIterator[LLMEvent]: ...
+    def stream(self, messages: list[Message], tools: list[ToolSpec],
+               tool_choice: ToolChoice = "auto") -> AsyncIterator[LLMEvent]: ...
 
 class TTSProvider(Protocol):
     name: str
     sample_rate: int  # 24_000 for Kokoro
-    def synthesize(self, text: str, voice: str) -> AsyncIterator[bytes]: ...  # PCM16 LE chunks
+    def synthesize(self, text: str, voice: str | None = None) -> AsyncIterator[bytes]: ...  # PCM16 LE chunks
     async def warm_up(self) -> None: ...
 ```
 
 ```python
-# session.py
+# protocol.py
 class SessionState(StrEnum):
     IDLE = "idle"; CONNECTING = "connecting"; LISTENING = "listening"; HEARING = "hearing"
     THINKING = "thinking"; SPEAKING = "speaking"; INTERRUPTED = "interrupted"; ERROR = "error"
 
-@dataclass
+# session.py -- a plain class, built per socket by SessionManager
 class Session:
-    id: str
-    ws: WebSocket
-    deck: Deck
-    providers: Providers
-    history: ConversationHistory
-    slides: SlideController          # current_slide, presentation_cursor, mode
-    state: SessionState = SessionState.CONNECTING
-    turn_id: int = 0
-    task: asyncio.Task[None] | None = None
-    pending_utterance: bytes | None = None
-    last_interrupt_ts: float = 0.0
+    def __init__(self, websocket, *, settings, providers, decks, prompts) -> None: ...
+    # public: id, deck, slides (current_slide, presentation_cursor, mode), history,
+    #         state, turn_id
+    # private bookkeeping: _task, _interrupted_turn, _interrupted_at (TR-023),
+    #         _playing, _last_sentence_id (TR-090), _expecting_binary (TR-140), _started
 ```
 
 ### 4.3 Session state machine
@@ -298,44 +305,51 @@ class Session:
 | ID | Requirement |
 |---|---|
 | TR-020 | States and transitions exactly as PRD §7. Every transition emits `state {value, turn_id, server_ts}`. |
-| TR-021 | `turn_id` increments when a new pipeline task starts. Clients discard `transcript.agent`, audio, and `metrics` whose `turn_id` is older than the latest `state` they received. |
+| TR-021 | `turn_id` increments when a new pipeline task starts. Clients discard JSON messages whose `turn_id` is older than the latest `state` they received. Audio frames carry only `sentence_id` and `seq`, so stale audio is dealt with by flushing on `agent.cancelled` rather than by filtering. |
 | TR-022 | At most one pipeline task per session. `Session.start_turn()` cancels and awaits the previous task before creating a new one. |
-| TR-023 | `speech.start` received in THINKING or SPEAKING is treated as `interrupt` with `last_completed_sentence_id` taken from the most recent `playback.progress` (client may follow with an explicit `interrupt` carrying a more precise value; the later value wins if it arrives within 200 ms). |
-| TR-024 | `interrupt` received in LISTENING or HEARING is a no-op. Two interrupts within 500 ms are idempotent. |
+| TR-023 | `speech.start` is treated as an `interrupt` **in SPEAKING only**. In THINKING it is not: nothing has been spoken, and the utterance that follows supersedes the running turn anyway (observed live, where the tail of the user's own sentence cancelled their own turn twice). An explicit `interrupt` message does cancel in THINKING. A second interrupt naming a turn already cancelled refines the cut if it carries a better `last_completed_sentence_id`, within `INTERRUPT_DEBOUNCE_S` = 500 ms. |
+| TR-024 | `interrupt` in LISTENING or HEARING is a no-op **unless** it names the current turn: within the 500 ms debounce it refines that turn's cut (TR-023), and while the client is still playing the turn it truncates history and emits `agent.cancelled` (TR-090). An interrupt for a turn already heard in full changes nothing. |
 | TR-025 | A watchdog (`asyncio.timeout(20)`) wraps each turn. On expiry: cancel task, emit `error {code: "turn_timeout", recoverable: true}`, state → LISTENING. |
 | TR-026 | On WebSocket disconnect: cancel task, release resources, remove session. Session objects must not outlive the socket. |
 
 ### 4.4 Turn pipeline (`pipeline/turn.py`)
 
+Transcription happens in `Session.handle_utterance`, before a turn exists, so that a filler transcript costs no cancellation (TR-089). `run_turn` starts from text.
+
 ```
-run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|"text")
-  1. metrics.start()
-  2. if utterance: transcript = await stt.transcribe(utterance)          → metrics.stt_ms
-       if transcript is empty or in FILLER_DENYLIST: emit state LISTENING; return
-       emit transcript.user
-     else: transcript.text = text
-  3. history.add_user(transcript.text)
-  4. messages = prompt_builder.build(history, deck, slides.snapshot())
-  5. chunker = SentenceChunker(); tts_queue = asyncio.Queue(maxsize=2)
-     sender = create_task(_tts_sender(tts_queue))       # synthesises + sends in order
-  6. async for ev in llm.stream(messages, TOOLS):
-       ToolCallDelta → slides.apply_tool(ev) → emit tool.call, slide.goto; history.add_tool_call/result
-       TokenDelta    → for sentence in chunker.feed(ev.text): await tts_queue.put(sentence)   (first token → metrics.llm_ttft_ms)
-       LLMDone       → for sentence in chunker.flush(): put; break
-  7. await tts_queue.put(END); await sender
-  8. if no tool call and slides.keyword_fallback(full_text) → emit tool.call(source="fallback"), slide.goto
-  9. history.add_assistant(full_text, sentences)
- 10. emit metrics
- (state → LISTENING is driven by the client's final playback.progress, with a 3 s safety timer)
+Session.handle_utterance(pcm16)
+  transcript = await stt.transcribe(pcm16)                     → metrics.stt_ms
+  if empty or in FILLER_TRANSCRIPTS: stay put; return          # no turn is started
+  start_turn(transcript.text)                                  # cancels any running turn
+
+run_turn(*, turn_id, text, deck, llm, tts, voice, history, slides, prompts, metrics,
+         emit, send_audio, on_speaking)
+  1. emit transcript.user; history.add_user(text)
+  2. messages = prompt_builder.build(history, deck, slides.snapshot())
+  3. chunker = SentenceChunker(); sender = SpeechSender(depth=2)   # synthesises + sends in order
+  4. for step in range(MAX_LLM_STEPS = 3):
+       async for ev in llm.stream(messages, build_tools(len(deck.slides))):
+         ToolCallDelta    → slides.apply_tool(name, args) → emit tool.call, slide.goto
+         TokenDelta       → chunker.feed(...) → sender.submit(sentence)  (first token → llm_ttft_ms)
+         ProviderSwitched → emit provider.fallback, once per turn (TR-085)
+         LLMDone          → chunker.flush() → sender.submit(...)
+       if finish_reason != "tool_calls" or words were spoken: break
+       # else: put the tool results back and ask again -- a tool call returns no words
+  5. await sender.stop()          # drains what is queued; never cancels mid-frame
+  6. if nothing navigated and the answer is not a refusal:
+       slides.keyword_fallback(text) → emit tool.call(source="fallback"), slide.goto
+  7. if no words at all: speak one fallback line rather than change the slide in silence
+  8. history.add_assistant(text, sentences); emit metrics
+  9. session sets _playing, then state → LISTENING (TR-090)
 ```
 
 | ID | Requirement |
 |---|---|
-| TR-030 | STT input is a 16 kHz mono PCM16 WAV built in memory with `soundfile`; requests time out at 10 s; one retry after 500 ms on 429/5xx. |
+| TR-030 | STT input is a 16 kHz mono PCM16 WAV built in memory by writing a 44-byte RIFF header with `struct.pack` (no audio library); requests time out at 20 s; one retry after 500 ms on 429/5xx. |
 | TR-031 | LLM streaming uses `httpx.AsyncClient.stream` against the OpenAI-compatible Groq endpoint so that cancelling the task closes the HTTP stream immediately. Tool-call argument fragments are accumulated per `call_id` and parsed when complete. |
 | TR-032 | Multiple tool calls in one response are applied in order; the last `go_to_slide` wins for the on-screen slide. |
-| TR-033 | The `_tts_sender` task synthesises sentences strictly in order and sends `transcript.agent` immediately before the first audio frame of each sentence. |
-| TR-034 | Cancellation: cancelling the turn task cancels `_tts_sender`; both swallow `CancelledError` only after cleanup, then re-raise. Unsent audio is discarded. |
+| TR-033 | `SpeechSender` synthesises sentences strictly in order behind a queue of depth 2, and sends `transcript.agent` for a sentence immediately before handing it to synthesis. It drops a sentence identical to one already spoken this turn, which is how a second model step reopening with the same words is kept out of the audio. |
+| TR-034 | Cancellation: cancelling the turn task propagates into the model stream and the synthesis thread; unsent audio is discarded. An orderly end is different from a cancel — `SpeechSender.stop()` sets a flag and enqueues a sentinel rather than cancelling, so the frame in flight finishes instead of being torn in half. |
 | TR-035 | `first token` and `first audio` timestamps use `time.perf_counter()`; metrics are integers in milliseconds. |
 
 ### 4.5 SentenceChunker (`pipeline/chunker.py`)
@@ -344,7 +358,7 @@ run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|
 |---|---|
 | TR-040 | `feed(text) -> list[str]` returns zero or more complete segments; `flush() -> list[str]` returns the remainder. |
 | TR-041 | A segment ends at `.`, `!`, `?` followed by whitespace or end, **unless** the terminator is part of a known abbreviation (`e.g.`, `i.e.`, `Dr.`, `vs.`) or a decimal number (`3.5`). |
-| TR-042 | If the buffer exceeds 60 characters and contains `,`, `;`, `:` or ` — `, split at the last such boundary (early first audio). |
+| TR-042 | If the buffer exceeds 60 characters and contains `,`, `;`, `:` or an em dash, split at the last such boundary, provided at least 24 characters precede it (early first audio without emitting a two-word fragment). |
 | TR-043 | If the buffer exceeds 200 characters with no boundary, split at the last whitespace. |
 | TR-044 | Segments are stripped and never empty; markdown symbols (`*`, `#`, backticks) are removed before TTS. |
 | TR-045 | Segment IDs (`sentence_id`) start at 0 per turn and increment by one. |
@@ -364,8 +378,8 @@ run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|
 | ID | Requirement |
 |---|---|
 | TR-060 | Holds `current_slide: int` (1-based), `presentation_cursor: int`, `mode: qa|present`, and the `Deck`. |
-| TR-061 | `apply_tool(call) -> SlideAction | None` validates: known tool name, `slide_index` within `1..len(deck.slides)`, `bullet_index` within the current slide. Invalid calls are logged and return a `tool` message with an error string so the model can self-correct; they never raise. |
-| TR-062 | `keyword_fallback(answer_text) -> SlideAction | None` tokenises the answer, scores each slide by weighted alias hits (exact alias phrase = 3, title word = 2, bullet word = 1), and returns the top slide if its score ≥ 4 and it beats the runner-up by ≥ 2 and it differs from `current_slide`. |
+| TR-061 | `apply_tool(name, arguments) -> SlideAction | None` validates: known tool name, `slide_index` within `1..len(deck.slides)`, `bullet_index` within the current slide. An invalid call is logged, leaves the reason in `last_error` for the caller to send back as the tool result, and returns `None`; it never raises. |
+| TR-062 | `keyword_fallback(answer_text) -> SlideAction | None` tokenises the answer, scores each slide by weighted alias hits (exact alias phrase = 3, title word = 2, bullet word = 1), and returns the top slide if its score ≥ 4 and it beats the runner-up by ≥ 2 and it differs from `current_slide`. Three gates narrow it further: it stands down for the rest of a turn in which the user navigated by hand; words the on-screen slide already shows are struck from rival slides' evidence; and an answer that declines the question as off-topic is never scored. |
 | TR-063 | `on_user_navigation(index)` updates `current_slide` and returns a system note string. Does not change `presentation_cursor`. |
 | TR-064 | `advance_cursor()` moves the cursor forward in `present` mode; `snapshot()` returns a small dict injected into the prompt. |
 
@@ -373,9 +387,9 @@ run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|
 
 | ID | Requirement |
 |---|---|
-| TR-070 | The template `prompts/presenter.md` has placeholders `{deck_json}`, `{current_slide}`, `{presentation_cursor}`, `{mode}`; rendering is a plain `str.format` with a `SafeDict` so stray braces in deck text cannot raise. |
-| TR-071 | Deck JSON in the prompt includes index, title, bullets, speaker notes, aliases; per-slide notes are capped at 600 characters. |
-| TR-072 | The tool schemas are constants in `pipeline/tools.py` and mirrored verbatim in PRD §F5. |
+| TR-070 | The template `prompts/presenter.md` has placeholders `{deck_json}`, `{slide_count}`, `{current_slide}`, `{current_slide_title}`, `{presentation_cursor}`, `{presentation_cursor_title}`, `{mode}`; rendering is a plain `str.format` with a `SafeDict` so stray braces in deck text cannot raise. |
+| TR-071 | Deck JSON in the prompt includes each slide's index, title and bullets, and the speaker notes **of the current slide only**, capped at 1,100 characters. Aliases are never sent: they serve the server-side fallback, and six slides' notes cost ~1,570 input tokens a turn against a free-tier ceiling of 8,000 a minute. |
+| TR-072 | The tool schemas are built by `build_tools(slide_count)` in `pipeline/tools.py`, so `slide_index.maximum` follows the loaded deck; PRD §F5 shows their shape, not their literal text. |
 
 ### 4.9 Providers
 
@@ -391,12 +405,8 @@ run_turn(session, *, utterance: bytes | None, text: str | None, source: "voice"|
 | TR-089 | **Added 2026-09-11.** A transcript in the filler denylist is recognised in `Session.handle_utterance`, before `start_turn`. Recognising it inside `run_turn` meant the cancellation had already happened: a cough during an answer destroyed that answer and replaced it with nothing. The session also keeps the floor rather than announcing LISTENING when a turn is still speaking. |
 | TR-087 | **Added 2026-09-11.** `Slide.figure` declares an arrangement (`metrics`, `split`, `flow`) as a list of items, each naming the bullet indices it presents. A model validator rejects any figure whose items do not cover every bullet exactly once, which is what stops the screen and the prompt drifting apart and what keeps `highlight_bullet` working across arrangements. The frontend falls back to a plain list for an absent or unrecognised kind, so a deck authored against a newer schema renders less prettily rather than not at all. |
 | TR-086 | **Added 2026-09-11, widened the same day.** A tool call the model wrote as prose instead of making is cut from speech. Three shapes, each observed from a real model: any tool name followed by an opening bracket (`go to slide(4, "...")`, `highlightbullet(1)`); the code-style name with a bare argument (`go_to_slide 4`, `highlight_bullet 3`), since underscores never occur in speech; and `highlight bullet 2` with neither, which no presenter says. `go to slide 4` as plain words is deliberately left alone, because "let's go to slide four" is real speech. The segment is cut at the call rather than dropped, because the model almost always types the call *after* finishing its sentence, and the sentence is the answer. Slide 5 names both tools without a bracket or a number and stays speakable. |
-| TR-085 | **Added 2026-09-11.** `LLM_FALLBACK_PROVIDER` names a second model to answer with when the first is rate limited. The wrapper switches only for a rate limit (a retryable error carrying a retry-after) and only before the primary has emitted anything, because half a spoken answer cannot be restarted elsewhere without repeating it. The switch is reported through the model stream as `ProviderSwitched`, the pipeline turns it into a `provider.fallback` message, and the UI names both models and says when the hosted one is expected back. The banner is scoped to the turn it explains: a later turn that completes without announcing a substitution clears it, so it never claims a substitution that has ended. Off by default: it needs a local model pulled. |
-| TR-089 | **Added 2026-09-11.** A transcript in the filler denylist is recognised in `Session.handle_utterance`, before `start_turn`. Recognising it inside `run_turn` meant the cancellation had already happened: a cough during an answer destroyed that answer and replaced it with nothing. The session also keeps the floor rather than announcing LISTENING when a turn is still speaking. |
-| TR-087 | **Added 2026-09-11.** `Slide.figure` declares an arrangement (`metrics`, `split`, `flow`) as a list of items, each naming the bullet indices it presents. A model validator rejects any figure whose items do not cover every bullet exactly once, which is what stops the screen and the prompt drifting apart and what keeps `highlight_bullet` working across arrangements. The frontend falls back to a plain list for an absent or unrecognised kind, so a deck authored against a newer schema renders less prettily rather than not at all. |
-| TR-086 | **Added 2026-09-11.** A segment matching a tool call written as prose -- a tool name followed by an opening bracket -- is dropped rather than spoken. Smaller models sometimes write the call instead of making it; the prompt asks them not to, and this makes it true. Matching requires the bracket, so an answer that merely names a tool, as slide 5 does, is unaffected. |
-| TR-084 | `FasterWhisperSTT` (optional): `large-v3-turbo` int8 on CPU; `OllamaLLM`: OpenAI-compatible endpoint at `OLLAMA_BASE_URL` with the same streaming parser as Groq. |
-| TR-085 | Every provider raises `ProviderError(provider, message, retryable)`; no vendor exception escapes `providers/`. |
+| TR-084 | `OllamaLLM`: OpenAI-compatible endpoint at `OLLAMA_BASE_URL`, sharing the streaming parser with Groq (`openai_compat.py`) — shipped, and measured by the same eval suites as the hosted model. `FasterWhisperSTT` (`large-v3-turbo` int8 on CPU) is **designed and not built**: `STT_PROVIDER=local` is refused at startup with a message saying so. |
+| TR-085 | **Provider failure discipline, in two halves.** *(a)* Every provider raises `ProviderError(provider, message, retryable, retry_after)`; no vendor exception escapes `providers/`. *(b)* **Added 2026-09-11.** `LLM_FALLBACK_PROVIDER` names a second model to answer with when the first is rate limited. The wrapper switches only for a rate limit (a retryable error carrying a retry-after) and only before the primary has emitted anything, because half a spoken answer cannot be restarted elsewhere without repeating it. The switch is reported through the model stream as `ProviderSwitched`, the pipeline turns it into a `provider.fallback` message, and the UI names both models and says when the hosted one is expected back. The banner is scoped to the turn it explains: a later turn that completes without announcing a substitution clears it. Off by default: it needs a local model pulled. The two halves share an id because ~40 citations in code and tests already point here, and both are about what happens when a provider will not answer. |
 
 ### 4.10 HTTP API
 
@@ -418,21 +428,26 @@ CORS allows `http://localhost:5173` and `http://127.0.0.1:5173` in development.
 ```
 frontend/src/
 ├── main.tsx, App.tsx
-├── config.ts                 VAD thresholds, sample rates, URLs
+├── config.ts                 detector thresholds and timings, sample rates, URLs
 ├── protocol.ts               Message types (mirror of backend protocol.py)
 ├── store.ts                  zustand store + selectors
+├── keyboard.ts               which keys a control claims, and when
+├── time.ts                   clock helpers shared by the HUD and the countdown chip
 ├── audio/
 │   ├── microphone.ts         Microphone: getUserMedia → AudioWorklet (public/worklets/capture.js) → 16 kHz PCM16 + energy detector
 │   └── playback.ts           PlaybackQueue: gapless scheduling, flush, progress callbacks
 ├── session/
 │   ├── client.ts             SessionClient: WS lifecycle, JSON/binary codec, reconnect
-│   └── useSession.ts         Hook wiring microphone/playback/client to the store
+│   ├── useSession.ts         Hook wiring microphone/playback/client to the store
+│   └── usePushToTalk.ts      Space-held capture, and the rules for when Space is ours
 └── components/
     ├── SlideDeck.tsx, Slide.tsx, ProgressDots.tsx
     ├── Orb.tsx
     ├── EventLog.tsx
     ├── LatencyHUD.tsx
-    └── Controls.tsx          Start/End, Auto-present, Mute, PTT toggle, text input
+    ├── FallbackBanner.tsx    which model is answering, and when the usual one is back
+    ├── RateLimitChip.tsx     countdown while the free tier is refusing
+    └── Controls.tsx          Start/End, Walk me through it, Mute, Push to talk, text input
 ```
 
 ### 5.2 Audio capture
@@ -440,7 +455,7 @@ frontend/src/
 | ID | Requirement |
 |---|---|
 | TR-100 | `getUserMedia({audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true}})`. |
-| TR-101 | An `AudioWorkletProcessor` converts the context's native rate (typically 48 kHz) to 16 kHz mono PCM16 using linear interpolation and posts `Int16Array` frames of 512 samples (32 ms). |
+| TR-101 | An `AudioWorkletProcessor` downmixes and resamples the context's native rate (typically 48 kHz) to 16 kHz using linear interpolation, and posts `{frame: Float32Array(512) (32 ms), rms}` — the buffer transferred, not copied. Conversion to PCM16 happens once per utterance on the main thread, so nothing is converted that ends up discarded. |
 | TR-102 | Frames feed both the VAD and a ring buffer holding the last 300 ms (pre-speech padding). |
 | TR-103 | `stop()` disconnects nodes, stops all tracks, and closes the capture `AudioContext`. Five start/stop cycles must leave zero live `MediaStreamTrack`s. |
 
@@ -451,7 +466,7 @@ frontend/src/
 | TR-110 | Detection runs in the browser on an `AudioWorkletProcessor` that downmixes, resamples to 16 kHz, and reports per-frame RMS, with hysteresis and the timings below on the main thread. **Changed 2026-09-11:** the design specified Silero VAD via `@ricky0123/vad-web`; it could not be made to load under Vite (see the engineering log for the four distinct failures) and was replaced by an energy threshold. Adequate for onset and endpointing with echo cancellation on, worse in a noisy room, and swappable in one file. |
 | TR-111 | Parameters per PRD §F3, all in `config.ts`: speech 0.02 RMS, silence 0.012 RMS, redemption 600 ms, min speech 250 ms, pre-pad 300 ms, onset 3 frames while playing and 1 while idle. **Changed 2026-09-11:** the first two were probabilities (0.6 / 0.35) when detection was Silero; they are amplitudes now that it is an energy threshold (TR-110). The timings are unchanged. |
 | TR-112 | While `PlaybackQueue.isPlaying`, onset requires **3 consecutive** positive frames (≈ 96 ms) to reduce echo-triggered self-interruption; otherwise 1 frame. |
-| TR-113 | On onset: emit `speech.start`; if playing, call `PlaybackQueue.flush()` first and emit `interrupt {last_completed_sentence_id}` (client tier of barge-in). Record `onsetTs = performance.now()`. |
+| TR-113 | On onset, one message or the other: while audio is playing, flush the `PlaybackQueue` and send `interrupt {last_completed_sentence_id}` (the client tier of barge-in); otherwise send `speech.start`. `interrupt_stop_ms` is the measured duration of the flush call itself. |
 | TR-114 | On end: assemble `prePad + speech` as one `Int16Array`, emit `speech.end {duration_ms}` then the binary frame. If duration < min speech, emit `interrupt.cancel` if an interrupt was sent, otherwise nothing. |
 | TR-115 | Push-to-talk mode bypasses VAD: keydown Space starts capture (and flushes/interrupts if playing), keyup ends the utterance. |
 | TR-116 | **Added 2026-09-11.** A capture must always be able to end, because while one is open no new onset can be declared and the listener therefore cannot interrupt at all. Two rules enforce it: a capture still open when the agent *starts* speaking is abandoned as a misfire, and any capture reaching `maxUtteranceMs` (20 s) ends — discarded when the agent is audible, since it is the agent's own voice leaking past echo cancellation, and uploaded otherwise. |
@@ -460,7 +475,7 @@ frontend/src/
 
 | ID | Requirement |
 |---|---|
-| TR-120 | A dedicated output `AudioContext` at 24 kHz (falls back to native rate with resampling if the browser refuses). |
+| TR-120 | A dedicated output `AudioContext` requested at 24 kHz, Kokoro's rate. No resampling fallback is implemented: every target browser honours the request, and a silent resampler would hide the day one does not. |
 | TR-121 | Each incoming frame `(sentence_id, seq, pcm16)` is converted to Float32, wrapped in an `AudioBuffer`, and scheduled with `source.start(nextStartTime)`, where `nextStartTime = max(ctx.currentTime + 0.02, lastEndTime)`. This yields gapless playback and tolerates late frames by inserting silence, never overlap. |
 | TR-122 | `flush()` stops every scheduled source, clears the queue, resets `nextStartTime`, and records `stoppedTs`. Must complete in < 20 ms. |
 | TR-123 | Completion tracking: the last frame of a sentence is known when the next sentence's first frame arrives or when `metrics` for the turn arrives (turn finished). On completion emit `playback.progress {sentence_id, turn_id}`. |
@@ -471,7 +486,7 @@ frontend/src/
 
 | ID | Requirement |
 |---|---|
-| TR-130 | Store shape: `{connection, agentState, turnId, currentSlide, highlight, events[], metrics: {last, medians}, settings: {ptt, debug, muted}}`. |
+| TR-130 | Store shape: `{connection, agentState, turnId, currentSlide, highlight, deck, sessionId, providers, protocolVersion, startedAt, lastStateAt, events[], eventSeq, metrics: {last, medians, history}, fallback, rateLimitedUntil, settings: {ptt, debug, muted}}`. |
 | TR-131 | Stale-turn guard: messages with `turn_id < store.turnId` are ignored except `state`. |
 | TR-132 | `EventLog` renders entries per PRD §F10; cancelled sentences (id > truncated_at) are rendered struck-through. |
 | TR-133 | `SlideDeck` clamps out-of-range indices and animates transitions with CSS; honours `prefers-reduced-motion`. |
@@ -521,12 +536,13 @@ Server → Client
 | `transcript.user` | `turn_id`, `text`, `final: true` |
 | `transcript.agent` | `turn_id`, `sentence_id`, `text` |
 | `tool.call` | `turn_id`, `name`, `args`, `source: "llm"\|"fallback"` |
-| `slide.goto` | `index`, `highlight: int\|null`, `reason` |
+| `slide.goto` | `turn_id`, `index`, `highlight: int\|null`, `reason` |
 | `agent.cancelled` | `turn_id`, `truncated_at_sentence_id: int\|null` |
 | `metrics` | `turn_id`, `stt_ms`, `llm_ttft_ms`, `llm_total_ms`, `tts_ttfb_ms`, `sentences: int` |
-| `error` | `code`, `message`, `recoverable: bool` |
+| `provider.fallback` | `turn_id`, `stage: "llm"`, `from_model`, `to_model`, `reason`, `retry_after_s: float\|null` |
+| `error` | `code`, `message`, `recoverable: bool`, `retry_after_s: float\|null` |
 
-Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tts_failed`, `turn_timeout`, `deck_not_found`, `rate_limited`.
+Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tts_failed`, `turn_timeout`, `internal_error`, `deck_not_found`, `rate_limited`.
 
 | ID | Requirement |
 |---|---|
@@ -596,7 +612,7 @@ Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tt
 | TR-170 | Any exception in a turn is caught at `run_turn`'s boundary, logged with `turn_id`, converted to one `error` message (mapped code), and the session returns to LISTENING. |
 | TR-171 | Groq HTTP 429 → `rate_limited` with the `retry-after` seconds in `message`; the frontend shows a countdown chip. |
 | TR-172 | STT returning empty text is not an error: state returns to LISTENING silently. |
-| TR-173 | Kokoro failure on one sentence skips that sentence, logs at ERROR, and continues with the next; the sentence is still shown in the transcript with a warning glyph. |
+| TR-173 | Kokoro failure on one sentence skips that sentence, logs at ERROR, and continues with the next. The sentence stays in the transcript as ordinary text: it was written, and the listener simply did not hear it. |
 | TR-174 | WebSocket send failures (client gone) terminate the session quietly. |
 | TR-175 | Frontend: a single automatic reconnect after an abnormal close (code ≠ 1000) with a fresh `session.start`; further failures show a retry button. |
 | TR-176 | Missing `GROQ_API_KEY` with `groq` providers selected fails at startup with an actionable message naming `.env.example`. |
@@ -609,7 +625,7 @@ Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tt
 |---|---|
 | TR-180 | API keys are read only from environment/`.env`; never sent to the browser; never logged (`Settings.__repr__` masks secrets). |
 | TR-181 | Audio and transcripts exist only in process memory for the session's lifetime. Logs contain transcript text at DEBUG level only. |
-| TR-182 | WebSocket messages are size-limited: JSON ≤ 16 KB, utterance binary ≤ 2 MB (≈ 60 s at 16 kHz). Larger frames close the socket with code 1009. |
+| TR-182 | WebSocket messages are size-limited: JSON ≤ 16 KB, utterance binary ≤ 2 MB (≈ 60 s at 16 kHz). An oversized utterance closes the socket with code 1009; an oversized JSON frame is answered with `error {bad_message}` and the socket stays open, because a client that can still be told what it did wrong should be. |
 | TR-183 | CORS restricted to the dev origins; no cookies. |
 | TR-184 | `ruff` `S` rules (bandit) enabled; `npm audit` and `uv pip audit`-equivalent reviewed before release. |
 
@@ -620,7 +636,7 @@ Error codes: `bad_message`, `unexpected_binary`, `stt_failed`, `llm_failed`, `tt
 | ID | Requirement |
 |---|---|
 | TR-190 | `structlog` JSON logs when `LOG_JSON=true`, coloured console otherwise, implemented in `app/logging_setup.py`. Standard-library records (uvicorn's especially) are bridged through the same processor chain so one renderer formats every line. `configure_logging` is idempotent. Bound context per session: `session_id`, `turn_id`. |
-| TR-191 | INFO events: `session.opened`, `state.changed`, `stt.done{ms}`, `llm.first_token{ms}`, `tool.call{name,args,source}`, `tts.first_audio{ms}`, `turn.done{ms}`, `turn.cancelled{truncated_at}`, `session.closed`. |
+| TR-191 | INFO events, as emitted: `app.startup`, `providers.selected`, `decks.registered`, `session.opened`, `stt.done{ms}`, `stt.too_short`, `session.empty_transcript`, `turn.dropped_filler`, `llm.tool_call`, `slides.tool_applied`, `tool.fallback`, `slides.fallback_suppressed`, `slides.user_navigation`, `speech.scaffolding_stripped`, `speech.tool_syntax_stripped`, `speech.duplicate_dropped`, `turn.cancelled_before_answer`, `session.closed`, `app.shutdown`. Timings live on the events that own them (`llm.stream_done{ms}` at DEBUG on the provider, `stt.done{ms}` here); state transitions are not logged, because every one of them is already a protocol message in the exportable event log (§7.2). |
 | TR-192 | `GET /api/health` reports provider names and TTS warm status for smoke tests. |
 | TR-193 | The frontend event log is exportable (§7.2) and is the primary debugging artefact. |
 
@@ -639,12 +655,12 @@ Tests are written alongside each feature and catalogued in `docs/TEST_CASES.md` 
 | **Backend integration** | pytest `-m integration` | Real Groq STT and LLM; Kokoro real synthesis | `make test-integration`, needs `GROQ_API_KEY` |
 | **Frontend unit** | vitest | `SentenceChunker` parity (TS mirror not needed — chunking is server-side), `PlaybackQueue` scheduling math with a fake `AudioContext`, `protocol.ts` codec, store reducers | `npm test` |
 | **Protocol parity** | pytest | Message type sets equal across languages | `make test` |
-| **End-to-end** | Playwright (Chromium) with fake media device flag and a fake-provider backend | Start session, text input → slide changes; injected utterance WAV → transcript; interrupt via synthetic VAD event → audio flushed | `make test-e2e` |
+| **End-to-end** | Playwright (Chromium) against a backend with `STT_PROVIDER=fake LLM_PROVIDER=fake TTS_PROVIDER=fake`, and a silent WAV as the fake microphone | Start session; typed questions → slide changes, chips, transcript; walkthrough; interruption driven by holding push-to-talk, since a silent fake mic cannot express *which* question is being asked; reconnect | `make test-e2e` |
 | **Manual checklist** | `docs/TEST_CASES.md` §Manual | Real mic, echo, headphones vs speakers | before release |
 
 ### 12.2 Fakes
 
-- `FakeSTT(scripted: dict[bytes_hash, str])`, `FakeLLM(script: list[LLMEvent], delay_ms)`, `FakeTTS(bytes_per_char, delay_ms)` in `backend/tests/fakes.py`. Enabled in the app via `APP_PROVIDERS=fake` for E2E runs.
+- In `backend/tests/fakes.py`: `FakeSTT(scripted, *, default_text, latency_ms, delay_s, error)`, `FakeLLM(script, *, delay_s, router)` — the router answers from the conversation, so a browser-driven run replies to what was actually asked — and `FakeTTS(*, bytes_per_char, delay_s, chunk_bytes, sample_rate, fail_on)`. Selected per stage by `STT_PROVIDER=fake`, `LLM_PROVIDER=fake`, `TTS_PROVIDER=fake`; there is no single `APP_PROVIDERS` switch.
 - Frontend: `FakeAudioContext` recording `start(when)` calls, used to assert gapless scheduling and flush behaviour.
 
 ### 12.3 Coverage expectations
@@ -666,6 +682,7 @@ Unit tests check the code; evals check the **agent's behaviour** with real model
 | **E3 Groundedness** | `datasets/grounded.jsonl`: 5 questions the slide notes answer, one for each of slides 2–6, plus 5 unanswerable | Judge scores 0–2 for faithfulness to notes; unanswerable must be declined | mean ≥ 1.7; decline rate on unanswerable ≥ 80 % |
 | **E4 Spoken style** | All E1–E3 outputs | Deterministic checks: sentence count 1–5 (unless asked for more), no markdown/list symbols, no URLs, no emoji, ≤ 90 words | pass ≥ 95 % |
 | **E5 Latency** | Three questions typed through the real pipeline with real synthesis, 3 turns, the model unpaced and each turn preceded by a quiet minute so the per-minute allowance is clear (STT is not exercised; the HUD reports it live) | p50/p95 of `llm_ttft_ms`, `llm_total_ms`, `tts_ttfb_ms` | `llm_ttft_ms` p95 ≤ 2.5 s; `tts_ttfb_ms` p95 ≤ 600 ms |
+| **JUDGE Calibration** | `datasets/judge_calibration.jsonl`: 10 hand-labelled groundedness items, half of them *nearly* right | Agreement between the judge's score and the hand label | ≥ 90 %; below it, the run reports that its judged suites should not be believed |
 | **E6 Tool-call hygiene** | E1 traces | Invalid tool calls (bad index, unknown tool), calls on off-topic inputs | 0 invalid; ≤ 5 % on off-topic |
 
 **Sizing (2026-09-11).** The sets were 40, 16 and 31 items. A call through the shipped prompt is about 2,800 tokens, a navigating turn makes two, and the free tier's daily budget is a bucket of 200,000 tokens per model that refills at about 2.3 tokens a second — so the 40-item routing set alone cost a full day and the six suites two and a half, and a gate that cannot run on the day it gates is not a gate. At 18 / 6 / 10 items the whole run is about 75 calls and 170,000 tokens, and E1 with E4 and E6 about 30 calls. The bars these sizes imply are stated so nobody mistakes them: 90 % on 18 items allows one miss; 10 % repetition on 6 allows none; 80 % decline on 5 allows one; 90 % judge agreement on 10 allows one. Records made on the larger sets are marked as such in `docs/EVALS.md`. Sets still grow by TR-203, and a run's cost grows with them, knowingly.
@@ -674,8 +691,8 @@ Unit tests check the code; evals check the **agent's behaviour** with real model
 
 | ID | Requirement |
 |---|---|
-| TR-200 | `run_evals.py --suite all|E1..E6 --model <id> --out results/<timestamp>.json` drives `run_turn` directly with real providers and a fake WebSocket sink; no browser required. |
-| TR-201 | The judge for E2/E3 is the same LLM provider with a fixed rubric prompt and `temperature=0`; judge prompts live in `evals/judges/`. Judge outputs are JSON with a score and a one-line rationale. |
+| TR-200 | `run_evals.py` drives `run_turn` directly with real providers and a fake WebSocket sink; no browser required. Flags: `--suite all` or a comma-separated list of `E1..E6`, `--model`, `--judge-model`, `--provider groq|ollama`, `--out` (defaults to a timestamped file under `results/`), `--min-interval`, `--concurrency`, `--max-wait`, `--limit`. |
+| TR-201 | The judge for E2/E3 is the same LLM provider with a fixed rubric prompt and `temperature=0`; judge prompts live in `evals/judges/`. Judge outputs are JSON with a score and a one-line rationale, extracted from the reply rather than assumed to be all of it. Before either judged suite runs, the judge is scored against the hand-labelled calibration set; below 90 % agreement the run says its judged numbers should not be believed. |
 | TR-202 | Each run writes a machine-readable JSON and a Markdown summary; the summary table is pasted into `docs/EVALS.md` with the git SHA, model IDs, and date. The SHA is read when the run starts, so a commit made during a long run is not recorded as the code that ran. |
 | TR-203 | Datasets are versioned in the repo; adding a failing real-world utterance to a dataset is the standard response to a routing bug. |
 | TR-204 | Evals are opt-in (`make evals`) because they consume free-tier quota. A navigating turn is two LLM calls, so E1 with 18 items is ≈ 30 calls and ≈ 85,000 tokens, four tenths of a day's budget; the six suites are ≈ 75 calls and ≈ 170,000 tokens. Hosted calls are paced 31 s apart by default, because a refused request counts against the minute that refused it. |
@@ -691,7 +708,7 @@ The runner accepts `--model` so E1 and E4 can be compared across `qwen/qwen3.8-2
 
 | ID | Requirement |
 |---|---|
-| TR-210 | Root `Makefile` targets: `setup`, `backend`, `frontend`, `lint`, `format`, `test`, `test-integration`, `test-e2e`, `evals`, `clean`. |
+| TR-210 | Root `Makefile` targets: `setup`, `backend`, `frontend`, `build`, `serve`, `lint`, `format`, `test`, `test-integration`, `test-e2e`, `evals`, `check`, `clean`. |
 | TR-211 | Backend: `uv` project; `ruff` config per `CLAUDE.md`; `mypy --strict` on `app/` (allow `Any` in provider SSE parsing only). |
 | TR-212 | Frontend: `tsc --noEmit`, ESLint type-checked config, Prettier; `vite build` produces `frontend/dist/` which the backend serves at `/` when present (single-process option for users). |
 | TR-213 | Conventional Commits; every commit that changes behaviour adds or updates a `docs/TEST_CASES.md` entry and a `docs/ENGINEERING_LOG.md` entry. |
@@ -707,7 +724,7 @@ The runner accepts `--model` so E1 and E4 can be compared across `qwen/qwen3.8-2
 | M2 Audio out | Kokoro provider, chunker, sender, PlaybackQueue, Orb, metrics | TC-BE-02x, TC-FE-02x green; first-audio measured | **shipped 2026-09-11**, first audio 777 ms |
 | M3 Audio in + barge-in | Capture, speech detection, Groq STT, interrupt tiers, truncation | TC-BE-03x, TC-FE-03x, TC-E2E-001 steps 1–4 green | **shipped 2026-09-11**, cancellation 1.9 ms |
 | M4 Polish | Present mode + resume, bidirectional sync, PTT, text fallback, README | All P1 TCs green; E1–E6 run recorded | **shipped 2026-09-11** |
-| M5 v0.1.0 | Tag, EVALS.md, ENGINEERING_LOG.md complete | `make lint test` clean in CI | in progress |
+| M5 v0.1.0 | Tag, EVALS.md, ENGINEERING_LOG.md complete | `make lint test` clean in CI | **shipped 2026-09-11**; release eval recorded that evening, docs reconciled with the code on the 13th |
 
 ---
 
@@ -717,7 +734,7 @@ The runner accepts `--model` so E1 and E4 can be compared across `qwen/qwen3.8-2
 |---|---|---|
 | ~~`kokoro-onnx` / `onnxruntime` wheel availability on Python 3.12 arm64~~ | **Closed 2026-09-10.** Verified installing and importing on this machine; CoreML execution provider available. | backend |
 | Groq SSE tool-call fragments differ from OpenAI format | Contract tests from recorded SSE fixtures; parser handles both `tool_calls[].function.arguments` deltas and whole-object calls | backend |
-| Browser refuses 24 kHz `AudioContext` | Resample to native rate in `PlaybackQueue` | frontend |
+| Browser refuses 24 kHz `AudioContext` | Accepted rather than mitigated: every target browser honours the request, and no resampling path is implemented (TR-120) | frontend |
 | Echo-driven self-interruption on speakers | TR-112 consecutive-frame rule, `echoCancellation`, headphone recommendation | frontend |
 | VAD assets path under Vite | Materialised: four workarounds failed in a real browser and Silero was replaced by an in-repo energy detector (TR-110, engineering log 2026-09-11) | frontend |
 

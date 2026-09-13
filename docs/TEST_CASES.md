@@ -13,9 +13,9 @@ Status beyond the obvious:
 - `planned` — no test exists. The row names the milestone that will write it.
 - `retired` — superseded. Kept so the ID is never reused.
 
-**Reconciled with the tree on 2026-09-11**, after M1 (text loop), M2 (audio out), M3 (audio in and barge-in) and the walkthrough and push-to-talk parts of M4: 590 backend cases across 23 files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 187 frontend cases across 18 files, all passing, plus five Playwright cases in `frontend/e2e/` run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
+**Reconciled with the tree on 2026-09-13**, after the release and its eval run: 608 backend cases across 23 unit files and 2 integration files, all passing with none skipped, plus six the default run deselects because they spend a real API key or load the real synthesiser, and 187 frontend cases across 18 files, all passing, plus five Playwright cases in four specs under `frontend/e2e/`, run by `make test-e2e`. Locations are real paths; `tests/` is relative to `backend/`, `src/` and `e2e/` to `frontend/`. Where one row is carried by several tests, they are listed together; where one test carries several rows, it is named by each of them.
 
-Every backend ID is claimed by exactly one test; four frontend IDs are still claimed twice, and §1 of the reconciliation items below names them. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
+Every backend ID is claimed by exactly one test. The four frontend IDs that were claimed twice were renumbered on 2026-09-13 (the walkthrough and mute block in `Controls.test.tsx` moved to TC-FE-238–241), so no ID is now claimed twice in either language. The collisions created by parallel authoring were renumbered on 2026-09-11: `test_history.py` moved to the 220 block and `test_turn.py` to 232-237, later joined by 242-243. IDs are never reused.
 
 ---
 
@@ -171,17 +171,17 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-041 | F13 / TR-020 | Given `text.input`, then states go THINKING → SPEAKING and a `transcript.user` is emitted with the text | `::test_a_typed_question_runs_a_turn_and_returns_to_listening` | passing |
 | TC-BE-042 | F5 | Given FakeLLM scripted to call `go_to_slide(4)`, then `tool.call{source: llm}` and `slide.goto{index: 4}` are emitted before any audio frame | `::test_a_tool_call_moves_the_deck_before_the_answer_is_spoken` | passing |
 | TC-BE-043 | F5 / TR-062 | Given FakeLLM returns text about latency and no tool call, then `tool.call{source: fallback}` and `slide.goto{2}` are emitted after the text | `::test_the_keyword_fallback_moves_the_deck_when_no_tool_was_called` | passing |
-| TC-BE-044 | F6 / TR-033 | Given FakeLLM streams two sentences, then `transcript.agent{0}` precedes audio frames with sentence_id 0, and same for 1 | `::test_each_sentence_is_announced_in_order_with_its_own_id`, `::test_audio_frames_ship_alongside_the_transcript` | passing — including the ordering half: each `transcript.agent` is asserted to arrive before the first audio frame of the sentence it announces |
+| TC-BE-044 | F6 / TR-033 | Given FakeLLM streams two sentences, then `transcript.agent{0}` precedes audio frames with sentence_id 0, and same for 1 | `::test_each_sentence_is_announced_in_order_with_its_own_id` | passing — the ordering half is asserted again from the frames' side by `::test_audio_frames_ship_alongside_the_transcript`, which is TC-BE-045's test |
 | TC-BE-045 | TR-141 | Then every server binary frame decodes through the 8-byte header and carries whole samples, at most 4,800 bytes of them | `::test_audio_frames_ship_alongside_the_transcript` | passing |
-| TC-BE-046 | F7 / TR-022/023 | Given a turn in SPEAKING, when `interrupt{last_completed: 0}` arrives, then the task is cancelled, `agent.cancelled{0}` is emitted, state is HEARING, history ends with "[interrupted by user]" | `::test_an_interrupt_cancels_the_turn_and_truncates_history`, `::test_an_interrupt_announces_the_interrupted_state_before_hearing` | passing — the interrupt lands on a turn that is genuinely SPEAKING. The budget asserted is 500 ms rather than the 50 ms TR-022 asks for, so a loaded machine cannot fail the case; measured live it is 1.9 ms |
+| TC-BE-046 | F7 / TR-022/023 | Given a turn in SPEAKING, when `interrupt{last_completed: 0}` arrives, then the task is cancelled, `agent.cancelled{0}` is emitted, state is HEARING, history ends with "[interrupted by user]" | `::test_an_interrupt_cancels_the_turn_and_truncates_history` | passing — the INTERRUPTED announcement on the way to HEARING is TC-BE-204's test. The interrupt lands on a turn that is genuinely SPEAKING. The budget asserted is 500 ms rather than the 50 ms TR-022 asks for, so a loaded machine cannot fail the case; measured live it is 1.9 ms |
 | TC-BE-047 | TR-024 | Given state LISTENING, when `interrupt` arrives, then nothing is emitted and state unchanged | `::test_an_interrupt_while_listening_does_nothing` | passing |
 | TC-BE-048 | TR-024 | Given two `interrupt` messages 100 ms apart, then exactly one `agent.cancelled` | `::test_two_interrupts_in_quick_succession_cancel_the_turn_once` | passing |
-| TC-BE-049 | TR-023 | Given state THINKING (no audio yet), when `speech.start` arrives, then the turn is cancelled and truncation uses `None`; outside a turn it is turn-taking, not barge-in | `::test_speech_onset_before_any_sentence_truncates_with_none`, `::test_speech_onset_while_listening_only_moves_to_hearing` | passing |
+| TC-BE-049 | TR-023 | Given state THINKING (no audio yet), when `speech.start` arrives, then the turn is **not** cancelled: nothing has been said, and the utterance that follows supersedes it. Outside a turn, onset is turn-taking rather than barge-in | `::test_speech_onset_while_thinking_does_not_cancel_the_turn`, `::test_speech_onset_while_listening_only_moves_to_hearing` | passing — the row said the opposite until 2026-09-13; the behaviour changed on the 11th when a user's own sentence tail was seen cancelling their own turn |
 | TC-BE-050 | TR-021 | Given a cancelled turn n and a new turn n+1, then no message with `turn_id: n` follows its `agent.cancelled` — `state` excepted, since the transition into HEARING reports the turn being left | `::test_a_cancelled_turn_sends_nothing_further_under_its_own_turn_id` | passing |
 | TC-BE-051 | TR-025 | Given FakeLLM that never finishes, then the watchdog fires with `error{turn_timeout}` and state LISTENING (timeout configured down to milliseconds rather than waiting 20 s) | `::test_a_turn_that_never_finishes_times_out_and_returns_to_listening` | passing |
 | TC-BE-052 | TR-170 | Given FakeSTT raising `ProviderError`, then `error{stt_failed, recoverable: true}` and state LISTENING | `::test_a_provider_failure_is_reported_as_recoverable` | passing — injected at the model in `::test_a_provider_failure_is_reported_as_recoverable` and at the transcriber in `::test_a_transcriber_failure_is_reported_and_the_session_survives`, which between them cover both codes the handler maps |
 | TC-BE-053 | TR-172 | Given FakeSTT returning "", then no `transcript.user`, no LLM call, state LISTENING | `::test_an_empty_or_filler_question_is_dropped_without_an_answer` | passing — typed in `::test_an_empty_or_filler_question_is_dropped_without_an_answer` and spoken in `::test_an_utterance_that_transcribes_to_nothing_is_dropped`, which is the branch in `handle_utterance` a typed question never reaches |
-| TC-BE-054 | F4 | Given FakeSTT returning "Thank you." (filler denylist), then the turn is dropped | same test, `denylist` parameter | passing — also spoken, in `::test_a_filler_transcript_is_dropped_the_same_way` |
+| TC-BE-054 | F4 | Given FakeSTT returning "Thank you." (filler denylist), then the turn is dropped | `::test_a_filler_transcript_is_dropped_the_same_way` | passing — also typed, as the `denylist` parameter of TC-BE-053's test |
 | TC-BE-055 | TR-140 | Given a binary frame not preceded by `speech.end`, then `error{unexpected_binary}` naming the message it must follow, and the session survives | `::test_a_binary_frame_without_speech_end_is_refused` | passing |
 | TC-BE-056 | TR-182 | Given a binary frame past `max_utterance_bytes`, then the socket closes with code 1009 and the transcriber is never called | `::test_an_oversized_utterance_closes_the_socket` | passing |
 | TC-BE-057 | F9 / TR-063 | Given `slide.changed{4, user}`, then history gets a system note and the next prompt reports current_slide 4 | `::test_manual_navigation_is_told_to_the_model` | passing |
@@ -213,7 +213,7 @@ so rows naming STT are still driven through `text.input`, which reaches the same
 | TC-BE-172 | TR-061 | Given a hallucinated slide index or a tool that does not exist, then the refusal is reported back to the model as a tool result and nothing moves | `::test_an_invalid_tool_call_is_reported_to_the_model_and_moves_nothing`, `::test_an_unknown_tool_is_refused_without_raising` | passing |
 | TC-BE-173 | TR-032 | Given the model finishes with `tool_calls`, then a second request is made and still offers tools; a turn finishing with `stop` costs one request | `::test_a_tool_call_finish_triggers_a_second_request_that_still_offers_tools`, `::test_a_plain_answer_costs_a_single_request` | passing |
 | TC-BE-174 | TR-062 | Given an answer that called no tool, the fallback routes it; once a tool has fired the fallback is never consulted; a local or thin answer moves nothing | `::test_the_fallback_routes_an_answer_that_called_no_tool`, `::test_the_fallback_is_not_consulted_once_a_tool_has_fired`, `::test_the_fallback_leaves_the_deck_alone_when_the_answer_is_local` | passing |
-| TC-BE-175 | TR-032 | Given the model calls a tool again on the second request, then the turn still stops after two requests | `::test_the_turn_stops_after_two_requests_however_the_model_finishes` | passing |
+| TC-BE-175 | TR-032 | Given the model calls a tool on every request, then the turn stops at the step ceiling (`MAX_LLM_STEPS` = 3) however the model finishes | `::test_the_turn_stops_at_the_step_ceiling_however_the_model_finishes` | passing — three rather than two because a model was seen calling `go_to_slide` and then `highlight_bullet`, both with empty content, leaving the deck moved and nothing said |
 | TC-BE-176 | TR-170/171 | Given a `ProviderError` from each stage, then each reaches the client under its own error code; a retryable failure carrying retry-after is reported as `rate_limited` | `::test_a_provider_failure_maps_to_its_error_code`, `::test_a_throttled_provider_is_reported_as_rate_limited` | passing |
 | TC-BE-177 | TR-022 | Then `cancel_task` awaits the task it cancelled, so two turns never overlap; cancelling no task, or a finished one, is a no-op | `::test_cancelling_a_turn_waits_for_it_to_unwind`, `::test_cancelling_nothing_is_safe` | passing |
 | TC-BE-232 | TR-062 | Given a tool call the deck refused, then the fallback may still route the answer — a rejected call is not the model navigating | `::test_a_rejected_tool_call_still_lets_the_fallback_route_the_answer` | passing|
@@ -288,6 +288,19 @@ the real providers. Two product defects, both fixed.
 | TC-BE-350 | TR-088 | Given a segment opening with a label leaked from the model's own chat template ("assistant reasoning", "assistant turn N", the JSON wrapper, the failure string), then the label is stripped, and a sentence that merely begins with those words is not | `tests/test_turn.py::test_labels_leaked_from_the_models_own_template_are_stripped` | passing |
 | TC-BE-351 | TR-202 | Given a SHA read when the run started, then the JSON and the summary record that SHA rather than the commit current when the file is written | `tests/test_evals.py::test_a_run_records_the_commit_it_started_under` | passing |
 | TC-BE-352 | E5 | Then the latency suite lets the quiet period pass before each turn, outside the turn's clock, instead of being paced inside the stream | `::test_the_latency_suite_waits_before_each_turn_rather_than_being_paced` | passing |
+
+### The catalogue checks itself (`backend/tests/test_catalogue.py`) — added 2026-09-13
+
+Written after a documentation audit found four rows naming tests that had been renamed, and a
+PRD still specifying a component replaced two days earlier. A catalogue that is verified by
+reading is verified until somebody stops reading.
+
+| ID | Feature / TR | Given / When / Then | Location | Status |
+|---|---|---|---|---|
+| TC-BE-353 | TR-213 | Then the parser finds the catalogue, the backend tests and the frontend test files, so a checker that matched nothing cannot pass the checks below | `tests/test_catalogue.py::test_the_catalogue_is_not_empty_and_parses` | passing |
+| TC-BE-354 | TR-213 | Then every row's named test exists, in both languages, with `::name` resolved against the section's file | `::test_every_row_names_a_test_that_exists` | passing |
+| TC-BE-355 | TR-213 | Then every ID a backend docstring claims has a row, and no ID is claimed by tests in two different files | `::test_every_backend_test_id_has_a_row_and_no_id_is_claimed_twice` | passing |
+| TC-BE-356 | TR-213 | Then no ID appears on two rows, in either the backend or the frontend block | `::test_no_catalogue_id_is_used_by_two_rows` | passing |
 
 ### Prompt scaffolding, and noise that killed an answer (added 2026-09-11)
 
@@ -434,7 +447,7 @@ rather than an edge case. The other two rows here close the last of milestone M4
 | TC-FE-196 | TR-115 | Given a focused checkbox, when space is held, then it ticks and no turn starts | `::TC-FE-196` | passing |
 | TC-FE-197 | TR-115 | Given the push-to-talk toggle clicked with a mouse, then it releases focus so the space bar is free | `src/components/Controls.test.tsx::TC-FE-197` | passing |
 | TC-FE-199 | TR-171 | Then a wait past 90 seconds is shown in minutes, on both the helper and the chip | `src/components/RateLimitChip.test.tsx::TC-FE-199` | passing |
-| TC-FE-198 | TR-115 | Given it activated from the keyboard, then focus is kept so the same key turns it off | `::TC-FE-198` | passing |
+| TC-FE-198 | TR-115 | Given it activated from the keyboard, then focus is kept so the same key turns it off | `src/components/Controls.test.tsx::TC-FE-198` | passing |
 
 ### The audio path (added 2026-09-11)
 
@@ -633,13 +646,12 @@ locations name each test by its sentence, because that is what the file holds.
 
 ## End-to-end (Playwright, fake-provider backend)
 
-No `frontend/e2e/` directory and no Playwright harness exist yet. TRD §15 puts the first
-walkthrough steps in M3 and the rest in M4.
+Four specs under `frontend/e2e/`, five cases, run by `make test-e2e` against a backend the harness starts itself with `STT_PROVIDER=fake LLM_PROVIDER=fake TTS_PROVIDER=fake`. The fake microphone plays a silent WAV, so questions are typed and interruption is driven by holding push-to-talk: a silent device cannot express *which* question is being asked.
 
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
-| TC-E2E-001 | PRD §13 | The full walkthrough scenario, steps 1–8, using text input and synthetic VAD events; asserts slide indices, log chips, and that audio is flushed on interrupt | `e2e/walkthrough.spec.ts` | passing — two tests: the scenario end to end, and that \"carry on\" resumes the tour rather than restarting it |
-| TC-E2E-002 | F2 | Given the backend is down, when Start is clicked, then the error toast with a retry button is shown; when the backend comes up and retry is clicked, the session connects | `e2e/connection.spec.ts` | passing |
+| TC-E2E-001 | PRD §13 | The full walkthrough scenario, steps 1–8, using text input and a held push-to-talk key for the interruption; asserts slide indices, log chips, and that audio is flushed on interrupt | `e2e/walkthrough.spec.ts` | passing — two tests: the scenario end to end, and that \"carry on\" resumes the tour rather than restarting it |
+| TC-E2E-002 | F2 | Given the backend is down, when Start is clicked, then the header reads `backend: unreachable` and the failure is reported in the log; when the backend comes up and Start is pressed again, the session connects | `e2e/connection.spec.ts` | passing |
 | TC-E2E-003 | F13 | Given mic permission denied (Playwright permission), then the text input still produces a voice answer and a slide change | `e2e/fallback.spec.ts` | passing |
 | TC-E2E-004 | F9 | Given manual navigation to slide 6 then text "explain this", then the agent answers without a `slide.goto` chip | `e2e/sync.spec.ts` | passing |
 
@@ -744,10 +756,10 @@ already lived; it was written out a second time here, and the two rows have been
 | ID | Feature / TR | Given / When / Then | Location | Status |
 |---|---|---|---|---|
 | TC-BE-250 | F8 | Given "walk me through it" typed or spoken, then a walkthrough starts instead of a model turn | `tests/test_session.py::test_a_spoken_request_to_walk_through_starts_the_presentation` | passing |
-| TC-FE-130 | F8 | Given an open session, when the walkthrough button is pressed, then the control message is sent | `src/components/Controls.test.tsx::TC-FE-130` | passing |
-| TC-FE-131 | F8 | Given no session, then neither the walkthrough nor mute is offered | `::TC-FE-131` | passing |
-| TC-FE-132 | F13 | Then mute reports its state through `aria-pressed` and toggles on click | `::TC-FE-132` | passing |
-| TC-FE-133 | F13 | Given a muted session, then the button offers to unmute and reads as pressed | `::TC-FE-133` | passing |
+| TC-FE-238 | F8 | Given an open session, when the walkthrough button is pressed, then the control message is sent | `src/components/Controls.test.tsx::TC-FE-238` | passing — renumbered from TC-FE-130 on 2026-09-13 |
+| TC-FE-239 | F8 | Given no session, then neither the walkthrough nor mute is offered | `::TC-FE-239` | passing |
+| TC-FE-240 | F13 | Then mute reports its state through `aria-pressed` and toggles on click | `::TC-FE-240` | passing |
+| TC-FE-241 | F13 | Given a muted session, then the button offers to unmute and reads as pressed | `::TC-FE-241` | passing |
 
 ---
 
@@ -768,37 +780,33 @@ already lived; it was written out a second time here, and the two rows have been
 
 ## Open reconciliation items
 
-One thing in the tree stops this catalogue from being a clean index, and it is now confined to the
-frontend. The fix is a one-line edit in each test file and belongs to whoever owns those files: a
-catalogue must not renumber somebody else's tests.
+Reconciled against the tree on 2026-09-13 by resolving each item rather than restating it. What is
+left is listed below, with the date it was last checked.
 
-### 1. Duplicate IDs — nine frontend IDs, each claimed by two unrelated tests
+### 1. Duplicate IDs — resolved
 
-The eighteen backend collisions listed here before have been resolved in the tree.
-`tests/test_history.py` now claims 220–231 and `tests/test_turn.py` 232–237 and 242–243, and a scan
-of every backend docstring finds no ID claimed twice. Nine frontend IDs still are, all of them
-created when the audio and control work landed. The convention the suite follows is one block of
-numbers per module, so the second column is the claimant that should move.
-
-| ID | First claimant (block owner) | Second claimant (should be renumbered) |
-|---|---|---|
-| `TC-FE-120` – `TC-FE-122` | `src/components/Orb.test.tsx` — the orb's state, its live region, and its compact form | `src/audio/playback.test.ts` — an empty frame, a flushed sentence, and audio enqueued after a flush |
-| `TC-FE-123` – `TC-FE-124` | `src/components/Slide.test.tsx` — the bullet highlight and its clock | `src/audio/playback.test.ts` — close silences playback, and closing twice is safe |
-| `TC-FE-130` – `TC-FE-132` | `src/components/EventLog.test.tsx` — struck-through sentences, the debug toggle, and the copy button | `src/components/Controls.test.tsx` — the walkthrough button, hiding it before a session, and mute |
-| `TC-FE-133` | `src/components/Controls.test.tsx` — the trimmed question reaches `onSend` | `src/components/Controls.test.tsx` — offering to unmute once muted (the same file claims it twice) |
+The eighteen backend collisions recorded here were resolved when `tests/test_history.py` moved to
+the 220 block and `tests/test_turn.py` to 232–237 and 242–243. The frontend's nine were resolved in
+two steps: `src/audio/playback.test.ts` took TC-FE-120–124 while `Orb.test.tsx` and `Slide.test.tsx`
+kept their own numbers under different rows, and on 2026-09-13 the walkthrough and mute block in
+`Controls.test.tsx` moved from TC-FE-130–133 to **TC-FE-238–241**, in the test file and in the rows
+above together. A scan of every backend docstring and every frontend test title now finds no ID
+claimed twice.
 
 Free backend numbers, if a renumbering wants a block: 067–069, 078–079, 083–089, 108–109, 127–129,
-138–139, 169, 184, 188–189, 195–199, 218–219, 238–239, 244–249, 251–259, and everything from 281
-up. Free frontend numbers: 004–009, 015–019, 024–029, 036–089, 096–099, 116–119, 139, 152–159, and
-everything from 179 up.
+138–139, 169, 184, 188–189, 195–199, 206, 218–219, 238–239, 244–249, 251–259, 322–329, and
+everything from 353 up. Free frontend numbers: 004–009, 015–019, 024–029, 036–089, 096–099,
+116–119, 139, 152–159, 179, 208–209, 222–229, and everything from 242 up. (The ranges printed here
+before 2026-09-13 said "everything from 281 up" and "from 179 up", which stopped being true when
+the 281–352 and 180–241 blocks were written.)
 
-### 2. Fifteen frontend tests carry no ID
+### 2. Frontend tests that carry no ID — sixteen
 
 They exist and pass, so they are named here rather than left invisible, but they are given no ID:
 the author assigns it in the same commit as the test (CLAUDE.md §3.1a). The microphone and
-push-to-talk tests that used to sit in this list were given IDs TC-FE-160–178 in this
+push-to-talk tests that used to sit in this list were given IDs TC-FE-160–178 in an earlier
 reconciliation, because a whole feature with no catalogue entry is worse than an ID assigned late;
-those IDs are not yet written into the test files.
+those rows locate their tests by title, and the IDs are still not written into the test files.
 
 | Location | What it asserts |
 |---|---|
@@ -808,6 +816,7 @@ those IDs are not yet written into the test files.
 | `::"invites the first question when nothing has happened yet"` | the empty log invites the first question |
 | `src/components/LatencyHUD.test.tsx::"grades each measurement against its budget and says when a stage never reported"` | each measurement is graded against its budget |
 | `::"says there is nothing to report before the first turn"` | the HUD is honest before the first turn |
+| `src/components/RateLimitChip.test.tsx::"rounds up, so the chip never sits on a number it has passed"` | the countdown rounds up rather than showing a second it has left |
 | `src/components/Slide.test.tsx::"renders the slide number and title as the slide's heading"` | the slide heading carries number and title |
 | `src/components/SlideDeck.test.tsx::"passes the highlight through to the slide it belongs to"` | the highlight reaches the right slide |
 | `::"says so rather than crashing when the index has no slide behind it"` | an index with no slide behind it degrades gracefully |
@@ -820,15 +829,26 @@ those IDs are not yet written into the test files.
 
 ### 3. One row retired
 
-TC-BE-074 was retired in this reconciliation. The Groq Whisper adapter shipped with a block of its
-own and its WAV-header test claims TC-BE-260, so the older row describes a test that no longer
-exists under that number. The ID is kept, as retired IDs always are, so that it is never reused.
-Nothing else has been withdrawn. The only rows left without an implementation are the four
-end-to-end ones, which wait on a Playwright harness that does not exist yet.
+TC-BE-074 was retired earlier: the Groq Whisper adapter shipped with a block of its own and its
+WAV-header test claims TC-BE-260, so the older row describes a test that no longer exists under that
+number. The ID is kept, as retired IDs always are, so that it is never reused. Nothing else has been
+withdrawn, and **no row is now without an implementation**: the four end-to-end rows were waiting on
+a Playwright harness when that sentence was written, and the harness shipped with M4. TC-INT-004 is
+the one row marked `implemented — not yet run`, because running it spends a real API key.
 
-### 4. Backend coverage the catalogue cannot yet claim
+### 4. Backend coverage the catalogue could not claim — closed
 
-No backend test uploads a valid utterance over the socket. `speech.end` followed by a binary frame
-is exercised only in its refusal paths (TC-BE-055, TC-BE-056), so `Session.handle_utterance`'s
-success path, its empty-transcript branch, and a `ProviderError` from the transcriber are reached
-by no test. That is what keeps TC-BE-052, TC-BE-053 and TC-BE-054 at `partial`.
+The sentence here said no backend test uploads a valid utterance over the socket, which kept
+TC-BE-052 to TC-BE-054 at `partial`. `tests/test_session.py` now drives the real path end to end
+(`::test_a_spoken_question_is_transcribed_and_answered`, TC-BE-281) along with its empty-transcript,
+filler and `ProviderError` branches, so those rows are `passing` and no row in this catalogue is
+`partial`.
+
+### 5. Known drift, still open (2026-09-13)
+
+- Nineteen rows, TC-FE-160–178, locate their tests by title because the IDs were assigned in this
+  catalogue and never written into `src/audio/microphone.test.ts` or the push-to-talk tests. A title
+  is a weaker key than an ID: renaming a test breaks the link silently.
+- The audit that produced this section was run by reading the tree, not by a check that runs. A
+  script that resolves every row to a live test — and fails when one does not resolve — is the
+  follow-up recorded in the engineering log.

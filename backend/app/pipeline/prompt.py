@@ -160,8 +160,9 @@ def render_deck_json(deck: Deck, current_slide: int | None = None) -> str:
     because every separator costs input tokens on every turn.
 
     Notes are included in full **only for the current slide**. Every other slide
-    contributes its title, bullets, and aliases, which is all the model needs to
-    decide where to navigate. This matters for more than tidiness: embedding all
+    contributes its title and bullets, which is all the model needs to decide
+    where to navigate; aliases are never sent, for the reason in the comment
+    below. This matters for more than tidiness: embedding all
     six slides' notes cost roughly 1,570 tokens per request, and Groq's free tier
     allows 8,000 tokens per minute, which capped the agent at about two requests
     a minute -- less than one exchange, since a turn that calls a tool needs two.

@@ -25,7 +25,111 @@ Rules:
 
 ## 2026-09-13
 
-### 2026-09-13 · The PRD still said Silero two days after Silero was gone · uncommitted
+### 2026-09-13 · Auditing the rest of the documents, and making the catalogue check itself · uncommitted
+**Scope:** `docs/PRD.md`, `docs/TRD.md`, `docs/TEST_CASES.md`, `backend/tests/test_catalogue.py`
+(new), `backend/app/decks/anatomy_of_a_voice_agent.json`, `backend/app/pipeline/prompt.py`,
+`frontend/src/components/Controls.test.tsx`
+
+**Asked for:** after the Silero sweep, "did you check only for Silero or all the staleness too".
+The honest answer was: only the terms I already knew had changed. So every factual claim in the
+living documents was checked against the code, in four passes, and what follows is what was wrong.
+
+**The PRD described a product in several places nobody built.** It promised a spoken greeting on
+connect (there is none, and slide 1 says the same thing in writing). It said onset while *thinking*
+cancels the turn (it deliberately does not, since the 11th, when a user's own sentence tail was seen
+killing their own turn twice). It said the agent offers to carry on after a misfire, and asks "shall
+I pick up from slide three?" after a digression (neither exists; `interrupt.cancel` is a deliberate
+no-op). It listed walkthrough triggers of "start" and "present" and resume phrases of "continue" and
+"go on" -- the real sets are six and five specific phrases, and the walkthrough makes no model call
+at all. It said the orb returns to listening when playback ends, which TR-090 contradicts. It said
+the prompt carries the whole deck including notes and aliases; it carries titles and bullets, plus
+the current slide's notes, and never aliases. It claimed ≤ 1 model request per turn where the
+ceiling is three. It pointed at `backend/tests/test_routing.py`, which does not exist. Its component
+table, repository tree, protocol table and open questions were each a release behind.
+
+**The TRD was stale in its diagrams and its contracts.** The pipeline diagram had `run_turn` calling
+STT, which moved into `handle_utterance` on the 11th (TR-089). Both sequence diagrams had the wrong
+order: transcription happens before THINKING, `transcript.agent` before SPEAKING, and LISTENING
+before the client's last `playback.progress`, not after. `Session` was documented as a dataclass with
+fields it does not have. TR-023, TR-024, TR-030, TR-033, TR-034, TR-042, TR-061, TR-062, TR-070,
+TR-071, TR-072, TR-101, TR-113, TR-120, TR-130, TR-173, TR-182, TR-191 and TR-200 each described
+something the code does differently -- most of them small, all of them checkable. Three rows were
+duplicated verbatim (TR-086, TR-087, TR-089) and one ID, TR-085, carried two different requirements.
+The duplicates are deleted; TR-085's two meanings are merged into one row rather than renumbered,
+because forty citations in code, tests and the catalogue already point at it and both halves are
+about what happens when a provider will not answer.
+
+**Two dependencies were declared and never imported.** `groq` (the official SDK) and `soundfile`:
+transcription posts multipart through `httpx` and the WAV header is 44 bytes of `struct.pack`. Both
+are gone from `pyproject.toml`, the lockfile and the TRD's dependency table.
+
+**The deck was telling the audience a stale number.** Slide 2's last bullet and its notes said the
+model's first token takes "seven hundred milliseconds to over two seconds", measured before the
+default model changed. The release eval measured 540 ms at the median and 670 at p95. The agent now
+says that. Slide 5's bullet showed `go_to_slide(index, ...)`; the parameter is `slide_index`.
+
+**The catalogue now checks itself, which is the part that matters.** Reading found four rows naming
+tests that had been renamed, three rows whose test claims a different ID, and four frontend IDs used
+by two tests each. Reading finds those once. `backend/tests/test_catalogue.py` parses
+`TEST_CASES.md`, resolves every row against the tree in both languages, and fails when a row names a
+test that does not exist, when a backend docstring claims an ID with no row, or when an ID is used
+twice (TC-BE-353 to 356). The walkthrough and mute block in `Controls.test.tsx` moved to
+TC-FE-238-241 to clear the collisions, in the tests and the rows together.
+
+**Alternatives considered.** Leaving the documents and noting the drift in a follow-up: rejected,
+because the PRD is what a reviewer reads first and it was describing a different product. Renumbering
+TR-085: rejected for the churn described above. Making the new checker a script rather than a test:
+rejected, because a script nobody runs is how this drift survived two days.
+
+**Verification:** 608 backend tests (four new), 187 frontend, lint and mypy clean. The new checker
+resolves 429 catalogue rows; before the fixes above it reported 7 unresolved and 4 duplicated IDs,
+which is how they were found.
+
+**Follow-ups:** TC-FE-160-178 still locate their tests by title rather than by an ID written into
+the file, which the checker cannot enforce; the relative-navigation loop and the phantom-reference
+rubric from the release eval are still open.
+
+## 2026-09-13
+
+### 2026-09-13 · Twenty-seven smaller claims, and two dependencies nothing imported · cae2689
+**Scope:** `README.md`, `CLAUDE.md`, `.env.example`, `Makefile`, `.github/workflows/ci.yml`,
+`backend/pyproject.toml`, `backend/uv.lock`, `backend/app/config.py`, `backend/evals/results/README.md`
+
+**Change:** the same audit that caught the PRD, applied to the files a reviewer meets first.
+
+*README.* The tool is `go_to_slide(slide_index, reason)`, not `(index, reason)`. The release run
+misses routing by three items, not two -- the third came back as the provider's own failure string
+and I had summarised it away. The first-token figure was quoted from a three-question smoke run
+("700 ms to 2.3 s") when the E5 record measured 540 / 670 ms; the table now cites the record and
+names the engineering-log entry for every number that has no eval behind it. "The flush takes under
+a millisecond" was never measured, and is gone. The architecture diagram showed faster-whisper as a
+local provider; only Ollama is one.
+
+*CLAUDE.md.* `make lint` also runs mypy and Prettier; `make test` also runs vitest. Two ruff
+per-file-ignore lines were missing. `ConversationHistory.truncate` is `truncate_current`; the store
+field is `agentState`; `ConfigError` belongs in the error hierarchy. The "no vendor code outside
+providers/" rule now states its one real exception, `turn.py` importing provider name constants to
+map a failure to its stage, rather than being quietly false.
+
+*Environment and build.* `KOKORO_MODELS_DIR` and `KOKORO_DOWNLOAD` were undocumented; `NOTSET` was
+offered as a log level the config rejects; `BACKEND_HOST`/`BACKEND_PORT` are validated but not read
+by either launcher, which the file now says. `make setup` and CI installed the `local` extra, whose
+provider does not exist, so both use a plain `uv sync`. `build` and `serve` joined `.PHONY`.
+
+**Two dependencies were declared and never imported:** `groq`, the official SDK, and `soundfile`.
+Transcription posts multipart through `httpx` for control of cancellation, and the WAV header is 44
+bytes of `struct.pack`. Removing them takes 1.4 MB and a transitive tree out of the environment and
+makes the TRD's "no vendor SDK" claim true.
+
+**And the coverage floor the TRD promises is enforced now.** `fail_under` had sat unset since Phase
+0 behind a comment saying it would be enabled "once those modules exist". They exist: it is 80, and
+the suite reports 96.4 %.
+
+**Verification:** 603 backend tests, 187 frontend, lint clean, CI green on cae2689.
+
+**Follow-ups:** none; the deeper items are in the entry above.
+
+### 2026-09-13 · The PRD still said Silero two days after Silero was gone · 85fd937
 **Scope:** `docs/PRD.md`, `docs/TRD.md` (§2.2 diagram, §2.1 providers row, §3.2 tree, §8.1, §13.3,
 risk register), `CLAUDE.md`, `.env.example`
 

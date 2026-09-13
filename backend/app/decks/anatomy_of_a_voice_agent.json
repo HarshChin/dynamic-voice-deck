@@ -56,9 +56,9 @@
         "First token from the model: 250 ms budgeted",
         "First audio chunk from Kokoro: about 250 ms",
         "Budget: 1.5 s to first sound, 2.5 s at p95",
-        "Measured now: first token 700 ms to 2.3 s"
+        "Measured now: 540 ms to first token, 670 at p95"
       ],
-      "notes": "Here is where the milliseconds go, measured from the end of your speech to the first sound of mine. Endpointing costs six hundred, because that is how long I wait in silence before deciding you have finished. Transcription takes about three hundred. The budget gives the model two hundred and fifty to its first token, and synthesis another two hundred and fifty once the first sentence is complete. Network and scheduling take forty. That totals about one and a half seconds, with a ceiling of two and a half at the ninety-fifth percentile. One line of that is missing its number today. Measured against the real service, the model's first token takes anywhere from seven hundred milliseconds to over two seconds, so first sound is nearer three seconds than one and a half. The rest of the budget holds. The interesting part is that endpointing is the largest item I actually control, and it is a product decision rather than a model limit. Shorten it and I cut you off; lengthen it and I feel slow.",
+      "notes": "Here is where the milliseconds go, measured from the end of your speech to the first sound of mine. Endpointing costs six hundred, because that is how long I wait in silence before deciding you have finished. Transcription takes about three hundred. The budget gives the model two hundred and fifty to its first token, and synthesis another two hundred and fifty once the first sentence is complete. Network and scheduling take forty. That totals about one and a half seconds, with a ceiling of two and a half at the ninety-fifth percentile. One line of that has a measured number now. Against the real service, my first token takes five hundred and forty milliseconds at the median and six hundred and seventy at the ninety-fifth percentile, a little over the budgeted two hundred and fifty. The rest of the budget holds. The interesting part is that endpointing is the largest item I actually control, and it is a product decision rather than a model limit. Shorten it and I cut you off; lengthen it and I feel slow.",
       "aliases": [
         "latency",
         "speed",
@@ -114,7 +114,7 @@
             "bullets": [
               5
             ],
-            "heading": "0.7-2.3 s",
+            "heading": "540 ms",
             "caption": "first token, measured"
           }
         ]
@@ -236,7 +236,7 @@
       "title": "Thinking: Tool Calling and Intent Routing",
       "bullets": [
         "All titles and bullets; notes for the slide on screen",
-        "go_to_slide(index, reason) moves the deck",
+        "go_to_slide(slide_index, reason) moves the deck",
         "highlight_bullet emphasises one line",
         "Navigating costs two model round trips per turn",
         "Alias scoring on the server catches a missed call",
