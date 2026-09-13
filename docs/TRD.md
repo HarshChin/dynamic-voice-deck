@@ -367,7 +367,7 @@ run_turn(*, turn_id, text, deck, llm, tts, voice, history, slides, prompts, metr
 
 | ID | Requirement |
 |---|---|
-| TR-050 | Message model: `role: system|user|assistant|tool`, `content: str`, optional `tool_calls`, `tool_call_id`, and for assistant messages `sentences: list[str]` (the segments as spoken). |
+| TR-050 | Message model: `role: system\|user\|assistant\|tool`, `content: str`, optional `tool_calls`, `tool_call_id`, and for assistant messages `sentences: list[str]` (the segments as spoken). |
 | TR-051 | `truncate_current(turn_id, last_completed_sentence_id)` replaces the in-progress assistant content with `" ".join(sentences[: last_completed + 1]) + " [interrupted by user]"`. If `last_completed_sentence_id is None`, content becomes `"[interrupted by user before speaking]"`. Tool calls already applied in that turn are retained. |
 | TR-052 | History keeps the system message plus the most recent 20 user/assistant pairs; older messages are dropped oldest-first. Tool messages are dropped together with their parent assistant message. |
 | TR-053 | `add_system_note(text)` appends a `system` message such as `"[User manually moved to slide 4: Barge-in]"`. |
@@ -377,9 +377,9 @@ run_turn(*, turn_id, text, deck, llm, tts, voice, history, slides, prompts, metr
 
 | ID | Requirement |
 |---|---|
-| TR-060 | Holds `current_slide: int` (1-based), `presentation_cursor: int`, `mode: qa|present`, and the `Deck`. |
-| TR-061 | `apply_tool(name, arguments) -> SlideAction | None` validates: known tool name, `slide_index` within `1..len(deck.slides)`, `bullet_index` within the current slide. An invalid call is logged, leaves the reason in `last_error` for the caller to send back as the tool result, and returns `None`; it never raises. |
-| TR-062 | `keyword_fallback(answer_text) -> SlideAction | None` tokenises the answer, scores each slide by weighted alias hits (exact alias phrase = 3, title word = 2, bullet word = 1), and returns the top slide if its score ≥ 4 and it beats the runner-up by ≥ 2 and it differs from `current_slide`. Three gates narrow it further: it stands down for the rest of a turn in which the user navigated by hand; words the on-screen slide already shows are struck from rival slides' evidence; and an answer that declines the question as off-topic is never scored. |
+| TR-060 | Holds `current_slide: int` (1-based), `presentation_cursor: int`, `mode: qa\|present`, and the `Deck`. |
+| TR-061 | `apply_tool(name, arguments) -> SlideAction \| None` validates: known tool name, `slide_index` within `1..len(deck.slides)`, `bullet_index` within the current slide. An invalid call is logged, leaves the reason in `last_error` for the caller to send back as the tool result, and returns `None`; it never raises. |
+| TR-062 | `keyword_fallback(answer_text) -> SlideAction \| None` tokenises the answer, scores each slide by weighted alias hits (exact alias phrase = 3, title word = 2, bullet word = 1), and returns the top slide if its score ≥ 4 and it beats the runner-up by ≥ 2 and it differs from `current_slide`. Three gates narrow it further: it stands down for the rest of a turn in which the user navigated by hand; words the on-screen slide already shows are struck from rival slides' evidence; and an answer that declines the question as off-topic is never scored. |
 | TR-063 | `on_user_navigation(index)` updates `current_slide` and returns a system note string. Does not change `presentation_cursor`. |
 | TR-064 | `advance_cursor()` moves the cursor forward in `present` mode; `snapshot()` returns a small dict injected into the prompt. |
 
@@ -691,7 +691,7 @@ Unit tests check the code; evals check the **agent's behaviour** with real model
 
 | ID | Requirement |
 |---|---|
-| TR-200 | `run_evals.py` drives `run_turn` directly with real providers and a fake WebSocket sink; no browser required. Flags: `--suite all` or a comma-separated list of `E1..E6`, `--model`, `--judge-model`, `--provider groq|ollama`, `--out` (defaults to a timestamped file under `results/`), `--min-interval`, `--concurrency`, `--max-wait`, `--limit`. |
+| TR-200 | `run_evals.py` drives `run_turn` directly with real providers and a fake WebSocket sink; no browser required. Flags: `--suite all` or a comma-separated list of `E1..E6`, `--model`, `--judge-model`, `--provider groq\|ollama`, `--out` (defaults to a timestamped file under `results/`), `--min-interval`, `--concurrency`, `--max-wait`, `--limit`. |
 | TR-201 | The judge for E2/E3 is the same LLM provider with a fixed rubric prompt and `temperature=0`; judge prompts live in `evals/judges/`. Judge outputs are JSON with a score and a one-line rationale, extracted from the reply rather than assumed to be all of it. Before either judged suite runs, the judge is scored against the hand-labelled calibration set; below 90 % agreement the run says its judged numbers should not be believed. |
 | TR-202 | Each run writes a machine-readable JSON and a Markdown summary; the summary table is pasted into `docs/EVALS.md` with the git SHA, model IDs, and date. The SHA is read when the run starts, so a commit made during a long run is not recorded as the code that ran. |
 | TR-203 | Datasets are versioned in the repo; adding a failing real-world utterance to a dataset is the standard response to a routing bug. |
