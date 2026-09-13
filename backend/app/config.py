@@ -55,8 +55,11 @@ class Settings(BaseSettings):
 
     ``none`` keeps the previous behaviour: the turn fails and the client shows a
     countdown. ``ollama`` answers anyway, more slowly, on this machine. It is
-    off by default because it needs Ollama installed and a model pulled, and a
-    fresh clone of this repository should not silently require a 5 GB download.
+    off by default *as a setting*, so that nothing is required of a process that
+    sets nothing; `.env.example` ships ``ollama``, because a demo meets the
+    per-minute ceiling more often than a reviewer minds a 4.7 GB pull. Choosing
+    it without Ollama running costs nothing either: the wrapper falls back to
+    reporting the rate limit it started with.
     """
 
     # --- Credentials --------------------------------------------------------

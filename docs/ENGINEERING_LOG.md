@@ -25,6 +25,34 @@ Rules:
 
 ## 2026-09-13
 
+### 2026-09-13 · Announcing the substitute only once it speaks · uncommitted
+**Scope:** `app/providers/fallback.py`, `app/config.py`, `tests/test_fallback.py`, `.env.example`,
+`README.md`, `docs/TRD.md` (TR-085), `docs/TEST_CASES.md`
+
+**Change:** `FallbackLLM` yielded `ProviderSwitched` before it had asked the local model anything,
+so a machine with no Ollama showed a banner naming a model that never spoke and then failed the
+turn. The switch is now announced on the fallback's *first event*. A fallback that cannot be reached
+raises the primary's rate limit instead, with the connection failure kept as `__cause__`, so the
+listener sees the countdown they would have seen before. A fallback that fails *after* speaking
+still raises its own error: by then the substitution is a fact the listener has heard.
+
+**Why now.** The previous entry shipped `LLM_FALLBACK_PROVIDER=ollama` in `.env.example` and
+recorded this edge as the cost of doing so. That cost is what a reviewer cloning the repository
+without Ollama would have paid, which is the wrong person to charge.
+
+**Alternatives considered.** Announcing eagerly and swallowing the fallback's failure: the banner
+still lies about who answered. Checking Ollama's health at startup: a process that was up at boot
+can be down at the turn, and it would fail the boot of anyone who has the default and no Ollama.
+
+**Verification:** two tests (TC-BE-357, TC-BE-358), 610 backend cases, lint and mypy clean. Proved
+twice on this machine against the real provider: pointed at a dead port, the turn raises the hosted
+model's rate limit with `retry_after=19` and no banner; pointed at the real Ollama, the switch is
+announced and `qwen2.5:7b` answers, with the keyword fallback still moving the deck.
+
+**Follow-ups:** none; this closes the follow-up from the entry below.
+
+## 2026-09-13
+
 ### 2026-09-13 · The local fallback ships on · uncommitted
 **Scope:** `.env.example`, `README.md`, `docs/TRD.md` (TR-085)
 

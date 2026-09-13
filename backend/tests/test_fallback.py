@@ -97,6 +97,46 @@ async def drain(provider: LLMProvider) -> list[LLMEvent]:
     return [event async for event in provider.stream([], [], "auto")]
 
 
+async def test_an_unreachable_fallback_reports_the_rate_limit_that_started_it() -> None:
+    """TC-BE-357: TR-085 -- a model that never spoke must not be announced, or blamed.
+
+    This is what lets `.env.example` ship the fallback enabled: a clone without Ollama
+    running behaves exactly as `none` did, with the countdown the hosted model asked for.
+    """
+    limit = rate_limited(seconds=19.0)
+    unreachable = BrokenLLM(ProviderError("ollama", "connection refused", retryable=True))
+    wrapper = build(BrokenLLM(limit), unreachable)
+
+    with pytest.raises(ProviderError) as raised:
+        await drain(wrapper)
+
+    assert raised.value is limit
+    assert raised.value.retry_after == 19.0
+    assert isinstance(raised.value.__cause__, ProviderError)
+    assert raised.value.__cause__.provider == "ollama"
+    assert unreachable.calls == 1
+
+
+async def test_a_fallback_that_fails_after_speaking_raises_its_own_failure() -> None:
+    """TC-BE-358: TR-085 -- once the listener has heard the substitute, the substitute owns it."""
+    broken_fallback = ProviderError("ollama", "stream closed", retryable=False)
+    wrapper = build(
+        BrokenLLM(rate_limited()),
+        BrokenLLM(broken_fallback, before=[TokenDelta(text="Two layers, actually.")]),
+    )
+
+    events: list[LLMEvent] = []
+    with pytest.raises(ProviderError) as raised:
+        async for event in wrapper.stream([], [], "auto"):
+            events.append(event)
+
+    assert raised.value is broken_fallback
+    assert isinstance(events[0], ProviderSwitched)
+    assert [event.text for event in events if isinstance(event, TokenDelta)] == [
+        "Two layers, actually."
+    ]
+
+
 async def test_the_primary_answers_and_nothing_is_substituted() -> None:
     """TC-BE-312: TR-085 -- the wrapper is invisible when the hosted model works."""
     primary = FakeLLM(sentence_script("Two layers, actually."))

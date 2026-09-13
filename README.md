@@ -250,8 +250,8 @@ the hosted model on E1. It is kept anyway because of _how_ it fails — it answe
 leaves the deck where it was, rather than going silent. Degrading is a feature; dying is not. The
 numbers are in [`docs/EVALS.md`](docs/EVALS.md). `.env.example` ships with it enabled, so the
 two commands in that file (`ollama serve` and `ollama pull qwen2.5:7b`) are worth running before a
-demo; without them only a rate-limited turn is affected, and it reports a failed turn instead of
-counting down.
+demo. Skipping them costs nothing: a substitution is announced only once the local model
+actually speaks, so a machine without Ollama counts down exactly as it did before.
 
 **Detection in the browser, transcription per utterance.** Interruption is detected locally and
 needs no round trip, which is what makes it feel instant. The cost is that transcription cannot

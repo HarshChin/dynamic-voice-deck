@@ -351,6 +351,8 @@ one thing that must never happen: a half-spoken answer restarted on another mode
 | TC-BE-316 | TR-085 | Given a failure after the answer began, then it is raised: restarting would repeat what was spoken | `::test_a_failure_after_the_answer_started_is_not_retried` | passing |
 | TC-BE-317 | TR-085 | Then the local model receives the same conversation and the same tools | `::test_the_local_model_gets_the_same_conversation_and_tools` | passing |
 | TC-BE-318 | TR-085 | Then closing the wrapper closes both providers | `::test_closing_the_wrapper_closes_both_providers` | passing |
+| TC-BE-357 | TR-085 | Given a fallback that cannot be reached, then the primary's rate limit is raised with its retry-after, the unreachable error is kept as the cause, and no substitution is announced | `::test_an_unreachable_fallback_reports_the_rate_limit_that_started_it` | passing |
+| TC-BE-358 | TR-085 | Given a fallback that fails after it has spoken, then its own failure is raised and the substitution stands | `::test_a_fallback_that_fails_after_speaking_raises_its_own_failure` | passing |
 | TC-BE-319 | TR-085 | Then `provider.fallback` reaches the client ahead of the answer, and no `error` is sent: the turn succeeded | `tests/test_session.py::test_a_substituted_model_is_announced_to_the_client` | passing |
 | TC-BE-320 | TR-086 | Given a tool call the model typed instead of making, then it is dropped rather than read aloud | `tests/test_turn.py::test_a_tool_call_the_model_typed_is_never_spoken` | passing |
 | TC-BE-321 | TR-086 | Given an answer that merely names a tool, as slide 5 does, then it is still spoken | `::test_an_answer_that_merely_names_a_tool_is_still_spoken` | passing |

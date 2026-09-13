@@ -83,8 +83,13 @@ class FallbackLLM:
 
         Raises:
             ProviderError: If the primary failed for any reason other than a
-                rate limit, if it failed after it had already started speaking,
-                or if the fallback failed too.
+                rate limit, or after it had already started speaking. If the
+                fallback fails before producing anything -- Ollama not running,
+                model not pulled -- the primary's rate limit is raised instead,
+                so the listener sees the countdown rather than a failure for a
+                model they never asked for. A fallback that fails *after* it has
+                spoken raises its own error, because by then the substitution is
+                a fact the listener has heard.
         """
         emitted = False
         try:
@@ -100,6 +105,7 @@ class FallbackLLM:
                 raise
             if not _is_rate_limit(exc):
                 raise
+            rate_limit = exc
             switch = ProviderSwitched(
                 from_model=self._primary_model,
                 to_model=self._fallback_model,
@@ -107,15 +113,31 @@ class FallbackLLM:
                 retry_after_s=exc.retry_after,
             )
 
-        logger.info(
-            "llm.fallback",
-            from_model=switch.from_model,
-            to_model=switch.to_model,
-            retry_after_s=switch.retry_after_s,
-        )
-        yield switch
-        async for event in self._fallback.stream(messages, tools, tool_choice):
-            yield event
+        # The switch is announced on the fallback's first event rather than before its first
+        # request, so that a fallback which cannot be reached at all costs nothing: no banner is
+        # shown for a model that never spoke, and the turn fails with the rate limit that actually
+        # stopped it. This is what lets `.env.example` ship the fallback on for people who have not
+        # installed Ollama.
+        announced = False
+        try:
+            async for event in self._fallback.stream(messages, tools, tool_choice):
+                if not announced:
+                    logger.info(
+                        "llm.fallback",
+                        from_model=switch.from_model,
+                        to_model=switch.to_model,
+                        retry_after_s=switch.retry_after_s,
+                    )
+                    yield switch
+                    announced = True
+                yield event
+        except ProviderError as exc:
+            if announced:
+                raise
+            logger.warning(
+                "llm.fallback_unreachable", fallback=self._fallback_model, error=str(exc)
+            )
+            raise rate_limit from exc
 
 
 def _is_rate_limit(exc: ProviderError) -> bool:
