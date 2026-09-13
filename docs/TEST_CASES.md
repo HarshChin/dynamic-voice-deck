@@ -357,8 +357,8 @@ one thing that must never happen: a half-spoken answer restarted on another mode
 | TC-BE-320 | TR-086 | Given a tool call the model typed instead of making, then it is dropped rather than read aloud | `tests/test_turn.py::test_a_tool_call_the_model_typed_is_never_spoken` | passing |
 | TC-BE-321 | TR-086 | Given an answer that merely names a tool, as slide 5 does, then it is still spoken | `::test_an_answer_that_merely_names_a_tool_is_still_spoken` | passing |
 | TC-FE-210 | TR-085 | Then the banner names both models and says the answer comes from this machine | `src/components/FallbackBanner.test.tsx::TC-FE-210` | passing |
-| TC-FE-211 | TR-085 | And says when the usual model is expected back, when that is known | `::TC-FE-211` | passing |
-| TC-FE-212 | TR-085 | Then that estimate counts down and disappears, while the banner itself stays | `::TC-FE-212` | passing |
+| TC-FE-211 | TR-085 | Then the banner says nothing about time and starts no clock: the countdown belongs to the chip | `::TC-FE-211` | passing |
+| TC-FE-212 | TR-085 / TR-171 | Then the two stand side by side, the chip saying when the hosted model returns and the banner who is answering meanwhile, neither repeating the other | `::TC-FE-212` | passing |
 | TC-FE-213 | TR-085 | Then nothing is shown when no model has been substituted | `::TC-FE-213` | passing |
 | TC-FE-214 | TR-085 | Then the store records which model is answering | `src/store.test.ts::TC-FE-214` | passing |
 | TC-FE-215 | TR-085 | Then it is logged as its own kind, not as an error: the agent did answer | `::TC-FE-215` | passing |

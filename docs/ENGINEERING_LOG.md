@@ -25,6 +25,31 @@ Rules:
 
 ## 2026-09-13
 
+### 2026-09-13 · The countdown and the banner both belong on screen · uncommitted
+**Scope:** `frontend/src/components/FallbackBanner.tsx`, `frontend/src/App.tsx`,
+`frontend/src/components/FallbackBanner.test.tsx`, `docs/TEST_CASES.md`, `docs/TRD.md`, `README.md`
+
+**Change:** while the local model is answering, the rate-limit chip stays up instead of being
+replaced. The banner no longer carries a "back in 45s" clause of its own, and no longer runs a timer
+to redraw it.
+
+**Why the original was wrong.** The banner replaced the chip on the reasoning that the two said
+contradictory things: the chip means wait, the banner means carry on. That is true of the *words*
+and false of the *facts*. A listener needs both: who is speaking now, and when the usual model comes
+back. Suppressing one to avoid an awkward pairing left the second question unanswered whenever the
+banner's own estimate had elapsed, and duplicated the countdown logic in two components when it was
+shown.
+
+**What replaced it.** Two elements, each owning one fact and stating it once. `RateLimitChip` owns
+the wait, `FallbackBanner` owns the substitution. The banner is now a pure function of two strings:
+no clock, no interval, no redraw state, fourteen fewer lines.
+
+**Verification:** the banner's four cases were rewritten (TC-FE-210 to 213), including one that
+renders chip and banner together and asserts the wait appears on the chip and not on the banner.
+187 frontend cases, 610 backend, lint clean.
+
+## 2026-09-13
+
 ### 2026-09-13 · "Go to slide two" was answered with a lecture · uncommitted
 **Scope:** `app/prompts/presenter.md`, `docs/PRD.md` (F5, §8.1)
 

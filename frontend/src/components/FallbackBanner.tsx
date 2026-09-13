@@ -1,11 +1,6 @@
-import { useEffect, useState, type JSX } from "react";
-
-import { describeWait } from "../time";
+import { type JSX } from "react";
 
 import styles from "./FallbackBanner.module.css";
-
-/** How often the "back in" estimate is redrawn. */
-const TICK_MS = 1_000;
 
 /** Inputs to the banner. */
 export interface FallbackBannerProps {
@@ -13,10 +8,6 @@ export interface FallbackBannerProps {
   readonly fromModel: string | null;
   /** The model answering instead. */
   readonly toModel: string | null;
-  /** Epoch milliseconds until the usual model is expected back, or `null`. */
-  readonly until?: number | null;
-  /** Clock seam, so a test does not have to wait in real time. */
-  readonly now?: () => number;
 }
 
 /**
@@ -24,54 +15,25 @@ export interface FallbackBannerProps {
  *
  * This is the one piece of the fallback the listener actually experiences: the voice gets slower.
  * Without an explanation that reads as degradation rather than breakage, a slow answer looks like
- * a fault. It replaces the rate-limit countdown rather than sitting beside it, because the two say
- * contradictory things -- one means "wait", and this means "carry on, it is already answering".
+ * a fault.
  *
- * @param props - Which model was substituted for which, and when the usual one returns.
+ * It says who is speaking and nothing about time. The countdown belongs to `RateLimitChip`, which
+ * stays up beside this while the hosted model is still refusing: one element owns *when the usual
+ * model returns*, the other owns *who is answering meanwhile*, and neither repeats the other.
+ *
+ * @param props - Which model was substituted for which.
  * @returns The banner, or nothing when no substitution is in force.
  */
-export function FallbackBanner({
-  fromModel,
-  toModel,
-  until = null,
-  now = Date.now,
-}: FallbackBannerProps): JSX.Element | null {
-  const [, redraw] = useState(0);
-
-  useEffect(() => {
-    if (until === null) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      redraw((count) => count + 1);
-      if (now() >= until) {
-        window.clearInterval(timer);
-      }
-    }, TICK_MS);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [until, now]);
-
+export function FallbackBanner({ fromModel, toModel }: FallbackBannerProps): JSX.Element | null {
   if (fromModel === null || toModel === null) {
     return null;
   }
-
-  const remaining = until === null ? 0 : until - now();
   return (
     <p className={styles.banner} role="status" aria-live="polite">
       <span className={styles.dot} aria-hidden="true" />
       <span>
         <strong>{fromModel}</strong> hit its rate limit — answering with <strong>{toModel}</strong>{" "}
         on this machine
-        {remaining > 0 ? (
-          <>
-            {" · "}
-            <strong>{fromModel}</strong> back in {describeWait(remaining)}
-          </>
-        ) : (
-          ""
-        )}
       </span>
     </p>
   );

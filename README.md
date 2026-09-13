@@ -244,8 +244,8 @@ enough to be. The cost is that the model is the slowest stage and the free tier'
 reachable in normal use — four questions in two minutes is enough.
 
 **So the model has a local understudy.** Set `LLM_FALLBACK_PROVIDER=ollama` and a rate-limited turn
-is answered by `qwen2.5:7b` running on your own machine instead of failing, with a banner naming
-both models. It is four to six times slower to first token, and it routes less well: 57.5 % against
+is answered by `qwen2.5:7b` running on your own machine instead of failing. A banner names both
+models while the countdown chip beside it keeps saying when the hosted one is back. It is four to six times slower to first token, and it routes less well: 57.5 % against
 the hosted model on E1. It is kept anyway because of _how_ it fails — it answers the question and
 leaves the deck where it was, rather than going silent. Degrading is a feature; dying is not. The
 numbers are in [`docs/EVALS.md`](docs/EVALS.md). `.env.example` ships with it enabled, so the

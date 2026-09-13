@@ -84,15 +84,13 @@ export function App(): JSX.Element {
           <p className="app__tagline">A voice-first slide presenter you can interrupt.</p>
         </div>
         <p className="app__deck">{deck?.title ?? "No deck loaded"}</p>
-        {fallback === null ? (
-          <RateLimitChip until={rateLimitedUntil} />
-        ) : (
-          <FallbackBanner
-            fromModel={fallback.fromModel}
-            toModel={fallback.toModel}
-            until={rateLimitedUntil}
-          />
-        )}
+        {/* Both, side by side: the chip says when the hosted model is back, the banner says who
+            is answering until then. Neither is the whole story on its own. */}
+        <RateLimitChip until={rateLimitedUntil} />
+        <FallbackBanner
+          fromModel={fallback?.fromModel ?? null}
+          toModel={fallback?.toModel ?? null}
+        />
         <p className={`app__health app__health--${backend}`} role="status" aria-live="polite">
           <span className="app__health-dot" aria-hidden="true" />
           backend: {backend}

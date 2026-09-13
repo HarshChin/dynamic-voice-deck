@@ -1,5 +1,7 @@
-import { act, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { RateLimitChip } from "./RateLimitChip";
 
 import { FallbackBanner } from "./FallbackBanner";
 
@@ -17,49 +19,37 @@ afterEach(() => {
 
 describe("FallbackBanner", () => {
   it("TC-FE-210: names both models and says the answer is coming from this machine", () => {
-    render(<FallbackBanner fromModel="qwen/qwen3.8-27b" toModel="qwen2.5:7b" now={now} />);
+    render(<FallbackBanner fromModel="qwen/qwen3.8-27b" toModel="qwen2.5:7b" />);
 
     const banner = screen.getByRole("status");
     expect(banner).toHaveTextContent("qwen/qwen3.8-27b hit its rate limit");
     expect(banner).toHaveTextContent("answering with qwen2.5:7b on this machine");
   });
 
-  it("TC-FE-211: adds when the usual model is expected back, when that is known", () => {
-    render(
-      <FallbackBanner
-        fromModel="qwen/qwen3.8-27b"
-        toModel="qwen2.5:7b"
-        until={clock + 900_000}
-        now={now}
-      />,
-    );
+  it("TC-FE-211: says nothing about time, and starts no clock of its own", () => {
+    render(<FallbackBanner fromModel="qwen/qwen3.8-27b" toModel="qwen2.5:7b" />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("qwen/qwen3.8-27b back in 15 min");
+    expect(screen.getByRole("status")).not.toHaveTextContent("back in");
+    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("TC-FE-212: counts that estimate down and drops it once it has passed", () => {
+  it("TC-FE-212: stands beside the countdown, which keeps saying when the usual model returns", () => {
     render(
-      <FallbackBanner
-        fromModel="qwen/qwen3.8-27b"
-        toModel="qwen2.5:7b"
-        until={clock + 5_000}
-        now={now}
-      />,
+      <>
+        <RateLimitChip until={clock + 900_000} now={now} />
+        <FallbackBanner fromModel="qwen/qwen3.8-27b" toModel="qwen2.5:7b" />
+      </>,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("qwen/qwen3.8-27b back in 5s");
 
-    act(() => {
-      clock += 6_000;
-      vi.advanceTimersByTime(6_000);
-    });
-
-    // The substitution is still in force, so the banner stays; only the estimate goes.
-    expect(screen.getByRole("status")).toHaveTextContent("on this machine");
-    expect(screen.getByRole("status")).not.toHaveTextContent("back in");
+    const [chip, banner] = screen.getAllByRole("status");
+    expect(chip).toHaveTextContent("15 min");
+    expect(banner).toHaveTextContent("answering with qwen2.5:7b on this machine");
+    // Said once between them: the chip owns the wait, the banner owns who is speaking.
+    expect(banner).not.toHaveTextContent("15 min");
   });
 
   it("TC-FE-213: shows nothing when no model has been substituted", () => {
-    render(<FallbackBanner fromModel={null} toModel={null} now={now} />);
+    render(<FallbackBanner fromModel={null} toModel={null} />);
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(vi.getTimerCount()).toBe(0);
